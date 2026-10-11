@@ -4,36 +4,50 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
+import cz.offgrid.maps.data.map.MapFileManager
 import cz.offgrid.maps.presentation.theme.*
+import cz.offgrid.maps.presentation.ui.map.MapLibreMapView
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapLibreMap
 
 /**
  * Hlavní obrazovka mapy pro kruhový displej Wear OS.
  *
- * Architektura a ergonomie:
- * - Kruhový layout: Ovládací prvky respektují zakřivení displeje a nezasahují do rohů.
- * - Rotary Zoom: Plná podpora otočné korunky pro zoomování (s haptickým cvaknutím).
- * - True Black: Pozadí mapy a UI je čistě černé (#000000) pro nulovou spotřebu OLED pixelů.
- * - Dotykové plochy: Tlačítka mají velikost minimálně 48 dp pro spolehlivé stisknutí i v rukavicích.
+ * Kombinuje:
+ * 1. Nativní MapLibre rendering s True Black stylem.
+ * 2. Rotary Input (zoom otáčením korunky bez zakrývání displeje prsty).
+ * 3. Indikaci stavu GPS a záznamu trasy.
+ * 4. Tlačítko pro vycentrování pozice.
  */
 @Composable
 fun MapScreen(
     modifier: Modifier = Modifier
 ) {
-    var zoomLevel by remember { mutableStateOf(14.0f) }
+    val context = LocalContext.current
+    val mapFileManager = remember { MapFileManager(context) }
+    val defaultMapFile = remember { mapFileManager.getDefaultMap() }
+
+    var zoomLevel by remember { mutableFloatStateOf(13.0f) }
     var isTracking by remember { mutableStateOf(false) }
     var isGpsFixed by remember { mutableStateOf(true) }
 
-    // FocusRequester je nutný pro zachycení otočení korunky (Rotary Event)
+    // Výchozí souřadnice (např. Krkonoše / Sněžka: 50.736, 15.740)
+    var currentLocation by remember { mutableStateOf(LatLng(50.7360, 15.7396)) }
+    var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+
+    // FocusRequester pro zachycení otočení korunky hodinek
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -48,83 +62,89 @@ fun MapScreen(
             .focusable()
             .rotaryZoom(
                 onZoomIn = {
-                    if (zoomLevel < 19.0f) zoomLevel += 0.5f
+                    if (zoomLevel < 18.0f) zoomLevel += 0.5f
                 },
                 onZoomOut = {
-                    if (zoomLevel > 5.0f) zoomLevel -= 0.5f
+                    if (zoomLevel > 6.0f) zoomLevel -= 0.5f
                 }
             )
     ) {
-        // Map Container - zde se vykresluje offline vektorová mapa přes MapLibre
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(AmoledBlack),
-            contentAlignment = Alignment.Center
-        ) {
-            // Prototypové zobrazení mapového středu a zoomu
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+        // Nativní vektorová mapa
+        MapLibreMapView(
+            zoomLevel = zoomLevel,
+            targetLocation = currentLocation,
+            mbtilesFile = defaultMapFile,
+            modifier = Modifier.fillMaxSize(),
+            onMapReady = { map ->
+                maplibreMapInstance = map
+            }
+        )
+
+        // Upozornění, pokud ještě není nahrán žádný offline soubor .mbtiles
+        if (defaultMapFile == null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 24.dp)
+                    .background(DarkSurfaceVariant.copy(alpha = 0.9f), RoundedCornerShape(12.dp))
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "OffGrid Map",
-                    color = OutdoorTextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Zoom: %.1f".format(zoomLevel),
+                    text = "Vložte .mbtiles do /files/maps",
                     color = OutdoorAmber,
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = "Otáčejte korunkou",
-                    color = OutdoorTextSecondary,
-                    fontSize = 10.sp
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
 
-        // Horní indikátor: Stav GPS a úsporného režimu
+        // Horní indikátor: Stav GPS a zoomu
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 16.dp),
+                .padding(top = 14.dp)
+                .background(AmoledBlack.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(8.dp)
+                    .size(7.dp)
                     .background(
                         color = if (isGpsFixed) OutdoorLime else TrailRed,
                         shape = CircleShape
                     )
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
-                text = if (isGpsFixed) "GPS FIX" else "HLEDÁM GPS",
+                text = if (isGpsFixed) "GPS" else "NO GPS",
                 color = if (isGpsFixed) OutdoorLime else TrailRed,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Z %.1f".format(zoomLevel),
+                color = OutdoorTextSecondary,
+                fontSize = 10.sp
             )
         }
 
-        // Spodní ovládací lišta: Záznam trasy a zaměření polohy
+        // Spodní ergonomická lišta: Ovládací tlačítka
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
-                .fillMaxWidth(0.85f),
+                .padding(bottom = 14.dp)
+                .fillMaxWidth(0.82f),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Tlačítko pro spuštění / zastavení záznamu trasy
+            // Tlačítko záznamu trasy (REC / GO)
             Button(
                 onClick = { isTracking = !isTracking },
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(46.dp),
                 colors = ButtonDefaults.buttonColors(
                     backgroundColor = if (isTracking) TrailRed else DarkSurfaceVariant,
                     contentColor = OutdoorTextPrimary
@@ -137,12 +157,15 @@ fun MapScreen(
                 )
             }
 
-            // Tlačítko pro vycentrování na aktuální GPS pozici
+            // Tlačítko pro návrat na střed (Re-center na GPS pozici)
             Button(
                 onClick = {
-                    // Vycentrovat mapu
+                    maplibreMapInstance?.easeCamera(
+                        CameraUpdateFactory.newLatLng(currentLocation),
+                        200
+                    )
                 },
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(46.dp),
                 colors = ButtonDefaults.buttonColors(
                     backgroundColor = DarkSurfaceVariant,
                     contentColor = OutdoorAmber
