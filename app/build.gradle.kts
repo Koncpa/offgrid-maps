@@ -1,0 +1,79 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+
+android {
+    namespace = "cz.offgrid.maps"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "cz.offgrid.maps"
+        minSdk = 30 // Wear OS 3+ (Android 11)
+        targetSdk = 34
+        versionCode = 1
+        versionName = "0.1.0"
+        vectorDrawables {
+            useSupportLibrary = true
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("debug") // Pro vývoj a sideloading
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+dependencies {
+    // Wear OS Compose (Material & Foundation)
+    implementation("androidx.wear.compose:compose-material:1.4.0")
+    implementation("androidx.wear.compose:compose-foundation:1.4.0")
+    implementation("androidx.wear.compose:compose-navigation:1.4.0")
+
+    // Core Android & Compose
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.5")
+
+    // Wear Tooling & UI
+    implementation("androidx.wear:wear:1.3.0")
+    implementation("androidx.wear:wear-tooling-preview:1.0.0")
+
+    // GPS & Fused Location Provider
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    // MapLibre Native SDK pro offline vektorové mapy
+    implementation("org.maplibre.gl:android-sdk:11.5.1")
+
+    // Unit testy
+    testImplementation("junit:junit:4.13.2")
+}
