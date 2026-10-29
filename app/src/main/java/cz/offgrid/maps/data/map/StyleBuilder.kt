@@ -8,17 +8,17 @@ import java.io.File
  * Principy stylu:
  * 1. Background: #000000 (OLED subpixely vypnuté, 0 mW spotřeba).
  * 2. Voda a řeky: Tmavě modrá (#0D223D / #1C447A).
- * 3. Lesy / příroda: Velmi tmavě zelená (#06130B) pro minimální spotřebu, ale jasné odlišení lesa.
+ * 3. Lesy / příroda: Velmi tmavě zelená (#07170D) pro minimální spotřebu, ale jasné odlišení lesa.
  * 4. Budovy a ulice: Kontrastní jemné linie a obrysy budov pro orientaci v obcích.
- * 5. Lesní cesty a pěšiny: Přerušované čáry (#8C969E).
- * 6. Turistické značení (KČT): Výrazné pásové barvy (červená, modrá, zelená, žlutá) z OSM relací.
- * 7. Popisky (Města, obce, vrcholy s nadmořskou výškou): Jasný text s černým lemem (halo) pro čitelnost na slunci.
+ * 5. Lesní cesty a pěšiny: Přerušované čáry (#8A949E).
+ * 6. Turistické značení (KČT): Kompletní offline síť 14 591 úseků KČT tras Jihomoravského kraje
+ *    přímo z vestavěného souboru asset://jmk_kct_trails.geojson (červená, modrá, zelená, žlutá).
+ * 7. Popisky (Města, obce, vrcholy s nadmořskou výškou): Jasný text s černým lemem (halo).
  */
 object StyleBuilder {
 
     /**
      * Vytvoří kompletní MapLibre GL styl JSON.
-     * Pokud je k dispozici lokální .mbtiles soubor, čte z něj; jinak využívá OpenMapTiles s automatickou SQLite offline cache.
      */
     fun createAmoledOutdoorStyle(mbtilesFile: File?): String {
         val sourceDefinition = if (mbtilesFile != null && mbtilesFile.exists()) {
@@ -47,7 +47,11 @@ object StyleBuilder {
           "name": "OffGrid AMOLED Outdoor",
           "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
           "sources": {
-            $sourceDefinition
+            $sourceDefinition,
+            "kct_trails_source": {
+              "type": "geojson",
+              "data": "asset://jmk_kct_trails.geojson"
+            }
           },
           "layers": [
             {
@@ -130,7 +134,7 @@ object StyleBuilder {
               },
               "paint": {
                 "line-color": "#8A949E",
-                "line-width": 1.6,
+                "line-width": 1.5,
                 "line-dasharray": [2, 1.5]
               }
             },
@@ -161,7 +165,7 @@ object StyleBuilder {
               },
               "paint": {
                 "line-color": "#788290",
-                "line-width": 2.8
+                "line-width": 2.6
               }
             },
             {
@@ -179,69 +183,45 @@ object StyleBuilder {
             {
               "id": "trail_kct_yellow",
               "type": "line",
-              "source": "offline_source",
-              "source-layer": "transportation_name",
-              "filter": ["any",
-                ["==", "route_1_colour", "yellow"],
-                ["==", "route_2_colour", "yellow"],
-                ["==", "route_3_colour", "yellow"],
-                ["==", "colour", "yellow"]
-              ],
+              "source": "kct_trails_source",
+              "filter": ["==", ["get", "colour"], "yellow"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#FFCC00",
-                "line-width": 3.2
+                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.8, 13, 3.2, 16, 4.5]
               }
             },
             {
               "id": "trail_kct_green",
               "type": "line",
-              "source": "offline_source",
-              "source-layer": "transportation_name",
-              "filter": ["any",
-                ["==", "route_1_colour", "green"],
-                ["==", "route_2_colour", "green"],
-                ["==", "route_3_colour", "green"],
-                ["==", "colour", "green"]
-              ],
+              "source": "kct_trails_source",
+              "filter": ["==", ["get", "colour"], "green"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#00D166",
-                "line-width": 3.2
+                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.8, 13, 3.2, 16, 4.5]
               }
             },
             {
               "id": "trail_kct_blue",
               "type": "line",
-              "source": "offline_source",
-              "source-layer": "transportation_name",
-              "filter": ["any",
-                ["==", "route_1_colour", "blue"],
-                ["==", "route_2_colour", "blue"],
-                ["==", "route_3_colour", "blue"],
-                ["==", "colour", "blue"]
-              ],
+              "source": "kct_trails_source",
+              "filter": ["==", ["get", "colour"], "blue"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#3388FF",
-                "line-width": 3.2
+                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.8, 13, 3.2, 16, 4.5]
               }
             },
             {
               "id": "trail_kct_red",
               "type": "line",
-              "source": "offline_source",
-              "source-layer": "transportation_name",
-              "filter": ["any",
-                ["==", "route_1_colour", "red"],
-                ["==", "route_2_colour", "red"],
-                ["==", "route_3_colour", "red"],
-                ["==", "colour", "red"]
-              ],
+              "source": "kct_trails_source",
+              "filter": ["==", ["get", "colour"], "red"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#FF3333",
-                "line-width": 3.5
+                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 2.0, 13, 3.5, 16, 5.0]
               }
             },
             {
