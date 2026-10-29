@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Černý podklad -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0" />
+    <!-- Jantarový kompasový kruh -->
+    <path
+        android:strokeColor="#FF9E0B"
+        android:strokeWidth="2.5"
+        android:pathData="M24,24m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0" />
+    <!-- Střelka kompasu (sever - zelená/jantarová) -->
+    <path
+        android:fillColor="#76FF03"
+        android:pathData="M24,10 L29,24 L24,21 L19,24 Z" />
+    <path
+        android:fillColor="#FF9E0B"
+        android:pathData="M24,38 L29,24 L24,27 L19,24 Z" />
+</vector>

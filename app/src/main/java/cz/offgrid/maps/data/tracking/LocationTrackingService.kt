@@ -75,11 +75,12 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Bateriově optimalizovaný požadavek na polohu
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 7000L)
-            .setMinUpdateIntervalMillis(4000L)
-            .setMinUpdateDistanceMeters(5.0f) // Klíčový filtr: nevzorkuje, pokud stojíte na místě
-            .setMaxUpdateDelayMillis(10000L)  // Hardware batching
+        // Bateriově optimalizovaný požadavek na polohu pro celodenní túru (10–14 hodin)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 12000L)
+            .setMinUpdateIntervalMillis(8000L)
+            .setMinUpdateDistanceMeters(8.0f) // Klíčový filtr: nevzorkuje, pokud stojíte na místě
+            .setMaxUpdateDelayMillis(20000L)  // Hardware batching (šetří probouzení hlavního CPU)
+            .setWaitForAccurateLocation(false) // Nezdržuje zapnutý GPS čip pod hustými stromy
             .build()
 
         fusedLocationClient.requestLocationUpdates(

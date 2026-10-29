@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Vlastní téma pro mapovou obrazovku na Wear OS:
+        Zakazuje systémové gesto "Swipe-to-Dismiss" (tažení zleva doprava pro zavření aplikace),
+        aby uživatel mohl volně posouvat mapou všemi směry bez nechtěného vyskočení z aplikace.
+        Aplikace se pak ukončuje pouze fyzickým bočním tlačítkem hodinek.
+    -->
+    <style name="Theme.OffGridMaps" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowSwipeToDismiss">false</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
