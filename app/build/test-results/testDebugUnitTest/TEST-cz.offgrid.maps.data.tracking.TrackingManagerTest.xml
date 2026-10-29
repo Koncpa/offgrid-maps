@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="cz.offgrid.maps.data.tracking.TrackingManagerTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-29T21:18:41" hostname="Patriks-Air.home" time="0.039">
+<testsuite name="cz.offgrid.maps.data.tracking.TrackingManagerTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-29T21:21:22" hostname="Patriks-Air.home" time="0.009">
   <properties/>
-  <testcase name="calculateDistanceMeters_samePoint_returnsZero" classname="cz.offgrid.maps.data.tracking.TrackingManagerTest" time="0.032"/>
-  <testcase name="clearTrack_resetsPointsAndDistance" classname="cz.offgrid.maps.data.tracking.TrackingManagerTest" time="0.005"/>
+  <testcase name="calculateDistanceMeters_samePoint_returnsZero" classname="cz.offgrid.maps.data.tracking.TrackingManagerTest" time="0.007"/>
+  <testcase name="clearTrack_resetsPointsAndDistance" classname="cz.offgrid.maps.data.tracking.TrackingManagerTest" time="0.001"/>
   <testcase name="calculateDistanceMeters_knownLocations_calculatesAccurately" classname="cz.offgrid.maps.data.tracking.TrackingManagerTest" time="0.0"/>
   <testcase name="addPoint_whenTrackingInactive_updatesLocationOnly" classname="cz.offgrid.maps.data.tracking.TrackingManagerTest" time="0.0"/>
   <testcase name="addPoint_whenTrackingActive_accumulatesDistanceAndStoresPoints" classname="cz.offgrid.maps.data.tracking.TrackingManagerTest" time="0.0"/>

@@ -260,15 +260,6 @@ fun MapScreen(
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold
             )
-
-            if (!isTracking) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Z%.0f".format(zoomLevel),
-                    color = OutdoorTextSecondary,
-                    fontSize = 9.sp
-                )
-            }
         }
 
         // Potvrzení po zastavení záznamu a uložení GPX souboru
