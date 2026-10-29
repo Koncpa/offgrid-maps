@@ -13,8 +13,8 @@ val OutdoorLime = Color(0xFF76FF03)  // Status / GPS fix
 val OutdoorTextPrimary = Color(0xFFFFFFFF)
 val OutdoorTextSecondary = Color(0xFFB0B0B0)
 
-// České pásové značení (KČT) barvy pro turistické trasy
-val TrailRed = Color(0xFFFF3333)
-val TrailBlue = Color(0xFF3388FF)
-val TrailGreen = Color(0xFF00D166)
-val TrailYellow = Color(0xFFFFCC00)
+// České pásové značení (KČT) optimalizované pro čisté OLED subpixely (minimální odběr proudu)
+val TrailRed = Color(0xFFEA0000)    // Čistý R subpixel (G=0, B=0)
+val TrailBlue = Color(0xFF0077E6)   // Bez parazitního R subpixelu, snížený špičkový proud B
+val TrailGreen = Color(0xFF00C814)  // Lesní zelená tažená úsporným G subpixelem (R=0, min B)
+val TrailYellow = Color(0xFFE6B800) // Teplá žlutá s B=0 a sníženým špičkovým jasem o 10 %

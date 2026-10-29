@@ -170,8 +170,8 @@ object StyleBuilder {
               "filter": ["==", ["get", "colour"], "yellow"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
-                "line-color": "#FFCC00",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.92],
+                "line-color": "#E6B800",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.90],
                 "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.8, 14, 3.0, 16, 4.2]
               }
             },
@@ -183,8 +183,8 @@ object StyleBuilder {
               "filter": ["==", ["get", "colour"], "green"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
-                "line-color": "#00D166",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.92],
+                "line-color": "#00C814",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.90],
                 "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.8, 14, 3.0, 16, 4.2]
               }
             },
@@ -196,8 +196,8 @@ object StyleBuilder {
               "filter": ["==", ["get", "colour"], "blue"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
-                "line-color": "#3388FF",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0.0, 12.3, 0.92],
+                "line-color": "#0077E6",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0.0, 12.3, 0.90],
                 "line-width": ["interpolate", ["linear"], ["zoom"], 11.5, 1.6, 14, 3.0, 16, 4.2]
               }
             },
@@ -209,8 +209,8 @@ object StyleBuilder {
               "filter": ["==", ["get", "colour"], "red"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
-                "line-color": "#FF3333",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.0, 0.0, 11.8, 0.95],
+                "line-color": "#EA0000",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.0, 0.0, 11.8, 0.92],
                 "line-width": ["interpolate", ["linear"], ["zoom"], 11.0, 1.8, 14, 3.4, 16, 4.6]
               }
             },
