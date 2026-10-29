@@ -92,11 +92,34 @@ fun MapScreen(
     val totalDistanceMeters by TrackingManager.totalDistanceMeters.collectAsState()
     val latestGpsPoint by TrackingManager.currentLocation.collectAsState()
     val trackPoints by TrackingManager.trackPoints.collectAsState()
+    val recordingStartMillis by TrackingManager.recordingStartMillis.collectAsState()
+    val lastSavedSummary by TrackingManager.lastSavedSummary.collectAsState()
     val offlineStatus by OfflineRegionHelper.statusText.collectAsState()
     val azimuthDegrees by compassManager.azimuthDegrees.collectAsState()
 
     var zoomLevel by remember { mutableFloatStateOf(13.0f) }
     var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    var elapsedSeconds by remember { mutableLongStateOf(0L) }
+
+    // Živý vteřinový odpočet během aktivního záznamu trasy (běží jen při rozsvíceném displeji)
+    LaunchedEffect(isTracking, recordingStartMillis) {
+        if (isTracking && recordingStartMillis > 0L) {
+            while (isTracking) {
+                elapsedSeconds = ((System.currentTimeMillis() - recordingStartMillis) / 1000L).coerceAtLeast(0L)
+                kotlinx.coroutines.delay(1000L)
+            }
+        } else {
+            elapsedSeconds = 0L
+        }
+    }
+
+    // Automatické skrytí notifikace o uloženém GPX po 4 sekundách
+    LaunchedEffect(lastSavedSummary) {
+        if (lastSavedSummary != null) {
+            kotlinx.coroutines.delay(4500L)
+            TrackingManager.setSavedSummary(null)
+        }
+    }
 
     // Výchozí poloha: Jihomoravský kraj (Oslavany: 49.1246, 16.3353)
     var activeLocation by remember { mutableStateOf(LatLng(49.1246, 16.3353)) }
@@ -141,6 +164,10 @@ fun MapScreen(
         }
     }
 
+    // Společný rozměr a tloušťka rámečku pro dokonalou symetrii všech 4 tlačítek
+    val buttonSize = 40.dp
+    val buttonBorder = 1.5.dp
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -174,8 +201,12 @@ fun MapScreen(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 8.dp)
-                .background(AmoledBlack.copy(alpha = 0.90f), RoundedCornerShape(12.dp))
-                .border(1.dp, DarkSurfaceVariant, RoundedCornerShape(12.dp))
+                .background(AmoledBlack.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
+                .border(
+                    width = if (isTracking) 1.5.dp else 1.dp,
+                    color = if (isTracking) TrailRed else DarkSurfaceVariant,
+                    shape = RoundedCornerShape(12.dp)
+                )
                 .padding(horizontal = 9.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -186,12 +217,14 @@ fun MapScreen(
             )
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Text telemetrie: Při záznamu ušlé km, jinak nadmořská výška / stav offline
+            // Text telemetrie: Při záznamu živý čas + ušlé km, jinak nadmořská výška / stav offline
             val altitudeText = latestGpsPoint?.altitudeMeters?.let { "${it.roundToInt()} m" }
             if (isTracking) {
+                val mins = elapsedSeconds / 60
+                val secs = elapsedSeconds % 60
                 val km = totalDistanceMeters / 1000.0
                 Text(
-                    text = "%.2f km".format(km),
+                    text = "%02d:%02d • %.2f km".format(mins, secs, km),
                     color = OutdoorTextPrimary,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
@@ -215,15 +248,36 @@ fun MapScreen(
                 fontWeight = FontWeight.Bold
             )
 
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "Z%.0f".format(zoomLevel),
-                color = OutdoorTextSecondary,
-                fontSize = 9.sp
-            )
+            if (!isTracking) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Z%.0f".format(zoomLevel),
+                    color = OutdoorTextSecondary,
+                    fontSize = 9.sp
+                )
+            }
         }
 
-        // Vlevo uprostřed: Oddálit (−) v barvě MODRÉ turistické značky KČT
+        // Potvrzení po zastavení záznamu a uložení GPX souboru
+        lastSavedSummary?.let { summary ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 56.dp)
+                    .background(AmoledBlack.copy(alpha = 0.94f), RoundedCornerShape(10.dp))
+                    .border(1.2.dp, TrailGreen, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = summary,
+                    color = TrailGreen,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Vlevo uprostřed: Oddálit (−) v barvě MODRÉ turistické značky KČT (symetrických 40.dp)
         Button(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -234,9 +288,9 @@ fun MapScreen(
             },
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 5.dp)
-                .size(36.dp)
-                .border(1.2.dp, TrailBlue, CircleShape),
+                .padding(start = 6.dp)
+                .size(buttonSize)
+                .border(buttonBorder, TrailBlue, CircleShape),
             colors = ButtonDefaults.buttonColors(
                 backgroundColor = AmoledBlack.copy(alpha = 0.88f),
                 contentColor = TrailBlue
@@ -249,7 +303,7 @@ fun MapScreen(
             )
         }
 
-        // Vpravo uprostřed: Přiblížit (+) v barvě ŽLUTÉ turistické značky KČT
+        // Vpravo uprostřed: Přiblížit (+) v barvě ŽLUTÉ turistické značky KČT (symetrických 40.dp)
         Button(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -260,9 +314,9 @@ fun MapScreen(
             },
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 5.dp)
-                .size(36.dp)
-                .border(1.2.dp, TrailYellow, CircleShape),
+                .padding(end = 6.dp)
+                .size(buttonSize)
+                .border(buttonBorder, TrailYellow, CircleShape),
             colors = ButtonDefaults.buttonColors(
                 backgroundColor = AmoledBlack.copy(alpha = 0.88f),
                 contentColor = TrailYellow
@@ -275,12 +329,12 @@ fun MapScreen(
             )
         }
 
-        // Spodní lišta: Záznam trasy (ČERVENÁ KČT) a Poloha (ZELENÁ KČT)
+        // Spodní lišta: Záznam trasy (ČERVENÁ KČT) a Poloha (ZELENÁ KČT) — symetrických 40.dp
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 10.dp)
-                .fillMaxWidth(0.68f),
+                .fillMaxWidth(0.66f),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -309,8 +363,8 @@ fun MapScreen(
                     }
                 },
                 modifier = Modifier
-                    .size(42.dp)
-                    .border(1.5.dp, TrailRed, CircleShape),
+                    .size(buttonSize)
+                    .border(buttonBorder, TrailRed, CircleShape),
                 colors = ButtonDefaults.buttonColors(
                     backgroundColor = if (isTracking) TrailRed else AmoledBlack.copy(alpha = 0.88f),
                     contentColor = if (isTracking) OutdoorTextPrimary else TrailRed
@@ -333,8 +387,8 @@ fun MapScreen(
                     )
                 },
                 modifier = Modifier
-                    .size(42.dp)
-                    .border(1.5.dp, TrailGreen, CircleShape),
+                    .size(buttonSize)
+                    .border(buttonBorder, TrailGreen, CircleShape),
                 colors = ButtonDefaults.buttonColors(
                     backgroundColor = AmoledBlack.copy(alpha = 0.88f),
                     contentColor = TrailGreen

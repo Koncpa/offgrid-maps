@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Čistě černý AMOLED kruh -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0" />
+
+    <!-- Jemné vrstevnice v pozadí kruhu -->
+    <path
+        android:strokeColor="#242424"
+        android:strokeWidth="1.2"
+        android:pathData="M24,24m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0" />
+
+    <!-- Silueta dvojvrcholu hory (Pálava / Krkonoše) v horní části -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"
+        android:pathData="M10,21 L18,12 L23,17 L30,9 L38,21" />
+
+    <!-- Ikonická česká pásová značka KČT (Bílá - 4 barvy stezek - Bílá) -->
+    <!-- Horní bílý lem značky -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M11,23.5 h26 a1.5,1.5 0 0 1 1.5,1.5 v1.5 h-29 v-1.5 a1.5,1.5 0 0 1 1.5,-1.5 z" />
+
+    <!-- 4 barevné pruhy českého turistického značení (Červená, Modrá, Zelená, Žlutá) -->
+    <path
+        android:fillColor="#FF3333"
+        android:pathData="M9.5,27.5 h7.25 v6 h-7.25 z" />
+    <path
+        android:fillColor="#3388FF"
+        android:pathData="M16.75,27.5 h7.25 v6 h-7.25 z" />
+    <path
+        android:fillColor="#00D166"
+        android:pathData="M24.0,27.5 h7.25 v6 h-7.25 z" />
+    <path
+        android:fillColor="#FFCC00"
+        android:pathData="M31.25,27.5 h7.25 v6 h-7.25 z" />
+
+    <!-- Spodní bílý lem značky -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.5,34.5 h29 v1.5 a1.5,1.5 0 0 1 -1.5,1.5 h-26 a1.5,1.5 0 0 1 -1.5,-1.5 z" />
+</vector>

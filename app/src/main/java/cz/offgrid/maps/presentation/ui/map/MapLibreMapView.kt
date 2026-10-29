@@ -221,8 +221,9 @@ fun MapLibreMapView(
  * - Žádná bílá (#FFFFFF), která by rozsvěcela všechny 3 subpixely najednou.
  */
 private fun createMapyCzStyleLocationBitmap(): Bitmap {
-    val size = 44
+    val size = 76
     val center = size / 2f
+    val circleCenterY = center + 5f
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
@@ -232,39 +233,39 @@ private fun createMapyCzStyleLocationBitmap(): Bitmap {
         style = Paint.Style.FILL
     }
 
-    // Šetrná teplá jantarová barva (R=217, G=119, B=6 -> téměř nulová modrá složka)
+    // Šetrná teplá jantarová barva (R=224, G=122, B=0 -> nulová modrá složka)
     val ecoAmberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#D97706")
+        color = android.graphics.Color.parseColor("#E07A00")
         style = Paint.Style.FILL
     }
 
     // Tmavý střed tečky (šetří vnitřní pixely kruhu)
     val innerCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#141414")
+        color = android.graphics.Color.parseColor("#121212")
         style = Paint.Style.FILL
     }
 
-    // 1. Malá směrová šipečka (zobáček) těsně nad kroužkem polohy (jako v Mapy.cz)
+    // 1. Výrazná směrová šipečka (zobáček) těsně nad kroužkem polohy (styl Mapy.cz)
     val outerArrowPath = Path().apply {
-        moveTo(center, 2f)          // Špička nahoře
-        lineTo(center + 7.5f, 14f)  // Pravý roh šipečky
-        lineTo(center - 7.5f, 14f)  // Levý roh šipečky
+        moveTo(center, 3f)           // Špička nahoře
+        lineTo(center + 13.5f, 24f)  // Pravý roh šipečky
+        lineTo(center - 13.5f, 24f)  // Levý roh šipečky
         close()
     }
     canvas.drawPath(outerArrowPath, darkStrokePaint)
 
     val innerArrowPath = Path().apply {
-        moveTo(center, 4f)
-        lineTo(center + 5.5f, 13f)
-        lineTo(center - 5.5f, 13f)
+        moveTo(center, 6.5f)
+        lineTo(center + 10.0f, 22f)
+        lineTo(center - 10.0f, 22f)
         close()
     }
     canvas.drawPath(innerArrowPath, ecoAmberPaint)
 
-    // 2. Kompaktní kroužek polohy uprostřed
-    canvas.drawCircle(center, center + 2f, 8.5f, darkStrokePaint)
-    canvas.drawCircle(center, center + 2f, 6.5f, ecoAmberPaint)
-    canvas.drawCircle(center, center + 2f, 2.8f, innerCorePaint)
+    // 2. Kruhový bod polohy uprostřed
+    canvas.drawCircle(center, circleCenterY, 14.0f, darkStrokePaint)
+    canvas.drawCircle(center, circleCenterY, 11.0f, ecoAmberPaint)
+    canvas.drawCircle(center, circleCenterY, 4.8f, innerCorePaint)
 
     return bitmap
 }

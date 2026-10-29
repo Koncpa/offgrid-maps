@@ -8,15 +8,14 @@ import kotlin.math.*
 
 /**
  * Centrální správce stavu nahrávání trasy (Reaktivní StateFlow).
- *
- * Architektura:
- * - Umožňuje sdílet aktuální data o trase mezi běžící Background službou a Compose UI.
- * - Provádí výpočty vzdálenosti pomocí Haversinova vzorce (čistá matematika, nezávislá na Android frameworku pro snadné testování).
  */
 object TrackingManager {
 
     private val _isTracking = MutableStateFlow(false)
     val isTracking: StateFlow<Boolean> = _isTracking.asStateFlow()
+
+    private val _recordingStartMillis = MutableStateFlow(0L)
+    val recordingStartMillis: StateFlow<Long> = _recordingStartMillis.asStateFlow()
 
     private val _trackPoints = MutableStateFlow<List<TrackPoint>>(emptyList())
     val trackPoints: StateFlow<List<TrackPoint>> = _trackPoints.asStateFlow()
@@ -27,8 +26,29 @@ object TrackingManager {
     private val _currentLocation = MutableStateFlow<TrackPoint?>(null)
     val currentLocation: StateFlow<TrackPoint?> = _currentLocation.asStateFlow()
 
+    private val _lastSavedSummary = MutableStateFlow<String?>(null)
+    val lastSavedSummary: StateFlow<String?> = _lastSavedSummary.asStateFlow()
+
     fun setTrackingActive(active: Boolean) {
-        _isTracking.value = active
+        if (active && !_isTracking.value) {
+            // Zahajujeme novou trasu
+            _trackPoints.value = emptyList()
+            _totalDistanceMeters.value = 0.0
+            _recordingStartMillis.value = System.currentTimeMillis()
+            _lastSavedSummary.value = null
+            _isTracking.value = true
+
+            // Pokud už máme aktuální GPS polohu, hned ji vložíme jako 1. bod trasy
+            _currentLocation.value?.let { startPt ->
+                _trackPoints.value = listOf(startPt.copy(timestampMillis = System.currentTimeMillis()))
+            }
+        } else if (!active) {
+            _isTracking.value = false
+        }
+    }
+
+    fun setSavedSummary(summary: String?) {
+        _lastSavedSummary.value = summary
     }
 
     /**
@@ -45,6 +65,8 @@ object TrackingManager {
                 previous.latitude, previous.longitude,
                 point.latitude, point.longitude
             )
+            // Odfiltrujeme GPS šum na místě (< 1.5 metru), ale zaznamenáme reálnou chůzi
+            if (delta < 1.5) return
             _totalDistanceMeters.value += delta
         }
 
@@ -55,8 +77,12 @@ object TrackingManager {
      * Vyčistí záznam pro novou trasu.
      */
     fun clearTrack() {
+        _isTracking.value = false
         _trackPoints.value = emptyList()
         _totalDistanceMeters.value = 0.0
+        _recordingStartMillis.value = 0L
+        _currentLocation.value = null
+        _lastSavedSummary.value = null
     }
 
     /**

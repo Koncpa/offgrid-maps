@@ -14,15 +14,7 @@ import cz.offgrid.maps.MainActivity
 import cz.offgrid.maps.domain.model.TrackPoint
 
 /**
- * Popřední služba (Foreground Service) pro spolehlivý záznam GPS trasy na Wear OS.
- *
- * Klíčové technické principy pro úsporu energie:
- * 1. Adaptivní interval (7 sekund): Pro pěší chůzi (~1.2 m/s) je posun o 8 metrů perfektní přesnost,
- *    ale GPS čip může mezi pulzy usínat (duty-cycling), což šetří ~60 % energie.
- * 2. Filtr minimální vzdálenosti (5 metrů): Pokud uživatel stojí (svačina, rozcestník),
- *    systém neprobouzí hlavní procesor ani nepřidává zbytečné duplicitní body.
- * 3. Hardware Batching (maxUpdateDelay = 10s): Umožňuje hardwarovému koprocesoru
- *    akumulovat vzorky a předat je najednou, místo neustálého probouzení CPU z hlubokého spánku.
+ * Popřední služba (Foreground Service) pro záznam GPS trasy a automatický GPX export.
  */
 class LocationTrackingService : Service() {
 
@@ -64,7 +56,7 @@ class LocationTrackingService : Service() {
     private fun startTracking() {
         TrackingManager.setTrackingActive(true)
 
-        val notification = buildNotification("Hledám GPS satelity...")
+        val notification = buildNotification("Zaznamenávám trasu...")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -75,12 +67,27 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Bateriově optimalizovaný požadavek na polohu pro celodenní túru (10–14 hodin)
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 12000L)
-            .setMinUpdateIntervalMillis(8000L)
-            .setMinUpdateDistanceMeters(8.0f) // Klíčový filtr: nevzorkuje, pokud stojíte na místě
-            .setMaxUpdateDelayMillis(20000L)  // Hardware batching (šetří probouzení hlavního CPU)
-            .setWaitForAccurateLocation(false) // Nezdržuje zapnutý GPS čip pod hustými stromy
+        // Okamžitě si vyžádáme 1. bod při startu
+        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            .addOnSuccessListener { loc ->
+                if (loc != null && TrackingManager.isTracking.value) {
+                    TrackingManager.addPoint(
+                        TrackPoint(
+                            latitude = loc.latitude,
+                            longitude = loc.longitude,
+                            altitudeMeters = if (loc.hasAltitude()) loc.altitude else null,
+                            timestampMillis = loc.time,
+                            accuracyMeters = loc.accuracy
+                        )
+                    )
+                }
+            }
+
+        // Plynulé vzorkování po 5 sekundách při pohybu o alespoň 2 metry (bez zpoždění dávkování)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
+            .setMinUpdateIntervalMillis(3000L)
+            .setMinUpdateDistanceMeters(2.0f)
+            .setWaitForAccurateLocation(false)
             .build()
 
         fusedLocationClient.requestLocationUpdates(
@@ -92,7 +99,20 @@ class LocationTrackingService : Service() {
 
     private fun stopTracking() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
+
+        val recordedPoints = TrackingManager.trackPoints.value
+        val distKm = TrackingManager.totalDistanceMeters.value / 1000.0
+
+        // Uložíme trasu do .gpx souboru v hodinkách
+        val savedFile = GpxExporter.saveTrackToGpx(this, recordedPoints)
         TrackingManager.setTrackingActive(false)
+
+        if (savedFile != null) {
+            TrackingManager.setSavedSummary("GPX uloženo: %.2f km (%d b.)".format(distKm, recordedPoints.size))
+        } else {
+            TrackingManager.setSavedSummary("Záznam ukončen (0 bodů)")
+        }
+
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -102,7 +122,7 @@ class LocationTrackingService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Záznam trasy OffGrid",
-                NotificationManager.IMPORTANCE_LOW // Nízká priorita: nevibruje a neruší při každém bodu
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Zobrazuje aktivní stav záznamu offline trasy"
             }

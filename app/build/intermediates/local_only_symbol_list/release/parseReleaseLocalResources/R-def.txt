@@ -1,0 +1,12 @@
+R_DEF: Internal format may change without notice
+local
+drawable ic_launcher
+string app_name
+string my_location
+string no_map_loaded
+string offline_maps
+string tracking_start
+string tracking_stop
+string zoom_in
+string zoom_out
+style Theme.OffGridMaps
