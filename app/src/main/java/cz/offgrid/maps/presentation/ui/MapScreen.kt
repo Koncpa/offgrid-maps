@@ -200,7 +200,7 @@ fun MapScreen(
     }
 
     // Společný rozměr a tloušťka rámečku pro dokonalou symetrii všech 4 tlačítek
-    val buttonSize = 40.dp
+    val buttonSize = 38.dp
     val buttonBorder = 1.5.dp
 
     Box(
@@ -302,12 +302,12 @@ fun MapScreen(
             )
         }
 
-        // Varování při odchýlení od načtené GPX trasy (> 60 m)
+        // Varování při odchýlení od načtené GPX trasy (> 60 m) nebo diskrétní měřítko mapy pod horní lištou
         if (isOffRoute) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 32.dp)
+                    .padding(top = 31.dp)
                     .background(AmoledBlack.copy(alpha = 0.94f), RoundedCornerShape(8.dp))
                     .border(1.2.dp, TrailRed, RoundedCornerShape(8.dp))
                     .padding(horizontal = 7.dp, vertical = 2.dp)
@@ -319,6 +319,17 @@ fun MapScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+        } else {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 30.dp)
+            ) {
+                MapScaleBar(
+                    latitude = activeLocation.latitude,
+                    zoomLevel = zoomLevel
+                )
+            }
         }
 
         // Potvrzení po zastavení záznamu a uložení GPX souboru
@@ -326,7 +337,7 @@ fun MapScreen(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 54.dp)
+                    .padding(bottom = 58.dp)
                     .background(AmoledBlack.copy(alpha = 0.94f), RoundedCornerShape(10.dp))
                     .border(1.2.dp, TrailGreen, RoundedCornerShape(10.dp))
                     .padding(horizontal = 8.dp, vertical = 3.dp)
@@ -340,7 +351,7 @@ fun MapScreen(
             }
         }
 
-        // Vlevo uprostřed: Oddálit (−) v barvě MODRÉ turistické značky KČT (symetrických 40.dp)
+        // Vlevo uprostřed: Oddálit (−) v barvě MODRÉ turistické značky KČT (symetrických 38.dp)
         Button(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -351,7 +362,7 @@ fun MapScreen(
             },
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 6.dp)
+                .padding(start = 8.dp)
                 .size(buttonSize)
                 .border(buttonBorder, TrailBlue, CircleShape),
             colors = ButtonDefaults.buttonColors(
@@ -366,7 +377,7 @@ fun MapScreen(
             )
         }
 
-        // Vpravo uprostřed: Přiblížit (+) v barvě ŽLUTÉ turistické značky KČT (symetrických 40.dp)
+        // Vpravo uprostřed: Přiblížit (+) v barvě ŽLUTÉ turistické značky KČT (symetrických 38.dp)
         Button(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -377,7 +388,7 @@ fun MapScreen(
             },
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 6.dp)
+                .padding(end = 8.dp)
                 .size(buttonSize)
                 .border(buttonBorder, TrailYellow, CircleShape),
             colors = ButtonDefaults.buttonColors(
@@ -392,13 +403,13 @@ fun MapScreen(
             )
         }
 
-        // Spodní lišta: Záznam trasy (ČERVENÁ KČT), Měřítko mapy uprostřed a Poloha (ZELENÁ KČT)
+        // Spodní lišta: Záznam trasy (ČERVENÁ KČT) a Poloha (ZELENÁ KČT)
+        // Kompaktní rozestup uprostřed zaručuje, že tlačítka nejsou nikdy oříznuta kulatou lunetou displeje
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 10.dp)
-                .fillMaxWidth(0.70f),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(bottom = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Tlačítko záznamu trasy (REC / STOP) v barvě ČERVENÉ turistické značky KČT
@@ -439,12 +450,6 @@ fun MapScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
-
-            // Kompaktní dynamické měřítko mapy mezi spodními tlačítky
-            MapScaleBar(
-                latitude = activeLocation.latitude,
-                zoomLevel = zoomLevel
-            )
 
             // Tlačítko pro vycentrování na aktuální GPS pozici v barvě ZELENÉ turistické značky KČT
             Button(
@@ -487,8 +492,20 @@ fun MapScreen(
                     }
                     showGpxPicker = false
                 },
-                onClearRoute = {
+                onDeleteFile = { file ->
+                    if (plannedRouteName == file.nameWithoutExtension) {
+                        TrackingManager.setPlannedRoute(null, emptyList())
+                    }
+                    GpxExporter.deleteGpxFile(file)
+                    availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
+                },
+                onRemoveActiveRoute = {
+                    // Odstraní aktivní trasu z mapy i ze seznamu uložených souborů
+                    availableGpxFiles.find { it.nameWithoutExtension == plannedRouteName }?.let { file ->
+                        GpxExporter.deleteGpxFile(file)
+                    }
                     TrackingManager.setPlannedRoute(null, emptyList())
+                    availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
                     showGpxPicker = false
                 },
                 onDismiss = {
@@ -516,37 +533,38 @@ private fun MapScaleBar(
     val barWidthDp = (chosenMeters / metersPerDp).coerceIn(22.0, 44.0).dp
     val label = if (chosenMeters >= 1000) "${chosenMeters / 1000} km" else "$chosenMeters m"
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier
-            .background(AmoledBlack.copy(alpha = 0.85f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .background(AmoledBlack.copy(alpha = 0.82f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 5.dp, vertical = 1.5.dp)
     ) {
-        Text(
-            text = label,
-            color = OutdoorTextSecondary,
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(1.dp))
         Box(
             modifier = Modifier
                 .width(barWidthDp)
                 .height(2.dp)
                 .background(OutdoorTextSecondary)
         )
+        Text(
+            text = label,
+            color = OutdoorTextSecondary,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 /**
- * Čistě černý AMOLED překryvný panel pro výběr GPX trasy k navigaci.
+ * Čistě černý AMOLED překryvný panel pro výběr a odstranění GPX trasy.
  */
 @Composable
 private fun GpxRoutePickerOverlay(
     files: List<File>,
     activeRouteName: String?,
     onSelectFile: (File) -> Unit,
-    onClearRoute: () -> Unit,
+    onDeleteFile: (File) -> Unit,
+    onRemoveActiveRoute: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Box(
@@ -562,32 +580,53 @@ private fun GpxRoutePickerOverlay(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "GPX Navigace",
+                text = "GPX Trasy",
                 color = TrailYellow,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            files.take(3).forEach { file ->
-                val isSelected = activeRouteName == file.nameWithoutExtension
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(DarkSurface)
-                        .border(1.dp, if (isSelected) TrailGreen else DarkSurfaceVariant, RoundedCornerShape(10.dp))
-                        .clickable { onSelectFile(file) }
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = file.nameWithoutExtension.replace("_", " "),
-                        color = if (isSelected) TrailGreen else OutdoorTextPrimary,
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            if (files.isEmpty()) {
+                Text(
+                    text = "Žádné uložené trasy",
+                    color = OutdoorTextSecondary,
+                    fontSize = 9.5.sp,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                files.take(3).forEach { file ->
+                    val isSelected = activeRouteName == file.nameWithoutExtension
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(DarkSurface)
+                            .border(1.dp, if (isSelected) TrailGreen else DarkSurfaceVariant, RoundedCornerShape(10.dp))
+                            .clickable { onSelectFile(file) }
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = file.nameWithoutExtension.replace("_", " "),
+                            color = if (isSelected) TrailGreen else OutdoorTextPrimary,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "✕",
+                            color = TrailRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { onDeleteFile(file) }
+                                .padding(horizontal = 4.dp)
+                        )
+                    }
                 }
             }
 
@@ -600,11 +639,11 @@ private fun GpxRoutePickerOverlay(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .border(1.dp, TrailRed, RoundedCornerShape(10.dp))
-                            .clickable { onClearRoute() }
+                            .clickable { onRemoveActiveRoute() }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "Skrýt trasu",
+                            text = "Odstranit trasu",
                             color = TrailRed,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold

@@ -96,6 +96,13 @@ object GpxExporter {
         return points
     }
 
+    /**
+     * Smaže uložený .gpx soubor z interního úložiště hodinek.
+     */
+    fun deleteGpxFile(file: File): Boolean {
+        return if (file.exists()) file.delete() else false
+    }
+
     private fun getTracksDir(context: Context): File {
         return File(context.filesDir, "tracks").apply {
             if (!exists()) mkdirs()
@@ -103,6 +110,10 @@ object GpxExporter {
     }
 
     private fun ensureSampleTrackExists(tracksDir: File) {
+        val initMarker = File(tracksDir, ".sample_seeded")
+        if (initMarker.exists()) return
+        initMarker.writeText("1")
+
         val sampleFile = File(tracksDir, "oslavany_kct_okruh.gpx")
         if (sampleFile.exists()) return
 
