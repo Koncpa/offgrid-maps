@@ -20,6 +20,7 @@ class LocationTrackingService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    private lateinit var altimeterManager: BarometricAltimeterManager
     private var lastNotificationMillis = 0L
     private var lastNotifiedDistanceMeters = 0.0
     private var isScreenInteractive = true
@@ -27,15 +28,20 @@ class LocationTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        altimeterManager = BarometricAltimeterManager(this)
         createNotificationChannel()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.locations.forEach { location ->
+                    val gpsAlt = if (location.hasAltitude()) location.altitude else null
+                    val gpsAcc = if (location.hasAccuracy()) location.accuracy else null
+                    altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
+
                     val point = TrackPoint(
                         latitude = location.latitude,
                         longitude = location.longitude,
-                        altitudeMeters = if (location.hasAltitude()) location.altitude else null,
+                        altitudeMeters = gpsAlt,
                         timestampMillis = location.time,
                         accuracyMeters = location.accuracy,
                         speedMps = if (location.hasSpeed()) location.speed else null
@@ -71,6 +77,7 @@ class LocationTrackingService : Service() {
     @SuppressLint("MissingPermission")
     private fun startTracking() {
         TrackingManager.setTrackingActive(true)
+        altimeterManager.start()
         lastNotificationMillis = System.currentTimeMillis()
         lastNotifiedDistanceMeters = 0.0
         isScreenInteractive = true
@@ -90,11 +97,15 @@ class LocationTrackingService : Service() {
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { loc ->
                 if (loc != null && TrackingManager.isTracking.value) {
+                    val gpsAlt = if (loc.hasAltitude()) loc.altitude else null
+                    val gpsAcc = if (loc.hasAccuracy()) loc.accuracy else null
+                    altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
+
                     TrackingManager.addPoint(
                         TrackPoint(
                             latitude = loc.latitude,
                             longitude = loc.longitude,
-                            altitudeMeters = if (loc.hasAltitude()) loc.altitude else null,
+                            altitudeMeters = gpsAlt,
                             timestampMillis = loc.time,
                             accuracyMeters = loc.accuracy
                         )
@@ -140,16 +151,18 @@ class LocationTrackingService : Service() {
 
     private fun stopTracking() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        altimeterManager.stop()
 
         val recordedPoints = TrackingManager.trackPoints.value
         val distKm = TrackingManager.totalDistanceMeters.value / 1000.0
+        val ascentM = TrackingManager.totalAscentMeters.value.toInt()
 
         // Uložíme trasu do .gpx souboru v hodinkách
         val savedFile = GpxExporter.saveTrackToGpx(this, recordedPoints)
         TrackingManager.setTrackingActive(false)
 
         if (savedFile != null) {
-            TrackingManager.setSavedSummary("GPX uloženo: %.2f km (%d b.)".format(distKm, recordedPoints.size))
+            TrackingManager.setSavedSummary("GPX: %.2f km • ↑%d m".format(distKm, ascentM))
         } else {
             TrackingManager.setSavedSummary("Záznam ukončen (0 bodů)")
         }

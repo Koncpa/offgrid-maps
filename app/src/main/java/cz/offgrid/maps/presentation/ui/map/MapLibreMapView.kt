@@ -41,14 +41,12 @@ private const val USER_LOCATION_ICON_ID = "mapycz_style_location_arrow"
 private const val TRACK_LINE_SOURCE_ID = "recorded_track_source"
 private const val TRACK_LINE_LAYER_ID = "recorded_track_layer"
 
+private const val PLANNED_ROUTE_SOURCE_ID = "planned_gpx_route_source"
+private const val PLANNED_ROUTE_CASING_LAYER_ID = "planned_gpx_route_casing_layer"
+private const val PLANNED_ROUTE_LAYER_ID = "planned_gpx_route_layer"
+
 /**
  * Energeticky vysoce optimalizovaný Compose wrapper pro MapLibre MapView na Wear OS.
- *
- * Jak funguje nová GPS značka ve stylu Mapy.cz:
- * 1. Malá kompaktní tečka s drobnou šipečkou na obvodu (vykreslená jako lehká 48x48 bitmapa).
- * 2. Šipečka má na displeji vždy stejnou malou velikost bez ohledu na přiblížení mapy (Zoom).
- * 3. Barva je zvolena podle fyziky OLED displejů: Teplá tlumená jantarová (#D97706) s nulovým
- *    podílem modrého subpixelu a bez svítící bílé (#FFFFFF) – spotřebovává o ~65 % méně proudu.
  */
 @SuppressLint("ClickableViewAccessibility")
 @Composable
@@ -57,6 +55,7 @@ fun MapLibreMapView(
     targetLocation: LatLng,
     azimuthDegrees: Float,
     trackPoints: List<TrackPoint>,
+    plannedRoutePoints: List<TrackPoint> = emptyList(),
     mbtilesFile: File?,
     modifier: Modifier = Modifier,
     onMapReady: (MapLibreMap) -> Unit = {}
@@ -136,13 +135,36 @@ fun MapLibreMapView(
 
             val styleJson = StyleBuilder.createAmoledOutdoorStyle(mbtilesFile)
             map.setStyle(Style.Builder().fromJson(styleJson)) { style ->
+                // 0. Zdroj a vrstva pro načtenou GPX trasu k navigaci (černý podklad + čárkovaná vodicí linka)
+                val plannedSource = GeoJsonSource(PLANNED_ROUTE_SOURCE_ID)
+                style.addSource(plannedSource)
+                style.addLayer(
+                    LineLayer(PLANNED_ROUTE_CASING_LAYER_ID, PLANNED_ROUTE_SOURCE_ID).withProperties(
+                        lineColor("#000000"),
+                        lineWidth(6.0f),
+                        lineCap(Property.LINE_CAP_ROUND),
+                        lineJoin(Property.LINE_JOIN_ROUND)
+                    )
+                )
+                style.addLayer(
+                    LineLayer(PLANNED_ROUTE_LAYER_ID, PLANNED_ROUTE_SOURCE_ID).withProperties(
+                        lineColor("#D8D8D0"),
+                        lineWidth(3.2f),
+                        lineDasharray(arrayOf(2.0f, 1.5f)),
+                        lineCap(Property.LINE_CAP_ROUND),
+                        lineJoin(Property.LINE_JOIN_ROUND)
+                    )
+                )
+
                 // 1. Zdroj a vrstva pro zaznamenanou GPX trasu (v úsporné tlumené jantarové barvě)
                 val trackSource = GeoJsonSource(TRACK_LINE_SOURCE_ID)
                 style.addSource(trackSource)
                 style.addLayer(
                     LineLayer(TRACK_LINE_LAYER_ID, TRACK_LINE_SOURCE_ID).withProperties(
-                        lineColor("#D97706"),
-                        lineWidth(3.0f)
+                        lineColor("#E07A00"),
+                        lineWidth(3.4f),
+                        lineCap(Property.LINE_CAP_ROUND),
+                        lineJoin(Property.LINE_JOIN_ROUND)
                     )
                 )
 
@@ -198,10 +220,30 @@ fun MapLibreMapView(
 
     // Aktualizace vykreslené stopy trasy (překreslí se až při rozsvícení displeje)
     LaunchedEffect(trackPoints, isStyleLoaded, isScreenVisible) {
-        if (isStyleLoaded && isScreenVisible && trackPoints.size >= 2) {
+        if (isStyleLoaded && isScreenVisible) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(TRACK_LINE_SOURCE_ID)?.let { source ->
-                val coords = trackPoints.map { Point.fromLngLat(it.longitude, it.latitude) }
-                source.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
+                if (trackPoints.size >= 2) {
+                    val coords = trackPoints.map { Point.fromLngLat(it.longitude, it.latitude) }
+                    source.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
+                } else {
+                    source.setGeoJson("""{"type":"FeatureCollection","features":[]}""")
+                }
+                mapInstance?.triggerRepaint()
+            }
+        }
+    }
+
+    // Aktualizace načtené GPX trasy pro navigaci
+    LaunchedEffect(plannedRoutePoints, isStyleLoaded, isScreenVisible) {
+        if (isStyleLoaded && isScreenVisible) {
+            mapInstance?.style?.getSourceAs<GeoJsonSource>(PLANNED_ROUTE_SOURCE_ID)?.let { source ->
+                if (plannedRoutePoints.size >= 2) {
+                    val coords = plannedRoutePoints.map { Point.fromLngLat(it.longitude, it.latitude) }
+                    source.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
+                } else {
+                    source.setGeoJson("""{"type":"FeatureCollection","features":[]}""")
+                }
+                mapInstance?.triggerRepaint()
             }
         }
     }

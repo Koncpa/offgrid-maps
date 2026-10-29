@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.*
 
 /**
- * Centrální správce stavu nahrávání trasy (Reaktivní StateFlow).
+ * Centrální správce stavu nahrávání trasy, barometrického převýšení a GPX navigace.
  */
 object TrackingManager {
 
@@ -23,24 +23,48 @@ object TrackingManager {
     private val _totalDistanceMeters = MutableStateFlow(0.0)
     val totalDistanceMeters: StateFlow<Double> = _totalDistanceMeters.asStateFlow()
 
+    private val _currentAltitudeMeters = MutableStateFlow<Double?>(null)
+    val currentAltitudeMeters: StateFlow<Double?> = _currentAltitudeMeters.asStateFlow()
+
+    private val _totalAscentMeters = MutableStateFlow(0.0)
+    val totalAscentMeters: StateFlow<Double> = _totalAscentMeters.asStateFlow()
+
+    private var referenceAltitudeForAscent: Double? = null
+
     private val _currentLocation = MutableStateFlow<TrackPoint?>(null)
     val currentLocation: StateFlow<TrackPoint?> = _currentLocation.asStateFlow()
 
     private val _lastSavedSummary = MutableStateFlow<String?>(null)
     val lastSavedSummary: StateFlow<String?> = _lastSavedSummary.asStateFlow()
 
+    // Načtená GPX trasa pro navigaci po mapě
+    private val _plannedRoutePoints = MutableStateFlow<List<TrackPoint>>(emptyList())
+    val plannedRoutePoints: StateFlow<List<TrackPoint>> = _plannedRoutePoints.asStateFlow()
+
+    private val _plannedRouteName = MutableStateFlow<String?>(null)
+    val plannedRouteName: StateFlow<String?> = _plannedRouteName.asStateFlow()
+
+    private val _isOffRoute = MutableStateFlow(false)
+    val isOffRoute: StateFlow<Boolean> = _isOffRoute.asStateFlow()
+
     fun setTrackingActive(active: Boolean) {
         if (active && !_isTracking.value) {
-            // Zahajujeme novou trasu
             _trackPoints.value = emptyList()
             _totalDistanceMeters.value = 0.0
+            _totalAscentMeters.value = 0.0
+            referenceAltitudeForAscent = _currentAltitudeMeters.value
             _recordingStartMillis.value = System.currentTimeMillis()
             _lastSavedSummary.value = null
             _isTracking.value = true
 
-            // Pokud už máme aktuální GPS polohu, hned ji vložíme jako 1. bod trasy
             _currentLocation.value?.let { startPt ->
-                _trackPoints.value = listOf(startPt.copy(timestampMillis = System.currentTimeMillis()))
+                val alt = _currentAltitudeMeters.value ?: startPt.altitudeMeters
+                _trackPoints.value = listOf(
+                    startPt.copy(
+                        altitudeMeters = alt,
+                        timestampMillis = System.currentTimeMillis()
+                    )
+                )
             }
         } else if (!active) {
             _isTracking.value = false
@@ -52,10 +76,68 @@ object TrackingManager {
     }
 
     /**
-     * Přidá nový bod trasy a přičte vzdálenost od předchozího bodu.
+     * Aktualizuje nadmořskou výšku (z barometru nebo GPS fallbacku) a s hysterezí
+     * započítává nastoupané výškové metry během aktivního záznamu.
+     */
+    fun updateAltitude(altitudeMeters: Double, isBarometric: Boolean) {
+        _currentAltitudeMeters.value = altitudeMeters
+
+        if (!_isTracking.value) {
+            referenceAltitudeForAscent = altitudeMeters
+            return
+        }
+
+        val ref = referenceAltitudeForAscent
+        if (ref == null) {
+            referenceAltitudeForAscent = altitudeMeters
+            return
+        }
+
+        // Hysterezní práh: 3 m pro přesný barometr, 7 m pro GPS fallback (odfiltruje šum)
+        val threshold = if (isBarometric) 3.0 else 7.0
+        val diff = altitudeMeters - ref
+        if (diff >= threshold) {
+            _totalAscentMeters.value += diff
+            referenceAltitudeForAscent = altitudeMeters
+        } else if (diff <= -threshold) {
+            // Při klesání posuneme referenční hladinu dolů, abychom měřili další výstup
+            referenceAltitudeForAscent = altitudeMeters
+        }
+    }
+
+    /**
+     * Nastaví nebo vyčistí naplánovanou GPX trasu pro navigaci na mapě.
+     */
+    fun setPlannedRoute(name: String?, points: List<TrackPoint>) {
+        _plannedRouteName.value = name
+        _plannedRoutePoints.value = points
+        _isOffRoute.value = false
+    }
+
+    /**
+     * Přidá nový bod trasy, přičte vzdálenost a zkontroluje odchylku od naplánované GPX trasy.
      */
     fun addPoint(point: TrackPoint) {
-        _currentLocation.value = point
+        val enrichedPoint = if (_currentAltitudeMeters.value != null) {
+            point.copy(altitudeMeters = _currentAltitudeMeters.value)
+        } else {
+            point
+        }
+        _currentLocation.value = enrichedPoint
+
+        // Kontrola odchylky od naplánované GPX trasy (> 60 metrů = mimo trasu)
+        val route = _plannedRoutePoints.value
+        if (route.isNotEmpty()) {
+            val minDistanceToRoute = route.minOf { rPt ->
+                calculateDistanceMeters(
+                    enrichedPoint.latitude, enrichedPoint.longitude,
+                    rPt.latitude, rPt.longitude
+                )
+            }
+            _isOffRoute.value = minDistanceToRoute > 60.0
+        } else {
+            _isOffRoute.value = false
+        }
 
         if (!_isTracking.value) return
 
@@ -63,14 +145,14 @@ object TrackingManager {
         if (previous != null) {
             val delta = calculateDistanceMeters(
                 previous.latitude, previous.longitude,
-                point.latitude, point.longitude
+                enrichedPoint.latitude, enrichedPoint.longitude
             )
-            // Odfiltrujeme GPS šum na místě (< 1.5 metru), ale zaznamenáme reálnou chůzi
+            // Odfiltrujeme GPS šum na místě (< 1.5 metru)
             if (delta < 1.5) return
             _totalDistanceMeters.value += delta
         }
 
-        _trackPoints.value = _trackPoints.value + point
+        _trackPoints.value = _trackPoints.value + enrichedPoint
     }
 
     /**
@@ -80,9 +162,15 @@ object TrackingManager {
         _isTracking.value = false
         _trackPoints.value = emptyList()
         _totalDistanceMeters.value = 0.0
+        _totalAscentMeters.value = 0.0
+        _currentAltitudeMeters.value = null
+        referenceAltitudeForAscent = null
         _recordingStartMillis.value = 0L
         _currentLocation.value = null
         _lastSavedSummary.value = null
+        _plannedRouteName.value = null
+        _plannedRoutePoints.value = emptyList()
+        _isOffRoute.value = false
     }
 
     /**

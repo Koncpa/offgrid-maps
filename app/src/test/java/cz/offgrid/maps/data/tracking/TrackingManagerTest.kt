@@ -74,4 +74,34 @@ class TrackingManagerTest {
         assertEquals(0, TrackingManager.trackPoints.value.size)
         assertEquals(0.0, TrackingManager.totalDistanceMeters.value, 0.0)
     }
+
+    @Test
+    fun updateAltitude_accumulatesAscentWithHysteresis() {
+        TrackingManager.setTrackingActive(true)
+        TrackingManager.updateAltitude(250.0, isBarometric = true)
+        // Šum o 1.5 m pod prahem 3 m se nezapočítá
+        TrackingManager.updateAltitude(251.5, isBarometric = true)
+        assertEquals(0.0, TrackingManager.totalAscentMeters.value, 0.01)
+
+        // Výstup o 6 m nad referenčních 250 m se započítá
+        TrackingManager.updateAltitude(256.0, isBarometric = true)
+        assertEquals(6.0, TrackingManager.totalAscentMeters.value, 0.01)
+    }
+
+    @Test
+    fun addPoint_withPlannedRoute_detectsOffRouteOver60Meters() {
+        val route = listOf(
+            TrackPoint(49.1246, 16.3353),
+            TrackPoint(49.1268, 16.3321)
+        )
+        TrackingManager.setPlannedRoute("Oslavany okruh", route)
+
+        // Bod přímo na trase
+        TrackingManager.addPoint(TrackPoint(49.1246, 16.3353))
+        assertFalse(TrackingManager.isOffRoute.value)
+
+        // Bod vzdálený cca 300 m od trasy
+        TrackingManager.addPoint(TrackPoint(49.1200, 16.3400))
+        assertTrue(TrackingManager.isOffRoute.value)
+    }
 }
