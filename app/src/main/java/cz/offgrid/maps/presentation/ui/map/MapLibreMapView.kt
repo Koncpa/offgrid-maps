@@ -58,9 +58,11 @@ fun MapLibreMapView(
     plannedRoutePoints: List<TrackPoint> = emptyList(),
     mbtilesFile: File?,
     modifier: Modifier = Modifier,
+    onUserPanGesture: () -> Unit = {},
     onMapReady: (MapLibreMap) -> Unit = {}
 ) {
     val context = LocalContext.current
+    @Suppress("DEPRECATION")
     val lifecycleOwner = LocalLifecycleOwner.current
 
     RememberMapLibreInit(context)
@@ -126,6 +128,13 @@ fun MapLibreMapView(
                 isScrollGesturesEnabled = true
                 isFlingVelocityAnimationEnabled = false
                 isScaleVelocityAnimationEnabled = false
+            }
+
+            // Pokud uživatel pohne mapou prstem, odemkneme automatické centrování na GPS
+            map.addOnCameraMoveStartedListener { reason ->
+                if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                    onUserPanGesture()
+                }
             }
 
             map.cameraPosition = CameraPosition.Builder()

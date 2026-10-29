@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="cz.offgrid.maps.data.map.StyleBuilderTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-29T21:48:10" hostname="Patriks-Air.home" time="0.042">
+<testsuite name="cz.offgrid.maps.data.map.StyleBuilderTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-29T22:02:43" hostname="Patriks-Air.home" time="0.053">
   <properties/>
-  <testcase name="createAmoledOutdoorStyle_withMbtilesFile_containsMbtilesSourceAndKctLayers" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.038"/>
+  <testcase name="createAmoledOutdoorStyle_withMbtilesFile_containsMbtilesSourceAndKctLayers" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.049"/>
   <testcase name="createAmoledOutdoorStyle_withoutFile_containsAmoledBackground" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.003"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

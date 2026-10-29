@@ -63,6 +63,7 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
+    @Suppress("DEPRECATION")
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapFileManager = remember { MapFileManager(context) }
     val defaultMapFile = remember { mapFileManager.getDefaultMap() }
@@ -71,6 +72,7 @@ fun MapScreen(
 
     var showGpxPicker by remember { mutableStateOf(false) }
     var availableGpxFiles by remember { mutableStateOf<List<File>>(emptyList()) }
+    var isFollowingGps by remember { mutableStateOf(true) }
 
     // Zablokujeme systémové gesto "Zpět" při tažení od kraje displeje (pokud je otevřen GPX výběr, zavře ho)
     BackHandler(enabled = true) {
@@ -156,15 +158,17 @@ fun MapScreen(
     // Výchozí poloha: Jihomoravský kraj (Oslavany: 49.1246, 16.3353)
     var activeLocation by remember { mutableStateOf(LatLng(49.1246, 16.3353)) }
 
-    // Kamera se posouvá pouze tehdy, když je displej rozsvícený (šetří GPU na pozadí)
+    // Kamera sleduje GPS pouze tehdy, když je displej rozsvícený A uživatel neposunul mapu prstem (isFollowingGps)
     LaunchedEffect(latestGpsPoint, isScreenVisible) {
         if (isScreenVisible) {
             latestGpsPoint?.let { pt ->
                 val newLatLng = LatLng(pt.latitude, pt.longitude)
                 activeLocation = newLatLng
-                maplibreMapInstance?.moveCamera(
-                    CameraUpdateFactory.newLatLng(newLatLng)
-                )
+                if (isFollowingGps) {
+                    maplibreMapInstance?.moveCamera(
+                        CameraUpdateFactory.newLatLng(newLatLng)
+                    )
+                }
             }
         }
     }
@@ -183,6 +187,12 @@ fun MapScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+        // Pokud se hodinky na předchozí túře vybily před stiskem STOP, zachráníme rozpracovanou trasu
+        val recoveredFile = GpxExporter.recoverUnfinishedTrackIfAny(context)
+        if (recoveredFile != null) {
+            TrackingManager.setSavedSummary("Obnovena trasa po vypnutí")
+        }
+
         val hasLocation = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
@@ -227,6 +237,9 @@ fun MapScreen(
             plannedRoutePoints = plannedRoutePoints,
             mbtilesFile = defaultMapFile,
             modifier = Modifier.fillMaxSize(),
+            onUserPanGesture = {
+                isFollowingGps = false
+            },
             onMapReady = { map ->
                 maplibreMapInstance = map
             }
@@ -451,10 +464,11 @@ fun MapScreen(
                 )
             }
 
-            // Tlačítko pro vycentrování na aktuální GPS pozici v barvě ZELENÉ turistické značky KČT
+            // Tlačítko pro vycentrování a uzamčení sledování GPS v barvě ZELENÉ turistické značky KČT
             Button(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    isFollowingGps = true
                     fetchActiveLocationOnDemand(context, altimeterManager)
                     maplibreMapInstance?.moveCamera(
                         CameraUpdateFactory.newLatLng(activeLocation)
@@ -462,10 +476,14 @@ fun MapScreen(
                 },
                 modifier = Modifier
                     .size(buttonSize)
-                    .border(buttonBorder, TrailGreen, CircleShape),
+                    .border(
+                        width = if (isFollowingGps) 2.0.dp else buttonBorder,
+                        color = TrailGreen,
+                        shape = CircleShape
+                    ),
                 colors = ButtonDefaults.buttonColors(
                     backgroundColor = AmoledBlack.copy(alpha = 0.88f),
-                    contentColor = TrailGreen
+                    contentColor = if (isFollowingGps) TrailGreen else OutdoorTextSecondary
                 )
             ) {
                 Text(
@@ -485,8 +503,8 @@ fun MapScreen(
                     val points = GpxExporter.parseGpxFile(file)
                     if (points.isNotEmpty()) {
                         TrackingManager.setPlannedRoute(file.nameWithoutExtension, points)
+                        isFollowingGps = false
                         val startLatLng = LatLng(points.first().latitude, points.first().longitude)
-                        activeLocation = startLatLng
                         maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(startLatLng, 14.0))
                         zoomLevel = 14.0f
                     }

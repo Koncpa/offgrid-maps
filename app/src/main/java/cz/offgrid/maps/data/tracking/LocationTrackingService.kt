@@ -2,9 +2,12 @@ package cz.offgrid.maps.data.tracking
 
 import android.annotation.SuppressLint
 import android.app.*
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
@@ -14,7 +17,8 @@ import cz.offgrid.maps.MainActivity
 import cz.offgrid.maps.domain.model.TrackPoint
 
 /**
- * Popřední služba (Foreground Service) pro záznam GPS trasy a automatický GPX export.
+ * Popřední služba (Foreground Service) pro záznam GPS trasy, barometrického převýšení,
+ * průběžné zálohování a automatické nouzové uložení GPX při poklesu baterie na <= 5 %.
  */
 class LocationTrackingService : Service() {
 
@@ -23,7 +27,34 @@ class LocationTrackingService : Service() {
     private lateinit var altimeterManager: BarometricAltimeterManager
     private var lastNotificationMillis = 0L
     private var lastNotifiedDistanceMeters = 0.0
+    private var lastCheckpointPointsCount = 0
     private var isScreenInteractive = true
+    private var isBatteryReceiverRegistered = false
+
+    /**
+     * Pasivní posluchač systémového vysílání stavu baterie (0 mW spotřeba, žádné dotazování ve smyčce).
+     * Jakmile baterie klesne na <= 5 % (a hodinky nejsou na nabíječce), okamžitě uloží GPX trasu
+     * a vypne GPS, aby zbylých 5 % udrželo hodinky v chodu.
+     */
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != Intent.ACTION_BATTERY_CHANGED) return
+            if (!TrackingManager.isTracking.value) return
+
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL
+
+            if (level >= 0 && scale > 0 && !isCharging) {
+                val batteryPct = (level * 100) / scale
+                if (batteryPct in 1..LOW_BATTERY_THRESHOLD_PCT) {
+                    stopTracking(emergencyLowBattery = true)
+                }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -48,6 +79,14 @@ class LocationTrackingService : Service() {
                     )
                     TrackingManager.addPoint(point)
                 }
+
+                // Průběžná záloha na disk každých 10 zaznamenaných bodů (ochrana proti vybití/restartu)
+                val currentPoints = TrackingManager.trackPoints.value
+                if (currentPoints.size - lastCheckpointPointsCount >= 10) {
+                    lastCheckpointPointsCount = currentPoints.size
+                    GpxExporter.saveRecoveryCheckpoint(this@LocationTrackingService, currentPoints)
+                }
+
                 updateNotificationThrottled()
             }
         }
@@ -56,7 +95,7 @@ class LocationTrackingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startTracking()
-            ACTION_STOP -> stopTracking()
+            ACTION_STOP -> stopTracking(emergencyLowBattery = false)
             ACTION_SCREEN_ON -> {
                 if (TrackingManager.isTracking.value && !isScreenInteractive) {
                     isScreenInteractive = true
@@ -80,7 +119,13 @@ class LocationTrackingService : Service() {
         altimeterManager.start()
         lastNotificationMillis = System.currentTimeMillis()
         lastNotifiedDistanceMeters = 0.0
+        lastCheckpointPointsCount = 0
         isScreenInteractive = true
+
+        if (!isBatteryReceiverRegistered) {
+            registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            isBatteryReceiverRegistered = true
+        }
 
         val notification = buildNotification("Zaznamenávám trasu...")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -110,6 +155,7 @@ class LocationTrackingService : Service() {
                             accuracyMeters = loc.accuracy
                         )
                     )
+                    GpxExporter.saveRecoveryCheckpoint(this, TrackingManager.trackPoints.value)
                 }
             }
 
@@ -149,26 +195,45 @@ class LocationTrackingService : Service() {
         )
     }
 
-    private fun stopTracking() {
+    private fun stopTracking(emergencyLowBattery: Boolean) {
         fusedLocationClient.removeLocationUpdates(locationCallback)
         altimeterManager.stop()
+        unregisterBatteryReceiverSafely()
 
         val recordedPoints = TrackingManager.trackPoints.value
         val distKm = TrackingManager.totalDistanceMeters.value / 1000.0
         val ascentM = TrackingManager.totalAscentMeters.value.toInt()
 
-        // Uložíme trasu do .gpx souboru v hodinkách
-        val savedFile = GpxExporter.saveTrackToGpx(this, recordedPoints)
+        val prefix = if (emergencyLowBattery) "baterie5pct" else "tura"
+        val savedFile = GpxExporter.saveTrackToGpx(this, recordedPoints, prefix = prefix)
         TrackingManager.setTrackingActive(false)
 
-        if (savedFile != null) {
+        if (emergencyLowBattery) {
+            TrackingManager.setSavedSummary("Baterie ≤5 %! GPX uloženo (%.2f km)".format(distKm))
+        } else if (savedFile != null) {
             TrackingManager.setSavedSummary("GPX: %.2f km • ↑%d m".format(distKm, ascentM))
         } else {
+            GpxExporter.clearRecoveryCheckpoint(this)
             TrackingManager.setSavedSummary("Záznam ukončen (0 bodů)")
         }
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun unregisterBatteryReceiverSafely() {
+        if (isBatteryReceiverRegistered) {
+            try {
+                unregisterReceiver(batteryReceiver)
+            } catch (_: IllegalArgumentException) {
+            }
+            isBatteryReceiverRegistered = false
+        }
+    }
+
+    override fun onDestroy() {
+        unregisterBatteryReceiverSafely()
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {
@@ -200,6 +265,7 @@ class LocationTrackingService : Service() {
             .setContentTitle("OffGrid Záznam")
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setCategory(NotificationCompat.CATEGORY_WORKOUT)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setSilent(true)
@@ -220,8 +286,8 @@ class LocationTrackingService : Service() {
         lastNotifiedDistanceMeters = totalDistMeters
 
         val distanceKm = totalDistMeters / 1000.0
-        val pointsCount = TrackingManager.trackPoints.value.size
-        val statusText = "Vzdálenost: %.2f km • Body: %d".format(distanceKm, pointsCount)
+        val ascentM = TrackingManager.totalAscentMeters.value.toInt()
+        val statusText = "%.2f km • ↑%d m".format(distanceKm, ascentM)
 
         val manager = getSystemService(NotificationManager::class.java)
         manager?.notify(NOTIFICATION_ID, buildNotification(statusText))
@@ -236,6 +302,7 @@ class LocationTrackingService : Service() {
         const val ACTION_SCREEN_OFF = "cz.offgrid.maps.ACTION_SCREEN_OFF"
         private const val CHANNEL_ID = "offgrid_tracking_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val LOW_BATTERY_THRESHOLD_PCT = 5
 
         fun start(context: Context) {
             val intent = Intent(context, LocationTrackingService::class.java).apply {
