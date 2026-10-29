@@ -1,5 +1,9 @@
 package cz.offgrid.maps.presentation.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -14,8 +18,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.wear.compose.material.*
 import cz.offgrid.maps.data.map.MapFileManager
+import cz.offgrid.maps.data.tracking.LocationTrackingService
+import cz.offgrid.maps.data.tracking.TrackingManager
 import cz.offgrid.maps.presentation.theme.*
 import cz.offgrid.maps.presentation.ui.map.MapLibreMapView
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -25,11 +32,11 @@ import org.maplibre.android.maps.MapLibreMap
 /**
  * Hlavní obrazovka mapy pro kruhový displej Wear OS.
  *
- * Kombinuje:
+ * Plná integrace:
  * 1. Nativní MapLibre rendering s True Black stylem.
  * 2. Rotary Input (zoom otáčením korunky bez zakrývání displeje prsty).
- * 3. Indikaci stavu GPS a záznamu trasy.
- * 4. Tlačítko pro vycentrování pozice.
+ * 3. Propojení s LocationTrackingService (Foreground Service) a TrackingManager.
+ * 4. Živé zobrazení ujeté vzdálenosti (km) a stavu GPS fixu.
  */
 @Composable
 fun MapScreen(
@@ -39,13 +46,33 @@ fun MapScreen(
     val mapFileManager = remember { MapFileManager(context) }
     val defaultMapFile = remember { mapFileManager.getDefaultMap() }
 
-    var zoomLevel by remember { mutableFloatStateOf(13.0f) }
-    var isTracking by remember { mutableStateOf(false) }
-    var isGpsFixed by remember { mutableStateOf(true) }
+    // Reaktivní stav z TrackingManager
+    val isTracking by TrackingManager.isTracking.collectAsState()
+    val totalDistanceMeters by TrackingManager.totalDistanceMeters.collectAsState()
+    val latestGpsPoint by TrackingManager.currentLocation.collectAsState()
 
-    // Výchozí souřadnice (např. Krkonoše / Sněžka: 50.736, 15.740)
-    var currentLocation by remember { mutableStateOf(LatLng(50.7360, 15.7396)) }
+    var zoomLevel by remember { mutableFloatStateOf(13.0f) }
     var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+
+    // Výchozí poloha (např. Krkonoše / Sněžka, pokud ještě není GPS fix)
+    var activeLocation by remember { mutableStateOf(LatLng(50.7360, 15.7396)) }
+
+    // Když přijde nový GPS bod, aktualizujeme souřadnice
+    LaunchedEffect(latestGpsPoint) {
+        latestGpsPoint?.let { pt ->
+            activeLocation = LatLng(pt.latitude, pt.longitude)
+        }
+    }
+
+    // Permission launcher pro GPS
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        if (fineLocationGranted && !isTracking) {
+            LocationTrackingService.start(context)
+        }
+    }
 
     // FocusRequester pro zachycení otočení korunky hodinek
     val focusRequester = remember { FocusRequester() }
@@ -72,7 +99,7 @@ fun MapScreen(
         // Nativní vektorová mapa
         MapLibreMapView(
             zoomLevel = zoomLevel,
-            targetLocation = currentLocation,
+            targetLocation = activeLocation,
             mbtilesFile = defaultMapFile,
             modifier = Modifier.fillMaxSize(),
             onMapReady = { map ->
@@ -99,31 +126,45 @@ fun MapScreen(
             }
         }
 
-        // Horní indikátor: Stav GPS a zoomu
+        // Horní indikátor: Stav GPS, ujetá vzdálenost a zoom
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 14.dp)
-                .background(AmoledBlack.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
+                .padding(top = 12.dp)
+                .background(AmoledBlack.copy(alpha = 0.75f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 10.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
+            val hasGpsFix = latestGpsPoint != null
             Box(
                 modifier = Modifier
                     .size(7.dp)
                     .background(
-                        color = if (isGpsFixed) OutdoorLime else TrailRed,
+                        color = if (hasGpsFix) OutdoorLime else TrailRed,
                         shape = CircleShape
                     )
             )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = if (isGpsFixed) "GPS" else "NO GPS",
-                color = if (isGpsFixed) OutdoorLime else TrailRed,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Pokud nahráváme, zobrazíme ujeté km, jinak stav GPS
+            if (isTracking) {
+                val km = totalDistanceMeters / 1000.0
+                Text(
+                    text = "%.2f km".format(km),
+                    color = OutdoorLime,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            } else {
+                Text(
+                    text = if (hasGpsFix) "GPS OK" else "HLEDÁM",
+                    color = if (hasGpsFix) OutdoorLime else TrailRed,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Z %.1f".format(zoomLevel),
@@ -132,7 +173,7 @@ fun MapScreen(
             )
         }
 
-        // Spodní ergonomická lišta: Ovládací tlačítka
+        // Spodní ergonomická lišta: Ovládací tlačítka (velikost 46 dp)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -143,7 +184,28 @@ fun MapScreen(
         ) {
             // Tlačítko záznamu trasy (REC / GO)
             Button(
-                onClick = { isTracking = !isTracking },
+                onClick = {
+                    if (isTracking) {
+                        LocationTrackingService.stop(context)
+                    } else {
+                        // Zkontrolujeme oprávnění
+                        val hasFine = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (hasFine) {
+                            LocationTrackingService.start(context)
+                        } else {
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier.size(46.dp),
                 colors = ButtonDefaults.buttonColors(
                     backgroundColor = if (isTracking) TrailRed else DarkSurfaceVariant,
@@ -151,17 +213,17 @@ fun MapScreen(
                 )
             ) {
                 Text(
-                    text = if (isTracking) "REC" else "GO",
-                    fontSize = 11.sp,
+                    text = if (isTracking) "STOP" else "REC",
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            // Tlačítko pro návrat na střed (Re-center na GPS pozici)
+            // Tlačítko pro vycentrování na aktuální GPS pozici
             Button(
                 onClick = {
                     maplibreMapInstance?.easeCamera(
-                        CameraUpdateFactory.newLatLng(currentLocation),
+                        CameraUpdateFactory.newLatLng(activeLocation),
                         200
                     )
                 },
