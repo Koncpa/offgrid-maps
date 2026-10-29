@@ -22,16 +22,23 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.*
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import java.io.File
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
 
 private const val USER_LOCATION_SOURCE_ID = "user_location_source"
 private const val USER_LOCATION_HALO_LAYER_ID = "user_location_halo_layer"
 private const val USER_LOCATION_DOT_LAYER_ID = "user_location_dot_layer"
+
+private const val USER_HEADING_SOURCE_ID = "user_heading_source"
+private const val USER_HEADING_LAYER_ID = "user_heading_layer"
 
 private const val TRACK_LINE_SOURCE_ID = "recorded_track_source"
 private const val TRACK_LINE_LAYER_ID = "recorded_track_layer"
@@ -39,18 +46,17 @@ private const val TRACK_LINE_LAYER_ID = "recorded_track_layer"
 /**
  * Energeticky vysoce optimalizovaný Compose wrapper pro MapLibre MapView na Wear OS.
  *
- * Úspora baterie pro celodenní túru:
- * 1. Limit snímkové frekvence: setMaximumFps(15) snižuje odběr GPU o ~75 % oproti 60 FPS.
- * 2. Jednosnímkové překreslení: Používá moveCamera() místo animovaného easeCamera() (1 snímek místo 25).
- * 3. Vypnutá setrvačnost (isFlingVelocityAnimationEnabled = false): Jakmile zvednete prst z displeje,
- *    GPU se okamžitě uspí a nedobíhá animace posunu.
- * 4. Okamžité uspání při zhasnutí displeje (Lifecycle ON_PAUSE -> mapView.onPause()).
+ * Zobrazuje:
+ * 1. Ultra-Pure AMOLED vektorovou mapu + KČT trasy.
+ * 2. Zelený GPS bod polohy + Směrový kompasový kužel (kam míří ruka na rozcestí).
+ * 3. Zaznamenanou stopu túry.
  */
 @SuppressLint("ClickableViewAccessibility")
 @Composable
 fun MapLibreMapView(
     zoomLevel: Float,
     targetLocation: LatLng,
+    azimuthDegrees: Float,
     trackPoints: List<TrackPoint>,
     mbtilesFile: File?,
     modifier: Modifier = Modifier,
@@ -70,8 +76,6 @@ fun MapLibreMapView(
             // Klíčová úspora GPU: Omezíme maximální FPS na 15 snímků za sekundu
             setMaximumFps(15)
 
-            // Zabráníme systému Wear OS / One UI Watch vyhodnotit tažení prstem po mapě
-            // jako gesto "Zpět / Zavřít aplikaci" (Swipe-to-Dismiss).
             setOnTouchListener { view, event ->
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN,
@@ -84,7 +88,6 @@ fun MapLibreMapView(
         }
     }
 
-    // Životní cyklus - kritické pro úsporu energie (zastaví OpenGL při zhasnutí displeje)
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -106,7 +109,6 @@ fun MapLibreMapView(
         }
     }
 
-    // Inicializace mapy a stylu
     LaunchedEffect(mapView) {
         mapView.getMapAsync { map ->
             mapInstance = map
@@ -119,7 +121,6 @@ fun MapLibreMapView(
                 isTiltGesturesEnabled = false
                 isZoomGesturesEnabled = true
                 isScrollGesturesEnabled = true
-                // Vypneme dobíhající setrvačnost po zvednutí prstu -> GPU usne okamžitě po dotyku
                 isFlingVelocityAnimationEnabled = false
                 isScaleVelocityAnimationEnabled = false
             }
@@ -136,34 +137,48 @@ fun MapLibreMapView(
                 style.addSource(trackSource)
                 style.addLayer(
                     LineLayer(TRACK_LINE_LAYER_ID, TRACK_LINE_SOURCE_ID).withProperties(
-                        lineColor("#FF9E0B"),
-                        lineWidth(4.0f)
+                        lineColor("#FFFFFF"),
+                        lineWidth(3.5f)
                     )
                 )
 
-                // 2. Zdroj a vrstva pro aktuální polohu (GPS tečka)
+                // 2. Zdroj a vrstva pro kompasový kužel (směr pohledu)
+                val headingSource = GeoJsonSource(
+                    USER_HEADING_SOURCE_ID,
+                    createHeadingArrowFeature(targetLocation, azimuthDegrees, zoomLevel)
+                )
+                style.addSource(headingSource)
+                style.addLayer(
+                    LineLayer(USER_HEADING_LAYER_ID, USER_HEADING_SOURCE_ID).withProperties(
+                        lineColor("#00D166"),
+                        lineWidth(2.5f),
+                        lineCap(Property.LINE_CAP_ROUND),
+                        lineJoin(Property.LINE_JOIN_ROUND)
+                    )
+                )
+
+                // 3. Zdroj a vrstva pro aktuální polohu (GPS tečka v barvě KČT zelené s bílým středem)
                 val locationPoint = Point.fromLngLat(targetLocation.longitude, targetLocation.latitude)
                 val userSource = GeoJsonSource(USER_LOCATION_SOURCE_ID, Feature.fromGeometry(locationPoint))
                 style.addSource(userSource)
 
                 style.addLayer(
                     CircleLayer(USER_LOCATION_HALO_LAYER_ID, USER_LOCATION_SOURCE_ID).withProperties(
-                        circleRadius(10f),
-                        circleColor("#3376FF03")
+                        circleRadius(9f),
+                        circleColor("#3300D166")
                     )
                 )
                 style.addLayer(
                     CircleLayer(USER_LOCATION_DOT_LAYER_ID, USER_LOCATION_SOURCE_ID).withProperties(
                         circleRadius(5.0f),
-                        circleColor("#76FF03"),
-                        circleStrokeColor("#000000"),
+                        circleColor("#00D166"),
+                        circleStrokeColor("#FFFFFF"),
                         circleStrokeWidth(2.0f)
                     )
                 )
 
                 isStyleLoaded = true
 
-                // Automaticky uložíme Jihomoravský kraj do offline databáze hodinek
                 if (mbtilesFile == null) {
                     OfflineRegionHelper.ensureSouthMoraviaOffline(context, styleJson)
                 }
@@ -173,12 +188,19 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace pozice GPS tečky na mapě
-    LaunchedEffect(targetLocation, isStyleLoaded) {
+    // Aktualizace pozice GPS tečky a směrové šipky kompasu
+    LaunchedEffect(targetLocation, azimuthDegrees, zoomLevel, isStyleLoaded) {
         if (isStyleLoaded) {
-            mapInstance?.style?.getSourceAs<GeoJsonSource>(USER_LOCATION_SOURCE_ID)?.let { source ->
+            val map = mapInstance ?: return@LaunchedEffect
+            val currentZoom = map.cameraPosition.zoom.toFloat()
+
+            map.style?.getSourceAs<GeoJsonSource>(USER_LOCATION_SOURCE_ID)?.let { source ->
                 val pt = Point.fromLngLat(targetLocation.longitude, targetLocation.latitude)
                 source.setGeoJson(Feature.fromGeometry(pt))
+            }
+
+            map.style?.getSourceAs<GeoJsonSource>(USER_HEADING_SOURCE_ID)?.let { source ->
+                source.setGeoJson(createHeadingArrowFeature(targetLocation, azimuthDegrees, currentZoom))
             }
         }
     }
@@ -193,7 +215,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Reakce na změnu zoomu - použijeme okamžitý moveCamera (1 snímek) místo náročné animace
+    // Reakce na změnu zoomu
     LaunchedEffect(zoomLevel) {
         mapInstance?.let { map ->
             if (kotlin.math.abs(map.cameraPosition.zoom.toFloat() - zoomLevel) > 0.05f) {
@@ -206,6 +228,41 @@ fun MapLibreMapView(
         factory = { mapView },
         modifier = modifier.fillMaxSize()
     )
+}
+
+/**
+ * Vypočítá směrovou šipku (kužel pohledu) vycházející z pozice uživatele ve směru kompasu.
+ * Délka šipky se automaticky přizpůsobuje aktuálnímu přiblížení mapy (zoomu).
+ */
+private fun createHeadingArrowFeature(location: LatLng, azimuthDeg: Float, zoom: Float): Feature {
+    // Měřítko délky šipky podle zoomu (aby na obrazovce měla vždy cca 24 pixelů)
+    val baseSpanDeg = 0.0022 * 2.0.pow((13.0 - zoom.toDouble()).coerceIn(-5.0, 5.0))
+    val latRad = Math.toRadians(location.latitude)
+    val lonScale = 1.0 / cos(latRad).coerceAtLeast(0.2)
+
+    val radCenter = Math.toRadians(azimuthDeg.toDouble())
+    val tipLat = location.latitude + baseSpanDeg * cos(radCenter)
+    val tipLon = location.longitude + baseSpanDeg * sin(radCenter) * lonScale
+
+    // Křídla šipky (zpět od špičky pod úhlem +-145 stupňů)
+    val wingSpan = baseSpanDeg * 0.42
+    val radLeft = Math.toRadians((azimuthDeg + 145f).toDouble())
+    val radRight = Math.toRadians((azimuthDeg - 145f).toDouble())
+
+    val leftLat = tipLat + wingSpan * cos(radLeft)
+    val leftLon = tipLon + wingSpan * sin(radLeft) * lonScale
+
+    val rightLat = tipLat + wingSpan * cos(radRight)
+    val rightLon = tipLon + wingSpan * sin(radRight) * lonScale
+
+    val points = listOf(
+        Point.fromLngLat(location.longitude, location.latitude),
+        Point.fromLngLat(tipLon, tipLat),
+        Point.fromLngLat(leftLon, leftLat),
+        Point.fromLngLat(tipLon, tipLat),
+        Point.fromLngLat(rightLon, rightLat)
+    )
+    return Feature.fromGeometry(LineString.fromLngLats(points))
 }
 
 @Composable

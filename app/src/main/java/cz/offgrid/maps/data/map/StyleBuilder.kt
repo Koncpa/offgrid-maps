@@ -3,23 +3,21 @@ package cz.offgrid.maps.data.map
 import java.io.File
 
 /**
- * Generátor MapLibre GL Style JSON přizpůsobený pro AMOLED displeje hodinek a outdoor použití.
+ * Generátor MapLibre GL Style JSON v architektuře Ultra-Pure AMOLED & KČT.
  *
- * Principy stylu:
- * 1. Background: #000000 (OLED subpixely vypnuté, 0 mW spotřeba).
- * 2. Voda a řeky: Tmavě modrá (#0D223D / #1C447A).
- * 3. Lesy / příroda: Velmi tmavě zelená (#07170D) pro minimální spotřebu, ale jasné odlišení lesa.
- * 4. Budovy a ulice: Kontrastní jemné linie a obrysy budov pro orientaci v obcích.
- * 5. Lesní cesty a pěšiny: Přerušované čáry (#8A949E).
- * 6. Turistické značení (KČT): Kompletní offline síť 14 591 úseků KČT tras Jihomoravského kraje
- *    přímo z vestavěného souboru asset://jmk_kct_trails.geojson (červená, modrá, zelená, žlutá).
- * 7. Popisky (Města, obce, vrcholy s nadmořskou výškou): Jasný text s černým lemem (halo).
+ * Jak je strukturován barevný layout pro maximální úsporu baterie a čitelnost:
+ * 1. Čisté černé pozadí (#000000) bez plošného podbarvování lesů:
+ *    Plošné vyplňování lesů zelenou barvou rozsvěcelo tisíce OLED subpixelů po celé obrazovce.
+ *    Nyní zůstává 94 % plochy displeje čistě černých (#000000 = 0 mW spotřeba) a svítí
+ *    pouze samotné linie cest, vodních toků a popisky!
+ * 2. Chytré filtrování podle přiblížení (proti „barevné směsici“ při oddálení):
+ *    - Pod Zoom 11: Vidíte jen čistou kostru hlavních měst a hlavních silnic.
+ *    - Od Zoom 11: Jemně vystoupí hlavní červené dálkové trasy KČT.
+ *    - Od Zoom 12: Postupně se rozsvítí modré, zelené a žluté turistické trasy.
+ *    - Od Zoom 13: Vykreslí se tečkované lesní pěšiny a obrysy budov.
  */
 object StyleBuilder {
 
-    /**
-     * Vytvoří kompletní MapLibre GL styl JSON.
-     */
     fun createAmoledOutdoorStyle(mbtilesFile: File?): String {
         val sourceDefinition = if (mbtilesFile != null && mbtilesFile.exists()) {
             """
@@ -62,33 +60,12 @@ object StyleBuilder {
               }
             },
             {
-              "id": "landcover_wood",
-              "type": "fill",
-              "source": "offline_source",
-              "source-layer": "landcover",
-              "filter": ["==", ["get", "class"], "wood"],
-              "paint": {
-                "fill-color": "#07170D",
-                "fill-opacity": 0.85
-              }
-            },
-            {
-              "id": "landuse_park",
-              "type": "fill",
-              "source": "offline_source",
-              "source-layer": "park",
-              "paint": {
-                "fill-color": "#06140B",
-                "fill-opacity": 0.6
-              }
-            },
-            {
               "id": "water",
               "type": "fill",
               "source": "offline_source",
               "source-layer": "water",
               "paint": {
-                "fill-color": "#0D2440"
+                "fill-color": "#07182E"
               }
             },
             {
@@ -96,9 +73,10 @@ object StyleBuilder {
               "type": "line",
               "source": "offline_source",
               "source-layer": "waterway",
+              "minzoom": 10,
               "paint": {
-                "line-color": "#1D4A82",
-                "line-width": 1.6
+                "line-color": "#153B6B",
+                "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.0, 14, 1.8]
               }
             },
             {
@@ -106,8 +84,9 @@ object StyleBuilder {
               "type": "line",
               "source": "offline_source",
               "source-layer": "contour",
+              "minzoom": 12,
               "paint": {
-                "line-color": "#262626",
+                "line-color": "#222222",
                 "line-width": 0.8
               }
             },
@@ -116,41 +95,10 @@ object StyleBuilder {
               "type": "fill",
               "source": "offline_source",
               "source-layer": "building",
-              "minzoom": 13,
+              "minzoom": 14,
               "paint": {
-                "fill-color": "#121212",
-                "fill-outline-color": "#262626"
-              }
-            },
-            {
-              "id": "roads_paths",
-              "type": "line",
-              "source": "offline_source",
-              "source-layer": "transportation",
-              "filter": ["in", "class", "path", "track", "footway", "bridleway"],
-              "layout": {
-                "line-cap": "round",
-                "line-join": "round"
-              },
-              "paint": {
-                "line-color": "#8A949E",
-                "line-width": 1.5,
-                "line-dasharray": [2, 1.5]
-              }
-            },
-            {
-              "id": "roads_minor",
-              "type": "line",
-              "source": "offline_source",
-              "source-layer": "transportation",
-              "filter": ["in", "class", "minor", "service", "street"],
-              "layout": {
-                "line-cap": "round",
-                "line-join": "round"
-              },
-              "paint": {
-                "line-color": "#454A52",
-                "line-width": 2.0
+                "fill-color": "#0A0A0A",
+                "fill-outline-color": "#222222"
               }
             },
             {
@@ -164,8 +112,41 @@ object StyleBuilder {
                 "line-join": "round"
               },
               "paint": {
-                "line-color": "#788290",
-                "line-width": 2.6
+                "line-color": "#48505C",
+                "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.0, 13, 2.2, 16, 3.2]
+              }
+            },
+            {
+              "id": "roads_minor",
+              "type": "line",
+              "source": "offline_source",
+              "source-layer": "transportation",
+              "minzoom": 12,
+              "filter": ["in", "class", "minor", "service", "street"],
+              "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+              },
+              "paint": {
+                "line-color": "#323740",
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.0, 15, 2.0]
+              }
+            },
+            {
+              "id": "roads_paths",
+              "type": "line",
+              "source": "offline_source",
+              "source-layer": "transportation",
+              "minzoom": 13,
+              "filter": ["in", "class", "path", "track", "footway", "bridleway"],
+              "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+              },
+              "paint": {
+                "line-color": "#737D87",
+                "line-width": 1.4,
+                "line-dasharray": [2, 1.8]
               }
             },
             {
@@ -173,10 +154,11 @@ object StyleBuilder {
               "type": "line",
               "source": "offline_source",
               "source-layer": "transportation",
+              "minzoom": 11,
               "filter": ["==", "class", "rail"],
               "paint": {
-                "line-color": "#555555",
-                "line-width": 1.5,
+                "line-color": "#3D3D3D",
+                "line-width": 1.3,
                 "line-dasharray": [3, 3]
               }
             },
@@ -184,44 +166,52 @@ object StyleBuilder {
               "id": "trail_kct_yellow",
               "type": "line",
               "source": "kct_trails_source",
+              "minzoom": 12,
               "filter": ["==", ["get", "colour"], "yellow"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#FFCC00",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.8, 13, 3.2, 16, 4.5]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.8, 14, 3.0, 16, 4.2]
               }
             },
             {
               "id": "trail_kct_green",
               "type": "line",
               "source": "kct_trails_source",
+              "minzoom": 12,
               "filter": ["==", ["get", "colour"], "green"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#00D166",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.8, 13, 3.2, 16, 4.5]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.8, 14, 3.0, 16, 4.2]
               }
             },
             {
               "id": "trail_kct_blue",
               "type": "line",
               "source": "kct_trails_source",
+              "minzoom": 11,
               "filter": ["==", ["get", "colour"], "blue"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#3388FF",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.8, 13, 3.2, 16, 4.5]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0.0, 12.3, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11.5, 1.6, 14, 3.0, 16, 4.2]
               }
             },
             {
               "id": "trail_kct_red",
               "type": "line",
               "source": "kct_trails_source",
+              "minzoom": 11,
               "filter": ["==", ["get", "colour"], "red"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#FF3333",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 9, 2.0, 13, 3.5, 16, 5.0]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.0, 0.0, 11.8, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11.0, 1.8, 14, 3.4, 16, 4.6]
               }
             },
             {
@@ -229,21 +219,21 @@ object StyleBuilder {
               "type": "symbol",
               "source": "offline_source",
               "source-layer": "mountain_peak",
-              "minzoom": 10,
+              "minzoom": 11,
               "layout": {
                 "text-field": ["case",
                   ["has", "ele"],
-                  ["concat", "▲ ", ["coalesce", ["get", "name:cs"], ["get", "name"]], "\n", ["to-string", ["get", "ele"]], " m"],
+                  ["concat", "▲ ", ["coalesce", ["get", "name:cs"], ["get", "name"]], " (", ["to-string", ["get", "ele"]], " m)"],
                   ["concat", "▲ ", ["coalesce", ["get", "name:cs"], ["get", "name"]]]
                 ],
                 "text-font": ["Noto Sans Regular"],
-                "text-size": 11,
+                "text-size": 10,
                 "text-anchor": "center"
               },
               "paint": {
-                "text-color": "#FF9E0B",
+                "text-color": "#FFCC00",
                 "text-halo-color": "#000000",
-                "text-halo-width": 1.8
+                "text-halo-width": 2.0
               }
             },
             {
@@ -254,13 +244,13 @@ object StyleBuilder {
               "layout": {
                 "text-field": ["coalesce", ["get", "name:cs"], ["get", "name"]],
                 "text-font": ["Noto Sans Regular"],
-                "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 14, 13],
+                "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 14, 12],
                 "text-anchor": "center"
               },
               "paint": {
-                "text-color": "#E5E7EB",
+                "text-color": "#D1D5DB",
                 "text-halo-color": "#000000",
-                "text-halo-width": 2.0
+                "text-halo-width": 2.2
               }
             },
             {
@@ -268,7 +258,7 @@ object StyleBuilder {
               "type": "symbol",
               "source": "offline_source",
               "source-layer": "transportation_name",
-              "minzoom": 13,
+              "minzoom": 14,
               "layout": {
                 "symbol-placement": "line",
                 "text-field": ["coalesce", ["get", "name:cs"], ["get", "name"]],
@@ -276,9 +266,9 @@ object StyleBuilder {
                 "text-size": 10
               },
               "paint": {
-                "text-color": "#9CA3AF",
+                "text-color": "#8A949E",
                 "text-halo-color": "#000000",
-                "text-halo-width": 1.5
+                "text-halo-width": 1.8
               }
             }
           ]
