@@ -68,6 +68,7 @@ fun MapLibreMapView(
 
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var isStyleLoaded by remember { mutableStateOf(false) }
+    var isScreenVisible by remember { mutableStateOf(true) }
 
     val mapView = remember {
         MapView(context).apply {
@@ -92,10 +93,14 @@ fun MapLibreMapView(
             when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME -> {
+                    isScreenVisible = true
                     mapView.onResume()
                     mapView.setMaximumFps(15)
                 }
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_PAUSE -> {
+                    isScreenVisible = false
+                    mapView.onPause()
+                }
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
                 Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
                 else -> Unit
@@ -169,9 +174,9 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace pozice GPS tečky
-    LaunchedEffect(targetLocation, isStyleLoaded) {
-        if (isStyleLoaded) {
+    // Aktualizace pozice GPS tečky (pouze při rozsvíceném displeji -> 0 % GPU práce na pozadí)
+    LaunchedEffect(targetLocation, isStyleLoaded, isScreenVisible) {
+        if (isStyleLoaded && isScreenVisible) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(USER_LOCATION_SOURCE_ID)?.let { source ->
                 val pt = Point.fromLngLat(targetLocation.longitude, targetLocation.latitude)
                 source.setGeoJson(Feature.fromGeometry(pt))
@@ -180,17 +185,17 @@ fun MapLibreMapView(
     }
 
     // Aktualizace natočení malé šipečky podle kompasu (přímo na GPU přes vlastnost vrstvy)
-    LaunchedEffect(azimuthDegrees, isStyleLoaded) {
-        if (isStyleLoaded) {
+    LaunchedEffect(azimuthDegrees, isStyleLoaded, isScreenVisible) {
+        if (isStyleLoaded && isScreenVisible) {
             mapInstance?.style?.getLayerAs<SymbolLayer>(USER_LOCATION_LAYER_ID)?.setProperties(
                 iconRotate(azimuthDegrees)
             )
         }
     }
 
-    // Aktualizace vykreslené stopy trasy
-    LaunchedEffect(trackPoints, isStyleLoaded) {
-        if (isStyleLoaded && trackPoints.size >= 2) {
+    // Aktualizace vykreslené stopy trasy (překreslí se až při rozsvícení displeje)
+    LaunchedEffect(trackPoints, isStyleLoaded, isScreenVisible) {
+        if (isStyleLoaded && isScreenVisible && trackPoints.size >= 2) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(TRACK_LINE_SOURCE_ID)?.let { source ->
                 val coords = trackPoints.map { Point.fromLngLat(it.longitude, it.latitude) }
                 source.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))

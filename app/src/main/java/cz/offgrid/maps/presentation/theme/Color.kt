@@ -7,11 +7,11 @@ val AmoledBlack = Color(0xFF000000)
 val DarkSurface = Color(0xFF121212)
 val DarkSurfaceVariant = Color(0xFF1E1E1E)
 
-// Outdoorové akcentní barvy - vysoký kontrast i na přímém slunci
-val OutdoorAmber = Color(0xFFFF9E0B) // Hlavní akcent
-val OutdoorLime = Color(0xFF76FF03)  // Status / GPS fix
-val OutdoorTextPrimary = Color(0xFFFFFFFF)
-val OutdoorTextSecondary = Color(0xFFB0B0B0)
+// Outdoorové akcentní barvy - vysoký kontrast i na přímém slunci, šetrné k OLED
+val OutdoorAmber = Color(0xFFE07A00) // Hlavní akcent s B=0
+val OutdoorLime = Color(0xFF00C814)  // Status / GPS fix
+val OutdoorTextPrimary = Color(0xFFD8D8D0) // Teplá lomená bílá (~25 % úspora proudu oproti #FFFFFF)
+val OutdoorTextSecondary = Color(0xFFA0A098)
 
 // České pásové značení (KČT) optimalizované pro čisté OLED subpixely (minimální odběr proudu)
 val TrailRed = Color(0xFFEA0000)    // Čistý R subpixel (G=0, B=0)

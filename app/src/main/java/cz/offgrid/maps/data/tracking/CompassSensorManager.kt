@@ -22,7 +22,10 @@ import kotlin.math.abs
 class CompassSensorManager(context: Context) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val rotationSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+    // Geomagnetic Rotation Vector využívá jen magnetometr + akcelerometr a nezapíná žravý MEMS gyroskop (~80 % úspora proudu)
+    private val rotationSensor: Sensor? =
+        sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
 
     private val _azimuthDegrees = MutableStateFlow(0f)
     val azimuthDegrees: StateFlow<Float> = _azimuthDegrees.asStateFlow()
@@ -33,7 +36,7 @@ class CompassSensorManager(context: Context) : SensorEventListener {
 
     fun start() {
         rotationSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
     }
 

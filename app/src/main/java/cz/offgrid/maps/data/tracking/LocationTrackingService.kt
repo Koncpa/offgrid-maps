@@ -20,6 +20,9 @@ class LocationTrackingService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    private var lastNotificationMillis = 0L
+    private var lastNotifiedDistanceMeters = 0.0
+    private var isScreenInteractive = true
 
     override fun onCreate() {
         super.onCreate()
@@ -38,8 +41,8 @@ class LocationTrackingService : Service() {
                         speedMps = if (location.hasSpeed()) location.speed else null
                     )
                     TrackingManager.addPoint(point)
-                    updateNotification()
                 }
+                updateNotificationThrottled()
             }
         }
     }
@@ -48,6 +51,19 @@ class LocationTrackingService : Service() {
         when (intent?.action) {
             ACTION_START -> startTracking()
             ACTION_STOP -> stopTracking()
+            ACTION_SCREEN_ON -> {
+                if (TrackingManager.isTracking.value && !isScreenInteractive) {
+                    isScreenInteractive = true
+                    fusedLocationClient.flushLocations()
+                    registerLocationRequest(interactive = true)
+                }
+            }
+            ACTION_SCREEN_OFF -> {
+                if (TrackingManager.isTracking.value && isScreenInteractive) {
+                    isScreenInteractive = false
+                    registerLocationRequest(interactive = false)
+                }
+            }
         }
         return START_STICKY
     }
@@ -55,6 +71,9 @@ class LocationTrackingService : Service() {
     @SuppressLint("MissingPermission")
     private fun startTracking() {
         TrackingManager.setTrackingActive(true)
+        lastNotificationMillis = System.currentTimeMillis()
+        lastNotifiedDistanceMeters = 0.0
+        isScreenInteractive = true
 
         val notification = buildNotification("Zaznamenávám trasu...")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -83,12 +102,34 @@ class LocationTrackingService : Service() {
                 }
             }
 
-        // Plynulé vzorkování po 5 sekundách při pohybu o alespoň 2 metry (bez zpoždění dávkování)
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-            .setMinUpdateIntervalMillis(3000L)
-            .setMinUpdateDistanceMeters(2.0f)
-            .setWaitForAccurateLocation(false)
-            .build()
+        registerLocationRequest(interactive = true)
+    }
+
+    /**
+     * Přepíná mezi živým GPS režimem (když se uživatel dívá na displej)
+     * a úsporným hardwarovým FIFO dávkováním (když je ruka svěšená a displej zhasnutý).
+     */
+    @SuppressLint("MissingPermission")
+    private fun registerLocationRequest(interactive: Boolean) {
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+
+        val locationRequest = if (interactive) {
+            // Displej svítí: Živý režim bez zpoždění pro okamžité vykreslování stopy
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
+                .setMinUpdateIntervalMillis(3000L)
+                .setMinUpdateDistanceMeters(2.0f)
+                .setMaxUpdateDelayMillis(0L)
+                .setWaitForAccurateLocation(false)
+                .build()
+        } else {
+            // Displej zhasnutý: Hardwarový FIFO batching v GNSS čipu (hlavní CPU spí 30 s v kuse)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 8000L)
+                .setMinUpdateIntervalMillis(5000L)
+                .setMinUpdateDistanceMeters(3.5f)
+                .setMaxUpdateDelayMillis(30000L)
+                .setWaitForAccurateLocation(false)
+                .build()
+        }
 
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
@@ -152,8 +193,20 @@ class LocationTrackingService : Service() {
             .build()
     }
 
-    private fun updateNotification() {
-        val distanceKm = TrackingManager.totalDistanceMeters.value / 1000.0
+    /**
+     * Aktualizuje systémovou notifikaci maximálně jednou za 60 sekund nebo po každých 100 m,
+     * aby nebudila proces `system_server` přes Binder IPC při každém GPS bodu.
+     */
+    private fun updateNotificationThrottled() {
+        val now = System.currentTimeMillis()
+        val totalDistMeters = TrackingManager.totalDistanceMeters.value
+        if (now - lastNotificationMillis < 60_000L && (totalDistMeters - lastNotifiedDistanceMeters) < 100.0) {
+            return
+        }
+        lastNotificationMillis = now
+        lastNotifiedDistanceMeters = totalDistMeters
+
+        val distanceKm = totalDistMeters / 1000.0
         val pointsCount = TrackingManager.trackPoints.value.size
         val statusText = "Vzdálenost: %.2f km • Body: %d".format(distanceKm, pointsCount)
 
@@ -166,6 +219,8 @@ class LocationTrackingService : Service() {
     companion object {
         const val ACTION_START = "cz.offgrid.maps.ACTION_START"
         const val ACTION_STOP = "cz.offgrid.maps.ACTION_STOP"
+        const val ACTION_SCREEN_ON = "cz.offgrid.maps.ACTION_SCREEN_ON"
+        const val ACTION_SCREEN_OFF = "cz.offgrid.maps.ACTION_SCREEN_OFF"
         private const val CHANNEL_ID = "offgrid_tracking_channel"
         private const val NOTIFICATION_ID = 1001
 
@@ -183,6 +238,14 @@ class LocationTrackingService : Service() {
         fun stop(context: Context) {
             val intent = Intent(context, LocationTrackingService::class.java).apply {
                 action = ACTION_STOP
+            }
+            context.startService(intent)
+        }
+
+        fun notifyScreenState(context: Context, interactive: Boolean) {
+            if (!TrackingManager.isTracking.value) return
+            val intent = Intent(context, LocationTrackingService::class.java).apply {
+                action = if (interactive) ACTION_SCREEN_ON else ACTION_SCREEN_OFF
             }
             context.startService(intent)
         }

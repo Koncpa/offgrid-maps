@@ -72,12 +72,22 @@ fun MapScreen(
         // Pro opuštění aplikace slouží fyzické tlačítko Domů
     }
 
-    // Kompas běží výhradně při rozsvíceném displeji (0 mW při svěšené ruce)
+    var isScreenVisible by remember { mutableStateOf(true) }
+
+    // Kompas a živý režim GPS běží výhradně při rozsvíceném displeji (0 mW kompas + FIFO batching při svěšené ruce)
     DisposableEffect(lifecycleOwner, compassManager) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> compassManager.start()
-                Lifecycle.Event.ON_PAUSE -> compassManager.stop()
+                Lifecycle.Event.ON_RESUME -> {
+                    isScreenVisible = true
+                    compassManager.start()
+                    LocationTrackingService.notifyScreenState(context, interactive = true)
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    isScreenVisible = false
+                    compassManager.stop()
+                    LocationTrackingService.notifyScreenState(context, interactive = false)
+                }
                 else -> Unit
             }
         }
@@ -101,14 +111,14 @@ fun MapScreen(
     var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
 
-    // Živý vteřinový odpočet během aktivního záznamu trasy (běží jen při rozsvíceném displeji)
-    LaunchedEffect(isTracking, recordingStartMillis) {
+    // Živý vteřinový odpočet běží VÝHRADNĚ při rozsvíceném displeji (0 probuzení CPU při zhasnuté obrazovce)
+    LaunchedEffect(isTracking, recordingStartMillis, isScreenVisible) {
         if (isTracking && recordingStartMillis > 0L) {
-            while (isTracking) {
+            while (isTracking && isScreenVisible) {
                 elapsedSeconds = ((System.currentTimeMillis() - recordingStartMillis) / 1000L).coerceAtLeast(0L)
                 kotlinx.coroutines.delay(1000L)
             }
-        } else {
+        } else if (!isTracking) {
             elapsedSeconds = 0L
         }
     }
@@ -124,13 +134,16 @@ fun MapScreen(
     // Výchozí poloha: Jihomoravský kraj (Oslavany: 49.1246, 16.3353)
     var activeLocation by remember { mutableStateOf(LatLng(49.1246, 16.3353)) }
 
-    LaunchedEffect(latestGpsPoint) {
-        latestGpsPoint?.let { pt ->
-            val newLatLng = LatLng(pt.latitude, pt.longitude)
-            activeLocation = newLatLng
-            maplibreMapInstance?.moveCamera(
-                CameraUpdateFactory.newLatLng(newLatLng)
-            )
+    // Kamera se posouvá pouze tehdy, když je displej rozsvícený (šetří GPU na pozadí)
+    LaunchedEffect(latestGpsPoint, isScreenVisible) {
+        if (isScreenVisible) {
+            latestGpsPoint?.let { pt ->
+                val newLatLng = LatLng(pt.latitude, pt.longitude)
+                activeLocation = newLatLng
+                maplibreMapInstance?.moveCamera(
+                    CameraUpdateFactory.newLatLng(newLatLng)
+                )
+            }
         }
     }
 
@@ -418,19 +431,19 @@ private fun KctTrailBlazeBadge(stripeColor: Color) {
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background( Color.White )
+                .background(OutdoorTextPrimary)
         )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1.4f)
-                .background( stripeColor )
+                .background(stripeColor)
         )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background( Color.White )
+                .background(OutdoorTextPrimary)
         )
     }
 }

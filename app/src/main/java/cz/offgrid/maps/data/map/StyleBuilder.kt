@@ -231,7 +231,7 @@ object StyleBuilder {
                 "text-anchor": "center"
               },
               "paint": {
-                "text-color": "#FFCC00",
+                "text-color": "#E6B800",
                 "text-halo-color": "#000000",
                 "text-halo-width": 2.0
               }
@@ -248,7 +248,7 @@ object StyleBuilder {
                 "text-anchor": "center"
               },
               "paint": {
-                "text-color": "#D1D5DB",
+                "text-color": "#D8D8D0",
                 "text-halo-color": "#000000",
                 "text-halo-width": 2.2
               }
