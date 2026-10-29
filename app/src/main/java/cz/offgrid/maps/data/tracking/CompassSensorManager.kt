@@ -22,21 +22,23 @@ import kotlin.math.abs
 class CompassSensorManager(context: Context) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    // Geomagnetic Rotation Vector využívá jen magnetometr + akcelerometr a nezapíná žravý MEMS gyroskop (~80 % úspora proudu)
+    // Samsung Rotation Vector na Galaxy Watch Ultra běží na hardwarovém SensorHubu a dává okamžitou odezvu při otočení zápěstí.
+    // Protože ho v ON_PAUSE ihned odpojujeme, při zhasnutém displeji má 0 mW spotřebu.
     private val rotationSensor: Sensor? =
-        sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
-            ?: sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
 
     private val _azimuthDegrees = MutableStateFlow(0f)
     val azimuthDegrees: StateFlow<Float> = _azimuthDegrees.asStateFlow()
 
     private val rotationMatrix = FloatArray(9)
+    private val remappedMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
     private var lastUpdateMillis = 0L
 
     fun start() {
         rotationSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
     }
 
@@ -45,21 +47,38 @@ class CompassSensorManager(context: Context) : SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type != Sensor.TYPE_ROTATION_VECTOR) return
+        val type = event?.sensor?.type ?: return
+        if (type != Sensor.TYPE_ROTATION_VECTOR && type != Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR) return
 
         val now = System.currentTimeMillis()
-        if (now - lastUpdateMillis < 250L) return // Max 4 aktualizace za sekundu
+        if (now - lastUpdateMillis < 80L) return // ~12.5 Hz pro plynulé otáčení šipky
 
         SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
-        SensorManager.getOrientation(rotationMatrix, orientationAngles)
+
+        // Pokud jsou hodinky výrazně nakloněné k obličeji, přemapujeme souřadnicový systém,
+        // aby nedocházelo k zámku os (gimbal lock) a kompas ukazoval přesně směr pohledu
+        val inclinationZ = abs(rotationMatrix[8])
+        val activeMatrix = if (inclinationZ < 0.5f) {
+            SensorManager.remapCoordinateSystem(
+                rotationMatrix,
+                SensorManager.AXIS_X,
+                SensorManager.AXIS_Z,
+                remappedMatrix
+            )
+            remappedMatrix
+        } else {
+            rotationMatrix
+        }
+
+        SensorManager.getOrientation(activeMatrix, orientationAngles)
 
         val azimuthRad = orientationAngles[0]
         val azimuthDeg = ((Math.toDegrees(azimuthRad.toDouble()).toFloat() + 360f) % 360f)
 
-        // Aktualizujeme pouze při otočení o alespoň 6 stupňů (odfiltruje třes ruky)
+        // Citlivý práh 1.5 stupně pro plynulé otáčení šipečky na mapě
         val diff = abs(azimuthDeg - _azimuthDegrees.value)
         val wrappedDiff = if (diff > 180f) 360f - diff else diff
-        if (wrappedDiff >= 6f) {
+        if (wrappedDiff >= 1.5f) {
             lastUpdateMillis = now
             _azimuthDegrees.value = azimuthDeg
         }

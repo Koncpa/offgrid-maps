@@ -187,9 +187,12 @@ fun MapLibreMapView(
     // Aktualizace natočení malé šipečky podle kompasu (přímo na GPU přes vlastnost vrstvy)
     LaunchedEffect(azimuthDegrees, isStyleLoaded, isScreenVisible) {
         if (isStyleLoaded && isScreenVisible) {
-            mapInstance?.style?.getLayerAs<SymbolLayer>(USER_LOCATION_LAYER_ID)?.setProperties(
-                iconRotate(azimuthDegrees)
-            )
+            mapInstance?.let { map ->
+                map.style?.getLayerAs<SymbolLayer>(USER_LOCATION_LAYER_ID)?.setProperties(
+                    iconRotate(azimuthDegrees)
+                )
+                map.triggerRepaint()
+            }
         }
     }
 
@@ -219,16 +222,14 @@ fun MapLibreMapView(
 }
 
 /**
- * Vytvoří malou, k OLED displeji maximálně šetrnou značku polohy se směrovou šipečkou (styl Mapy.cz).
+ * Vytvoří k OLED displeji maximálně šetrnou značku polohy se směrovou šipečkou (styl Mapy.cz).
  *
- * Používá tlumenou teplou jantarovou/terakotovou barvu (#D97706) s černým lemem (#000000):
- * - 0 % modrého OLED subpixelu (který má nejvyšší energetickou náročnost).
- * - Žádná bílá (#FFFFFF), která by rozsvěcela všechny 3 subpixely najednou.
+ * Kruh polohy leží přesně v geometrickém středu bitmapy (42, 42), takže při otáčení
+ * zůstává tečka pevně na GPS souřadnici a šipečka obíhá po jejím obvodu.
  */
 private fun createMapyCzStyleLocationBitmap(): Bitmap {
-    val size = 76
+    val size = 84
     val center = size / 2f
-    val circleCenterY = center + 5f
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
@@ -250,27 +251,27 @@ private fun createMapyCzStyleLocationBitmap(): Bitmap {
         style = Paint.Style.FILL
     }
 
-    // 1. Výrazná směrová šipečka (zobáček) těsně nad kroužkem polohy (styl Mapy.cz)
+    // 1. Výrazná směrová šipečka (zobáček) obíhající nad kroužkem polohy (styl Mapy.cz)
     val outerArrowPath = Path().apply {
         moveTo(center, 3f)           // Špička nahoře
-        lineTo(center + 13.5f, 24f)  // Pravý roh šipečky
-        lineTo(center - 13.5f, 24f)  // Levý roh šipečky
+        lineTo(center + 14.0f, 26f)  // Pravý roh šipečky
+        lineTo(center - 14.0f, 26f)  // Levý roh šipečky
         close()
     }
     canvas.drawPath(outerArrowPath, darkStrokePaint)
 
     val innerArrowPath = Path().apply {
         moveTo(center, 6.5f)
-        lineTo(center + 10.0f, 22f)
-        lineTo(center - 10.0f, 22f)
+        lineTo(center + 10.5f, 24f)
+        lineTo(center - 10.5f, 24f)
         close()
     }
     canvas.drawPath(innerArrowPath, ecoAmberPaint)
 
-    // 2. Kruhový bod polohy uprostřed
-    canvas.drawCircle(center, circleCenterY, 14.0f, darkStrokePaint)
-    canvas.drawCircle(center, circleCenterY, 11.0f, ecoAmberPaint)
-    canvas.drawCircle(center, circleCenterY, 4.8f, innerCorePaint)
+    // 2. Kruhový bod polohy přesně ve středu otáčení (center, center)
+    canvas.drawCircle(center, center, 14.0f, darkStrokePaint)
+    canvas.drawCircle(center, center, 11.0f, ecoAmberPaint)
+    canvas.drawCircle(center, center, 4.8f, innerCorePaint)
 
     return bitmap
 }
