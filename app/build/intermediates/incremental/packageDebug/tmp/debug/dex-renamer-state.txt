@@ -1,4 +1,4 @@
-#Thu Oct 29 23:02:43 CET 2026
+#Thu Oct 29 23:11:10 CET 2026
 base.0=/Users/koncpa/projects/offgrid-maps/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex
 base.1=/Users/koncpa/projects/offgrid-maps/app/build/intermediates/dex/debug/mergeProjectDexDebug/0/classes.dex
 base.2=/Users/koncpa/projects/offgrid-maps/app/build/intermediates/dex/debug/mergeProjectDexDebug/1/classes.dex

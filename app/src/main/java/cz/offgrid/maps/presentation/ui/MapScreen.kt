@@ -111,34 +111,18 @@ fun MapScreen(
     }
 
     val isTracking by TrackingManager.isTracking.collectAsState()
-    val totalDistanceMeters by TrackingManager.totalDistanceMeters.collectAsState()
-    val totalAscentMeters by TrackingManager.totalAscentMeters.collectAsState()
     val currentAltitudeMeters by TrackingManager.currentAltitudeMeters.collectAsState()
     val latestGpsPoint by TrackingManager.currentLocation.collectAsState()
     val trackPoints by TrackingManager.trackPoints.collectAsState()
     val plannedRoutePoints by TrackingManager.plannedRoutePoints.collectAsState()
     val plannedRouteName by TrackingManager.plannedRouteName.collectAsState()
     val isOffRoute by TrackingManager.isOffRoute.collectAsState()
-    val recordingStartMillis by TrackingManager.recordingStartMillis.collectAsState()
     val lastSavedSummary by TrackingManager.lastSavedSummary.collectAsState()
     val offlineStatus by OfflineRegionHelper.statusText.collectAsState()
     val azimuthDegrees by compassManager.azimuthDegrees.collectAsState()
 
     var zoomLevel by remember { mutableFloatStateOf(13.0f) }
     var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
-    var elapsedSeconds by remember { mutableLongStateOf(0L) }
-
-    // Živý vteřinový odpočet běží VÝHRADNĚ při rozsvíceném displeji
-    LaunchedEffect(isTracking, recordingStartMillis, isScreenVisible) {
-        if (isTracking && recordingStartMillis > 0L) {
-            while (isTracking && isScreenVisible) {
-                elapsedSeconds = ((System.currentTimeMillis() - recordingStartMillis) / 1000L).coerceAtLeast(0L)
-                kotlinx.coroutines.delay(1000L)
-            }
-        } else if (!isTracking) {
-            elapsedSeconds = 0L
-        }
-    }
 
     // Haptické upozornění na zápěstí při sejmutí z naplánované GPX trasy (> 60 m)
     LaunchedEffect(isOffRoute) {
@@ -245,7 +229,7 @@ fun MapScreen(
             }
         )
 
-        // Horní informační pilulka se symbolem české turistické značky KČT (klepnutím otevře výběr GPX tras)
+        // Horní informační pilulka se symbolem české turistické značky KČT (vždy kompaktní, nikdy neoříznutá)
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -271,7 +255,7 @@ fun MapScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            // Ikonická česká pásová značka KČT (Bílá - Barva - Bílá)
+            // Ikonická česká pásová značka KČT (Červená = aktivní záznam, Modrá = GPX navigace, Zelená = klidový stav)
             KctTrailBlazeBadge(
                 stripeColor = when {
                     isTracking -> TrailRed
@@ -281,28 +265,20 @@ fun MapScreen(
             )
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Text telemetrie: Při záznamu živý čas + km + nastoupané m, jinak nadmořská výška
+            // Kompaktní text: Při stahování mapy procenta (DL XX%), jinak nadmořská výška
             val displayAltitude = currentAltitudeMeters ?: latestGpsPoint?.altitudeMeters
             val altitudeText = displayAltitude?.let { "${it.roundToInt()} m" }
-            if (isTracking) {
-                val mins = elapsedSeconds / 60
-                val secs = elapsedSeconds % 60
-                val km = totalDistanceMeters / 1000.0
-                val asc = totalAscentMeters.roundToInt()
-                Text(
-                    text = "%02d:%02d • %.2f km • ↑%d m".format(mins, secs, km, asc),
-                    color = OutdoorTextPrimary,
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            val pillLabel = if (offlineStatus.startsWith("DL")) {
+                offlineStatus
             } else {
-                Text(
-                    text = altitudeText ?: offlineStatus,
-                    color = OutdoorTextPrimary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                altitudeText ?: offlineStatus
             }
+            Text(
+                text = pillLabel,
+                color = OutdoorTextPrimary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
 
             Spacer(modifier = Modifier.width(6.dp))
 
@@ -494,7 +470,7 @@ fun MapScreen(
             }
         }
 
-        // AMOLED modální výběr uložených GPX tras (otevírá se klepnutím na horní lištu)
+        // AMOLED modální výběr uložených GPX tras a stahování offline mapy (otevírá se klepnutím na horní lištu)
         if (showGpxPicker) {
             GpxRoutePickerOverlay(
                 files = availableGpxFiles,
@@ -524,6 +500,11 @@ fun MapScreen(
                     }
                     TrackingManager.setPlannedRoute(null, emptyList())
                     availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
+                    showGpxPicker = false
+                },
+                onDownloadCurrentArea = {
+                    val center = maplibreMapInstance?.cameraPosition?.target ?: activeLocation
+                    OfflineRegionHelper.downloadAreaAround(context, center.latitude, center.longitude)
                     showGpxPicker = false
                 },
                 onDismiss = {
@@ -574,7 +555,7 @@ private fun MapScaleBar(
 }
 
 /**
- * Čistě černý AMOLED překryvný panel pro výběr a odstranění GPX trasy.
+ * Čistě černý AMOLED překryvný panel pro výběr/odstranění GPX trasy a stažení aktuální offline oblasti.
  */
 @Composable
 private fun GpxRoutePickerOverlay(
@@ -583,36 +564,54 @@ private fun GpxRoutePickerOverlay(
     onSelectFile: (File) -> Unit,
     onDeleteFile: (File) -> Unit,
     onRemoveActiveRoute: () -> Unit,
+    onDownloadCurrentArea: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(AmoledBlack.copy(alpha = 0.96f))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "GPX Trasy",
+                text = "Trasy & Offline mapa",
                 color = TrailYellow,
-                fontSize = 11.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold
             )
+
+            // Tlačítko pro stažení právě zobrazené oblasti (~30×30 km, Zoom 8–14)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DarkSurface)
+                    .border(1.dp, TrailBlue, RoundedCornerShape(10.dp))
+                    .clickable { onDownloadCurrentArea() }
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "⬇ Stáhnout tuto oblast",
+                    color = TrailBlue,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
             if (files.isEmpty()) {
                 Text(
                     text = "Žádné uložené trasy",
                     color = OutdoorTextSecondary,
-                    fontSize = 9.5.sp,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    fontSize = 9.sp,
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             } else {
-                files.take(3).forEach { file ->
+                files.take(2).forEach { file ->
                     val isSelected = activeRouteName == file.nameWithoutExtension
                     Row(
                         modifier = Modifier
@@ -621,14 +620,14 @@ private fun GpxRoutePickerOverlay(
                             .background(DarkSurface)
                             .border(1.dp, if (isSelected) TrailGreen else DarkSurfaceVariant, RoundedCornerShape(10.dp))
                             .clickable { onSelectFile(file) }
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = file.nameWithoutExtension.replace("_", " "),
                             color = if (isSelected) TrailGreen else OutdoorTextPrimary,
-                            fontSize = 9.5.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -638,7 +637,7 @@ private fun GpxRoutePickerOverlay(
                         Text(
                             text = "✕",
                             color = TrailRed,
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clickable { onDeleteFile(file) }
@@ -658,12 +657,12 @@ private fun GpxRoutePickerOverlay(
                             .clip(RoundedCornerShape(10.dp))
                             .border(1.dp, TrailRed, RoundedCornerShape(10.dp))
                             .clickable { onRemoveActiveRoute() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .padding(horizontal = 8.dp, vertical = 3.5.dp)
                     ) {
                         Text(
                             text = "Odstranit trasu",
                             color = TrailRed,
-                            fontSize = 9.sp,
+                            fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -673,12 +672,12 @@ private fun GpxRoutePickerOverlay(
                         .clip(RoundedCornerShape(10.dp))
                         .border(1.dp, OutdoorTextSecondary, RoundedCornerShape(10.dp))
                         .clickable { onDismiss() }
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .padding(horizontal = 10.dp, vertical = 3.5.dp)
                 ) {
                     Text(
                         text = "Zpět",
                         color = OutdoorTextPrimary,
-                        fontSize = 9.sp,
+                        fontSize = 8.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }

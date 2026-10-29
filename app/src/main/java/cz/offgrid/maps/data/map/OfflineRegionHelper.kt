@@ -125,13 +125,13 @@ object OfflineRegionHelper {
                     val pct = (100.0 * status.completedResourceCount / status.requiredResourceCount)
                         .toInt()
                         .coerceIn(0, 99)
-                    _statusText.value = "JMK $pct%"
+                    _statusText.value = "DL $pct%"
                 }
             }
 
             override fun onError(error: OfflineRegionError) {
                 // Pokud vypadne internet během stahování, použijeme to, co už v cache je
-                _statusText.value = "JMK CACHE"
+                activateStrictOfflineMode()
             }
 
             override fun mapboxTileCountLimitExceeded(limit: Long) {
@@ -139,6 +139,61 @@ object OfflineRegionHelper {
                 activateStrictOfflineMode()
             }
         })
+    }
+
+    /**
+     * Stáhne do offline paměti hodinek ~30×30 km oblast kolem aktuálního středu mapy (až do detailu Zoom 14).
+     * Během stahování dočasně zapne síť a po dokončení ji opět natvrdo odpojí (MapLibre.setConnected(false)).
+     */
+    fun downloadAreaAround(
+        context: Context,
+        centerLat: Double,
+        centerLon: Double
+    ) {
+        val offlineManager = OfflineManager.getInstance(context)
+        offlineManager.setOfflineMapboxTileCountLimit(60000L)
+
+        val styleFile = java.io.File(context.filesDir, "amoled_jmk_z14_style.json")
+        if (!styleFile.exists()) {
+            styleFile.writeText(StyleBuilder.createAmoledOutdoorStyle(null))
+        }
+        val styleFileUri = "file://${styleFile.absolutePath}"
+
+        // Obdélník cca 30 × 30 km kolem zvoleného středu mapy
+        val bounds = LatLngBounds.from(
+            (centerLat + 0.14).coerceAtMost(51.1),
+            (centerLon + 0.20).coerceAtMost(18.9),
+            (centerLat - 0.14).coerceAtLeast(48.5),
+            (centerLon - 0.20).coerceAtLeast(12.0)
+        )
+
+        val definition = OfflineTilePyramidRegionDefinition(
+            styleFileUri,
+            bounds,
+            8.0,
+            14.0,
+            1.0f
+        )
+
+        val regionName = "Custom_${"%.2f".format(java.util.Locale.US, centerLat)}_${"%.2f".format(java.util.Locale.US, centerLon)}"
+        val metadata = regionName.toByteArray(StandardCharsets.UTF_8)
+
+        _statusText.value = "DL 0%"
+        MapLibre.setConnected(true)
+
+        offlineManager.createOfflineRegion(
+            definition,
+            metadata,
+            object : OfflineManager.CreateOfflineRegionCallback {
+                override fun onCreate(offlineRegion: OfflineRegion) {
+                    startRegionDownload(offlineRegion)
+                }
+
+                override fun onError(error: String) {
+                    activateStrictOfflineMode()
+                }
+            }
+        )
     }
 
     /**
