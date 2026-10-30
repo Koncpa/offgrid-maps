@@ -139,6 +139,12 @@ fun MapScreen(
         }
     }
 
+    // Když si uživatel posouvá mapu prstem (isFollowingGps == false) a nenahrává trasu,
+    // povolíme živý náhled dlaždic (např. při hledání oblasti v Čechách ke stažení).
+    LaunchedEffect(isFollowingGps, isTracking) {
+        OfflineRegionHelper.setBrowsingMode(!isFollowingGps && !isTracking)
+    }
+
     // Výchozí poloha: Jihomoravský kraj (Oslavany: 49.1246, 16.3353)
     var activeLocation by remember { mutableStateOf(LatLng(49.1246, 16.3353)) }
 
