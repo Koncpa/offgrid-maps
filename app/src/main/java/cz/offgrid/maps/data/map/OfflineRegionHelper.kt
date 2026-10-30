@@ -129,14 +129,18 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Aktualizuje seznam všech uložených offline oblastí v paměti hodinek.
+     * Aktualizuje seznam všech uložených offline oblastí v paměti hodinek a automaticky
+     * odstraní starší duplicitní verze (např. dřívější verze Jihomoravského kraje z vývoje).
      */
     fun refreshSavedRegions(context: Context) {
         val offlineManager = OfflineManager.getInstance(context)
         offlineManager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
             override fun onList(offlineRegions: Array<OfflineRegion>?) {
-                val mapped = mutableListOf<SavedOfflineRegion>()
-                offlineRegions?.forEach { region ->
+                val sortedRegions = offlineRegions?.sortedByDescending { it.id } ?: emptyList()
+                val uniqueMapped = mutableListOf<SavedOfflineRegion>()
+                val seenTitles = mutableSetOf<String>()
+
+                for (region in sortedRegions) {
                     val rawMeta = String(region.metadata, StandardCharsets.UTF_8)
                     val bounds = region.definition.bounds
                     val centerLat = bounds?.center?.latitude ?: 49.1246
@@ -149,7 +153,17 @@ object OfflineRegionHelper {
                     } else {
                         resolveCzechRegionTitle(centerLat, centerLon)
                     }
-                    mapped.add(
+
+                    // Pokud už máme novější verzi téže oblasti (např. JMK v1, v2, v3), starší duplikát smažeme z DB
+                    if (!seenTitles.add(title)) {
+                        region.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
+                            override fun onDelete() {}
+                            override fun onError(error: String) {}
+                        })
+                        continue
+                    }
+
+                    uniqueMapped.add(
                         SavedOfflineRegion(
                             id = region.id,
                             rawMetadata = rawMeta,
@@ -160,8 +174,9 @@ object OfflineRegionHelper {
                         )
                     )
                 }
+
                 // Výchozí Jihomoravský kraj vždy nahoře, ostatní od nejnovějších
-                _savedRegions.value = mapped.sortedWith(
+                _savedRegions.value = uniqueMapped.sortedWith(
                     compareByDescending<SavedOfflineRegion> { it.isDefaultJmk }
                         .thenByDescending { it.id }
                 )
