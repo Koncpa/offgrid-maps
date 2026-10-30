@@ -230,7 +230,7 @@ class LocationTrackingService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun enableWatchHardwareGps() {
-        if (isWatchHardwareGpsActive) return
+        if (!TrackingManager.isTracking.value || isWatchHardwareGpsActive) return
         try {
             val lm = locationManager
             if (lm != null && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
@@ -250,7 +250,6 @@ class LocationTrackingService : Service() {
     }
 
     private fun disableWatchHardwareGps() {
-        if (!isWatchHardwareGpsActive) return
         try {
             locationManager?.removeUpdates(hardwareGpsListener)
         } catch (_: Exception) {

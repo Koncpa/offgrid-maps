@@ -12,6 +12,7 @@ import android.os.Looper
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
+import com.google.android.gms.tasks.CancellationTokenSource
 import cz.offgrid.maps.domain.model.TrackPoint
 
 /**
@@ -42,6 +43,7 @@ class LiveGpsManager(
     private var lastStrictFixElapsedRealtimeNs = 0L
     private var lastHardwareGpsElapsedRealtimeNs = 0L
     private var consecutiveAccurateFusedFixes = 0
+    private var currentLocTokenSource: CancellationTokenSource? = null
 
     // Pojistný časovač: pokud do 5 s od rozsvícení displeje nedorazí z telefonu fix <= 10 m, zapneme GPS v hodinkách
     private val fallbackToWatchGpsRunnable = Runnable {
@@ -54,6 +56,7 @@ class LiveGpsManager(
     }
 
     private val hardwareGpsListener = LocationListener { location ->
+        if (!isRunning) return@LocationListener
         lastHardwareGpsElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
         if (location.hasAccuracy() && location.accuracy <= STRICT_ACCURACY_METERS) {
             lastStrictFixElapsedRealtimeNs = lastHardwareGpsElapsedRealtimeNs
@@ -63,6 +66,7 @@ class LiveGpsManager(
 
     private val fusedLocationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
+            if (!isRunning) return
             for (location in result.locations) {
                 val acc = if (location.hasAccuracy()) location.accuracy else 999.0f
 
@@ -112,6 +116,7 @@ class LiveGpsManager(
 
         // 1. Použijeme poslední známou polohu pouze tehdy, pokud je čerstvá (< 60 s) a má přesnost <= 10 m
         fusedClient.lastLocation.addOnSuccessListener { lastLoc ->
+            if (!isRunning) return@addOnSuccessListener
             if (lastLoc != null && isLocationFreshAndAccurate(lastLoc, maxAgeMs = 60_000L, maxAccMeters = STRICT_ACCURACY_METERS)) {
                 lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
                 processLocation(lastLoc, isDirectWatchSatellite = false)
@@ -142,9 +147,10 @@ class LiveGpsManager(
      * Vypne odběr při zhasnutí displeje (`ON_PAUSE` -> 0 mW).
      */
     fun stop() {
-        if (!isRunning) return
         isRunning = false
         mainHandler.removeCallbacks(fallbackToWatchGpsRunnable)
+        currentLocTokenSource?.cancel()
+        currentLocTokenSource = null
         disableWatchHardwareGps()
         fusedClient.removeLocationUpdates(fusedLocationCallback)
     }
@@ -154,17 +160,22 @@ class LiveGpsManager(
      */
     @SuppressLint("MissingPermission")
     fun requestImmediateHighAccuracyFix() {
-        if (!hasFineLocationPermission()) return
+        if (!isRunning || !hasFineLocationPermission()) return
+
+        currentLocTokenSource?.cancel()
+        val tokenSource = CancellationTokenSource()
+        currentLocTokenSource = tokenSource
 
         val currentRequest = CurrentLocationRequest.Builder()
             .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
             .setGranularity(Granularity.GRANULARITY_FINE)
             .setMaxUpdateAgeMillis(0L)
-            .setDurationMillis(10_000L)
+            .setDurationMillis(8_000L)
             .build()
 
-        fusedClient.getCurrentLocation(currentRequest, null)
+        fusedClient.getCurrentLocation(currentRequest, tokenSource.token)
             .addOnSuccessListener { currentLoc ->
+                if (!isRunning) return@addOnSuccessListener
                 if (currentLoc != null) {
                     val acc = if (currentLoc.hasAccuracy()) currentLoc.accuracy else 999.0f
                     if (acc > STRICT_ACCURACY_METERS) {
@@ -179,7 +190,7 @@ class LiveGpsManager(
 
     @SuppressLint("MissingPermission")
     private fun enableWatchHardwareGps() {
-        if (isWatchHardwareGpsActive || !hasFineLocationPermission()) return
+        if (!isRunning || isWatchHardwareGpsActive || !hasFineLocationPermission()) return
         try {
             val lm = locationManager
             if (lm != null && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
@@ -197,7 +208,6 @@ class LiveGpsManager(
     }
 
     private fun disableWatchHardwareGps() {
-        if (!isWatchHardwareGpsActive) return
         try {
             locationManager?.removeUpdates(hardwareGpsListener)
         } catch (_: Exception) {
