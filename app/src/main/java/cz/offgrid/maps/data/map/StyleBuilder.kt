@@ -94,9 +94,9 @@ object StyleBuilder {
               "minzoom": 12,
               "filter": ["==", ["get", "major"], 0],
               "paint": {
-                "line-color": "#45371E",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.8, 14, 0.95],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.65, 14, 0.95]
+                "line-color": "#3D301A",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.65, 13, 0.85, 15, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.6, 13, 0.75, 15, 1.0]
               }
             },
             {
@@ -106,9 +106,9 @@ object StyleBuilder {
               "minzoom": 12,
               "filter": ["==", ["get", "major"], 1],
               "paint": {
-                "line-color": "#594727",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.85, 14, 0.95],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.9, 14, 1.25]
+                "line-color": "#4C3C21",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.72, 13, 0.88, 15, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.85, 13, 1.1, 15, 1.45]
               }
             },
             {
@@ -137,9 +137,9 @@ object StyleBuilder {
               "minzoom": 12,
               "filter": ["==", ["get", "major"], 0],
               "paint": {
-                "line-color": "#45371E",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.8, 14, 0.95],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.65, 14, 0.95]
+                "line-color": "#3D301A",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.65, 13, 0.85, 15, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.6, 13, 0.75, 15, 1.0]
               }
             },
             {
@@ -149,9 +149,9 @@ object StyleBuilder {
               "minzoom": 12,
               "filter": ["==", ["get", "major"], 1],
               "paint": {
-                "line-color": "#594727",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.85, 14, 0.95],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.9, 14, 1.25]
+                "line-color": "#4C3C21",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.72, 13, 0.88, 15, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.85, 13, 1.1, 15, 1.45]
               }
             },
             {
@@ -196,7 +196,7 @@ object StyleBuilder {
               },
               "paint": {
                 "line-color": "#48505C",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.0, 13, 2.2, 16, 3.2]
+                "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1.0, 12, 1.8, 14, 2.5, 16, 3.4]
               }
             },
             {
@@ -204,15 +204,34 @@ object StyleBuilder {
               "type": "line",
               "source": "offline_source",
               "source-layer": "transportation",
-              "minzoom": 12,
+              "minzoom": 11,
               "filter": ["in", "class", "minor", "service", "street"],
               "layout": {
                 "line-cap": "round",
                 "line-join": "round"
               },
               "paint": {
-                "line-color": "#323740",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.0, 15, 2.0]
+                "line-color": "#363C46",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0.5, 12, 0.9, 14, 1.0],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.8, 13, 1.4, 15, 2.2]
+              }
+            },
+            {
+              "id": "roads_tracks",
+              "type": "line",
+              "source": "offline_source",
+              "source-layer": "transportation",
+              "minzoom": 12,
+              "filter": ["==", "class", "track"],
+              "layout": {
+                "line-cap": "butt",
+                "line-join": "round"
+              },
+              "paint": {
+                "line-color": "#6E7680",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.75, 13, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.1, 14, 1.6, 16, 2.2],
+                "line-dasharray": [4.0, 2.0]
               }
             },
             {
@@ -221,15 +240,16 @@ object StyleBuilder {
               "source": "offline_source",
               "source-layer": "transportation",
               "minzoom": 13,
-              "filter": ["in", "class", "path", "track", "footway", "bridleway"],
+              "filter": ["in", "class", "path", "footway", "bridleway", "steps"],
               "layout": {
                 "line-cap": "round",
                 "line-join": "round"
               },
               "paint": {
-                "line-color": "#737D87",
-                "line-width": 1.4,
-                "line-dasharray": [2, 1.8]
+                "line-color": "#828C96",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0.8, 14, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.1, 15, 1.5, 16, 1.9],
+                "line-dasharray": [1.5, 1.8]
               }
             },
             {
@@ -249,52 +269,52 @@ object StyleBuilder {
               "id": "trail_kct_yellow",
               "type": "line",
               "source": "kct_trails_source",
-              "minzoom": 12,
+              "minzoom": 11,
               "filter": ["==", ["get", "colour"], "yellow"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#E6B800",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.90],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.8, 14, 3.0, 16, 4.2]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0.75, 12, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.4, 12, 2.0, 14, 3.0, 16, 4.2]
               }
             },
             {
               "id": "trail_kct_green",
               "type": "line",
               "source": "kct_trails_source",
-              "minzoom": 12,
+              "minzoom": 11,
               "filter": ["==", ["get", "colour"], "green"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#00C814",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.0, 12.6, 0.90],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.8, 14, 3.0, 16, 4.2]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0.75, 12, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.4, 12, 2.0, 14, 3.0, 16, 4.2]
               }
             },
             {
               "id": "trail_kct_blue",
               "type": "line",
               "source": "kct_trails_source",
-              "minzoom": 11,
+              "minzoom": 10,
               "filter": ["==", ["get", "colour"], "blue"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#0077E6",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.5, 0.0, 12.3, 0.90],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 11.5, 1.6, 14, 3.0, 16, 4.2]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.7, 11, 0.88, 12, 0.94],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.3, 12, 2.1, 14, 3.1, 16, 4.3]
               }
             },
             {
               "id": "trail_kct_red",
               "type": "line",
               "source": "kct_trails_source",
-              "minzoom": 11,
+              "minzoom": 10,
               "filter": ["==", ["get", "colour"], "red"],
               "layout": { "line-cap": "round", "line-join": "round" },
               "paint": {
                 "line-color": "#EA0000",
-                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11.0, 0.0, 11.8, 0.92],
-                "line-width": ["interpolate", ["linear"], ["zoom"], 11.0, 1.8, 14, 3.4, 16, 4.6]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.75, 11, 0.90, 12, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 12, 2.3, 14, 3.4, 16, 4.6]
               }
             },
             {

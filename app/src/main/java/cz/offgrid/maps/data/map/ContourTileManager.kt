@@ -56,7 +56,7 @@ object ContourTileManager {
         zoom: Double,
         allowNetworkFetch: Boolean
     ) {
-        if (zoom < 11.8) return
+        if (zoom < 11.0) return
 
         val centerTx = lonToTileX(centerLon, TILE_ZOOM)
         val centerTy = latToTileY(centerLat, TILE_ZOOM)

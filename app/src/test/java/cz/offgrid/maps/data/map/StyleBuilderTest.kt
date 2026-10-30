@@ -33,6 +33,8 @@ class StyleBuilderTest {
             assertTrue(styleJson.contains("contour_minor"))
             assertTrue(styleJson.contains("contour_major"))
             assertTrue(styleJson.contains("contour_labels"))
+            assertTrue(styleJson.contains("roads_tracks"))
+            assertTrue(styleJson.contains("roads_paths"))
         } finally {
             tempFile.delete()
         }
