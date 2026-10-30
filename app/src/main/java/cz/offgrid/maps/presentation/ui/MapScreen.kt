@@ -44,6 +44,9 @@ import cz.offgrid.maps.data.tracking.LocationTrackingService
 import cz.offgrid.maps.data.tracking.TrackingManager
 import cz.offgrid.maps.presentation.theme.*
 import cz.offgrid.maps.presentation.ui.map.MapLibreMapView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -62,6 +65,7 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
+    val coroutineScope = rememberCoroutineScope()
     @Suppress("DEPRECATION")
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapFileManager = remember { MapFileManager(context) }
@@ -182,19 +186,24 @@ fun MapScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val importedFile = GpxExporter.importGpxFromUri(context, uri)
-            if (importedFile != null) {
-                val points = GpxExporter.parseGpxFile(importedFile)
-                if (points.isNotEmpty()) {
-                    TrackingManager.setPlannedRoute(importedFile.nameWithoutExtension, points)
-                    isFollowingGps = false
-                    val startLatLng = LatLng(points.first().latitude, points.first().longitude)
-                    maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(startLatLng, 14.0))
-                    zoomLevel = 14.0f
-                    TrackingManager.setSavedSummary("Načteno: ${importedFile.nameWithoutExtension}")
+            coroutineScope.launch {
+                val (importedFile, points) = withContext(Dispatchers.IO) {
+                    val file = GpxExporter.importGpxFromUri(context, uri)
+                    val pts = if (file != null) GpxExporter.parseGpxFile(file) else emptyList()
+                    file to pts
                 }
-                availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
-                showGpxPicker = false
+                if (importedFile != null) {
+                    if (points.isNotEmpty()) {
+                        TrackingManager.setPlannedRoute(importedFile.nameWithoutExtension, points)
+                        isFollowingGps = false
+                        val startLatLng = LatLng(points.first().latitude, points.first().longitude)
+                        maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(startLatLng, 14.0))
+                        zoomLevel = 14.0f
+                        TrackingManager.setSavedSummary("Načteno: ${importedFile.nameWithoutExtension}")
+                    }
+                    availableGpxFiles = withContext(Dispatchers.IO) { GpxExporter.listSavedGpxFiles(context) }
+                    showGpxPicker = false
+                }
             }
         }
     }
@@ -519,26 +528,30 @@ fun MapScreen(
                 savedRegions = savedOfflineRegions,
                 offlineStatus = offlineStatus,
                 onSelectFile = { file ->
-                    val points = GpxExporter.parseGpxFile(file)
-                    if (points.isNotEmpty()) {
-                        // Vždy načteme a vykreslíme vybranou trasu (nová instance listu vynutí překreslení GeoJsonSource)
-                        TrackingManager.setPlannedRoute(null, emptyList())
-                        TrackingManager.setPlannedRoute(file.nameWithoutExtension, points.toList())
-                        isFollowingGps = false
-
-                        // Najdeme bod trasy nejblíže naší aktuální poloze (např. u Oslavan), abychom neodskakovali 25 km daleko
-                        val closestPt = points.minByOrNull { pt ->
-                            TrackingManager.calculateDistanceMeters(
-                                activeLocation.latitude, activeLocation.longitude,
-                                pt.latitude, pt.longitude
-                            )
-                        } ?: points.first()
-
-                        val focusLatLng = LatLng(closestPt.latitude, closestPt.longitude)
-                        maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(focusLatLng, 13.5))
-                        zoomLevel = 13.5f
-                    }
                     showGpxPicker = false
+                    coroutineScope.launch {
+                        val currentLoc = activeLocation
+                        val (points, closestPt) = withContext(Dispatchers.IO) {
+                            val pts = GpxExporter.parseGpxFile(file)
+                            val closest = pts.minByOrNull { pt ->
+                                TrackingManager.calculateDistanceMeters(
+                                    currentLoc.latitude, currentLoc.longitude,
+                                    pt.latitude, pt.longitude
+                                )
+                            } ?: pts.firstOrNull()
+                            pts to closest
+                        }
+                        if (points.isNotEmpty() && closestPt != null) {
+                            // Vždy načteme a vykreslíme vybranou trasu (nová instance listu vynutí překreslení GeoJsonSource)
+                            TrackingManager.setPlannedRoute(null, emptyList())
+                            TrackingManager.setPlannedRoute(file.nameWithoutExtension, points.toList())
+                            isFollowingGps = false
+
+                            val focusLatLng = LatLng(closestPt.latitude, closestPt.longitude)
+                            maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(focusLatLng, 13.5))
+                            zoomLevel = 13.5f
+                        }
+                    }
                 },
                 onShareFile = { file ->
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)

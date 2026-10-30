@@ -30,11 +30,10 @@ object ContourTileManager {
     private const val TILES_DIR_NAME = "contour_tiles"
     private const val TILE_ZOOM = 12
 
-    // Dlaždice z=12, které jsou již předbalené přímo v APK (assets/jmk_contours.geojson)
-    private val BUNDLED_JMK_TILES = setOf(
-        "2232_1412", "2233_1412", "2234_1412",
-        "2232_1413", "2233_1413", "2234_1413",
-        "2232_1414", "2233_1414", "2234_1414"
+    // Dlaždice z=12, které jsou již předbalené přímo v APK (assets/jmk_contours.geojson pro Oslavany / Ivančice / Zbýšov)
+    internal val BUNDLED_JMK_TILES = setOf(
+        "2233_1403", "2234_1403",
+        "2233_1404", "2234_1404"
     )
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -283,11 +282,11 @@ object ContourTileManager {
         return "[%.5f,%.5f]".format(Locale.US, lon, lat)
     }
 
-    private fun lonToTileX(lon: Double, z: Int): Int {
+    internal fun lonToTileX(lon: Double, z: Int): Int {
         return ((lon + 180.0) / 360.0 * (1 shl z)).toInt()
     }
 
-    private fun latToTileY(lat: Double, z: Int): Int {
+    internal fun latToTileY(lat: Double, z: Int): Int {
         val latRad = Math.toRadians(lat)
         return ((1.0 - asinh(tan(latRad)) / PI) / 2.0 * (1 shl z)).toInt()
     }

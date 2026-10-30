@@ -153,4 +153,75 @@ class TrackingManagerTest {
         assertEquals(348.5, points[0].altitudeMeters!!, 0.1)
         assertEquals(49.1580, points[1].latitude, 0.0001)
     }
+
+    @Test
+    fun addPoint_midpointOnLongStraightSegment_usesCrossTrackDistanceAndStaysOnRoute() {
+        // Dva body GPX trasy vzdálené od sebe ~445 metrů severo-jižně (49.1200 -> 49.1240)
+        // Kdybychom počítali jen vzdálenost k vrcholům (point-to-vertex), uprostřed úseku (49.1220)
+        // bychom byli ~222 m od obou bodů a falešně by vyskočil alarm "Mimo GPX trasu (>60 m)".
+        // Díky kolmé vzdálenosti k úsečce (Cross-Track / Point-to-Segment) je odchylka 0 m.
+        val route = listOf(
+            TrackPoint(49.1200, 16.3350),
+            TrackPoint(49.1240, 16.3350)
+        )
+        TrackingManager.setPlannedRoute("Dlouhá rovinka", route)
+
+        val midpoint = TrackPoint(49.1220, 16.3350, accuracyMeters = 4.0f)
+        val crossTrackDist = TrackingManager.calculateMinDistanceToRouteMeters(
+            midpoint.latitude,
+            midpoint.longitude,
+            route
+        )
+        assertEquals(0.0, crossTrackDist, 0.5)
+
+        TrackingManager.addPoint(midpoint)
+        assertFalse(TrackingManager.isOffRoute.value)
+    }
+
+    @Test
+    fun setPlannedRoute_cancelAndReload_clearsOffRouteAndRestoresNavigation() {
+        val route = listOf(
+            TrackPoint(49.1246, 16.3353),
+            TrackPoint(49.1268, 16.3321)
+        )
+        TrackingManager.setPlannedRoute("Udoli_Oslava", route)
+        assertEquals("Udoli_Oslava", TrackingManager.plannedRouteName.value)
+        assertEquals(2, TrackingManager.plannedRoutePoints.value.size)
+
+        // Sejdeme z trasy (> 60 m)
+        TrackingManager.addPoint(TrackPoint(49.1350, 16.3500, accuracyMeters = 4.0f))
+        assertTrue(TrackingManager.isOffRoute.value)
+
+        // Zrušíme trasu ("Zrušit trasu") -> vymaže se aktivní trasa i off-route alarm
+        TrackingManager.setPlannedRoute(null, emptyList())
+        assertNull(TrackingManager.plannedRouteName.value)
+        assertTrue(TrackingManager.plannedRoutePoints.value.isEmpty())
+        assertFalse(TrackingManager.isOffRoute.value)
+
+        // Znovu načteme stejnou trasu -> okamžitě obsahuje všechny body
+        TrackingManager.setPlannedRoute("Udoli_Oslava", route.toList())
+        assertEquals("Udoli_Oslava", TrackingManager.plannedRouteName.value)
+        assertEquals(2, TrackingManager.plannedRoutePoints.value.size)
+    }
+
+    @Test
+    fun deleteGpxFile_deletesFileAndRecordsInDeletedRegistry() {
+        val tempDir = kotlin.io.path.createTempDirectory("gpx_test").toFile()
+        try {
+            val gpxFile = java.io.File(tempDir, "Test_Trasa.gpx")
+            gpxFile.writeText("<gpx></gpx>")
+            assertTrue(gpxFile.exists())
+
+            val deleted = GpxExporter.deleteGpxFile(gpxFile)
+            assertTrue(deleted)
+            assertFalse(gpxFile.exists())
+
+            // Ověříme, že se název zapsal do .deleted_tracks, aby se při synchronizaci znovu neobjevil
+            val registry = java.io.File(tempDir, ".deleted_tracks")
+            assertTrue(registry.exists())
+            assertTrue(registry.readLines().contains("Test_Trasa.gpx"))
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

@@ -144,15 +144,14 @@ object TrackingManager {
         }
         _currentLocation.value = enrichedPoint
 
-        // Kontrola odchylky od naplánované GPX trasy (> 60 metrů = mimo trasu)
+        // Kontrola odchylky od naplánované GPX trasy (> 60 metrů od nejbližšího úseku trasy = mimo trasu)
         val route = _plannedRoutePoints.value
         if (route.isNotEmpty()) {
-            val minDistanceToRoute = route.minOf { rPt ->
-                calculateDistanceMeters(
-                    enrichedPoint.latitude, enrichedPoint.longitude,
-                    rPt.latitude, rPt.longitude
-                )
-            }
+            val minDistanceToRoute = calculateMinDistanceToRouteMeters(
+                enrichedPoint.latitude,
+                enrichedPoint.longitude,
+                route
+            )
             _isOffRoute.value = minDistanceToRoute > 60.0
         } else {
             _isOffRoute.value = false
@@ -190,6 +189,59 @@ object TrackingManager {
         _plannedRouteName.value = null
         _plannedRoutePoints.value = emptyList()
         _isOffRoute.value = false
+    }
+
+    /**
+     * Spočítá kolmou vzdálenost bodu [lat], [lon] od lomené čáry [route] (Point-to-Segment Cross-Track Distance).
+     * Zabraňuje falešným poplachům "Mimo trasu" na dlouhých rovných lesních úsecích mezi dvěma body GPX.
+     */
+    fun calculateMinDistanceToRouteMeters(
+        lat: Double,
+        lon: Double,
+        route: List<TrackPoint>
+    ): Double {
+        if (route.isEmpty()) return Double.MAX_VALUE
+        if (route.size == 1) {
+            return calculateDistanceMeters(lat, lon, route[0].latitude, route[0].longitude)
+        }
+        var minDist = Double.MAX_VALUE
+        for (i in 0 until route.size - 1) {
+            val a = route[i]
+            val b = route[i + 1]
+            val d = calculateDistanceToSegmentMeters(lat, lon, a.latitude, a.longitude, b.latitude, b.longitude)
+            if (d < minDist) minDist = d
+        }
+        return minDist
+    }
+
+    /**
+     * Vzdálenost bodu P(lat, lon) od úsečky AB v lokální rovinné projekci (v metrech).
+     */
+    fun calculateDistanceToSegmentMeters(
+        pLat: Double, pLon: Double,
+        aLat: Double, aLon: Double,
+        bLat: Double, bLon: Double
+    ): Double {
+        val cosLat = cos(Math.toRadians(pLat))
+        val metersPerDegLat = 111132.0
+        val metersPerDegLon = 111319.5 * cosLat
+
+        val ax = (aLon - pLon) * metersPerDegLon
+        val ay = (aLat - pLat) * metersPerDegLat
+        val bx = (bLon - pLon) * metersPerDegLon
+        val by = (bLat - pLat) * metersPerDegLat
+
+        val dx = bx - ax
+        val dy = by - ay
+        val lenSq = dx * dx + dy * dy
+        if (lenSq < 1e-6) {
+            return hypot(ax, ay)
+        }
+        // Projekce počátku P(0,0) na úsečku AB: t = -(A · (B - A)) / |B - A|^2
+        val t = (-(ax * dx + ay * dy) / lenSq).coerceIn(0.0, 1.0)
+        val projX = ax + t * dx
+        val projY = ay + t * dy
+        return hypot(projX, projY)
     }
 
     /**
