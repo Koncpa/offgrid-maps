@@ -28,9 +28,11 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.*
+import kotlinx.coroutines.delay
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import java.io.File
@@ -232,6 +234,8 @@ fun MapLibreMapView(
             mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_CONTOURS_SOURCE_ID)?.let { source ->
                 source.setGeoJson(geoJson)
                 mapInstance?.triggerRepaint()
+                delay(80L)
+                mapInstance?.triggerRepaint()
             }
         }
     }
@@ -264,25 +268,34 @@ fun MapLibreMapView(
             mapInstance?.style?.getSourceAs<GeoJsonSource>(TRACK_LINE_SOURCE_ID)?.let { source ->
                 if (trackPoints.size >= 2) {
                     val coords = trackPoints.map { Point.fromLngLat(it.longitude, it.latitude) }
-                    source.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
+                    val feature = Feature.fromGeometry(LineString.fromLngLats(coords))
+                    source.setGeoJson(FeatureCollection.fromFeature(feature))
                 } else {
-                    source.setGeoJson("""{"type":"FeatureCollection","features":[]}""")
+                    source.setGeoJson(FeatureCollection.fromFeatures(emptyArray()))
                 }
+                mapInstance?.triggerRepaint()
+                delay(60L)
                 mapInstance?.triggerRepaint()
             }
         }
     }
 
     // Aktualizace načtené GPX trasy pro navigaci
+    // Pozn.: C++ worker MapLibre tesselluje 3 000+ bodů asynchronně (~40-120 ms), proto vynutíme překreslení i po dokončení tessellace
     LaunchedEffect(plannedRoutePoints, isStyleLoaded, isScreenVisible) {
         if (isStyleLoaded && isScreenVisible) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(PLANNED_ROUTE_SOURCE_ID)?.let { source ->
                 if (plannedRoutePoints.size >= 2) {
                     val coords = plannedRoutePoints.map { Point.fromLngLat(it.longitude, it.latitude) }
-                    source.setGeoJson(Feature.fromGeometry(LineString.fromLngLats(coords)))
+                    val feature = Feature.fromGeometry(LineString.fromLngLats(coords))
+                    source.setGeoJson(FeatureCollection.fromFeature(feature))
                 } else {
-                    source.setGeoJson("""{"type":"FeatureCollection","features":[]}""")
+                    source.setGeoJson(FeatureCollection.fromFeatures(emptyArray()))
                 }
+                mapInstance?.triggerRepaint()
+                delay(60L)
+                mapInstance?.triggerRepaint()
+                delay(140L)
                 mapInstance?.triggerRepaint()
             }
         }

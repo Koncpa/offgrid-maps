@@ -519,18 +519,24 @@ fun MapScreen(
                 savedRegions = savedOfflineRegions,
                 offlineStatus = offlineStatus,
                 onSelectFile = { file ->
-                    if (plannedRouteName == file.nameWithoutExtension) {
-                        // Opětovné klepnutí na již aktivní trasu ji pouze skryje z mapy (soubor zůstane uložený)
+                    val points = GpxExporter.parseGpxFile(file)
+                    if (points.isNotEmpty()) {
+                        // Vždy načteme a vykreslíme vybranou trasu (nová instance listu vynutí překreslení GeoJsonSource)
                         TrackingManager.setPlannedRoute(null, emptyList())
-                    } else {
-                        val points = GpxExporter.parseGpxFile(file)
-                        if (points.isNotEmpty()) {
-                            TrackingManager.setPlannedRoute(file.nameWithoutExtension, points)
-                            isFollowingGps = false
-                            val startLatLng = LatLng(points.first().latitude, points.first().longitude)
-                            maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(startLatLng, 14.0))
-                            zoomLevel = 14.0f
-                        }
+                        TrackingManager.setPlannedRoute(file.nameWithoutExtension, points.toList())
+                        isFollowingGps = false
+
+                        // Najdeme bod trasy nejblíže naší aktuální poloze (např. u Oslavan), abychom neodskakovali 25 km daleko
+                        val closestPt = points.minByOrNull { pt ->
+                            TrackingManager.calculateDistanceMeters(
+                                activeLocation.latitude, activeLocation.longitude,
+                                pt.latitude, pt.longitude
+                            )
+                        } ?: points.first()
+
+                        val focusLatLng = LatLng(closestPt.latitude, closestPt.longitude)
+                        maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(focusLatLng, 13.5))
+                        zoomLevel = 13.5f
                     }
                     showGpxPicker = false
                 },
@@ -550,8 +556,10 @@ fun MapScreen(
                     availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
                 },
                 onRemoveActiveRoute = {
-                    // Pouze zruší zobrazení/navigaci aktivní trasy na mapě, samotný .gpx soubor nemaže!
+                    // Zruší aktivní navigaci po trase (soubor zůstává uložený) a vrátí kameru na aktuální GPS polohu
                     TrackingManager.setPlannedRoute(null, emptyList())
+                    isFollowingGps = true
+                    maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLng(activeLocation))
                     showGpxPicker = false
                 },
                 onImportGpx = {
@@ -896,7 +904,7 @@ private fun GpxRoutePickerOverlay(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Skrýt trasu",
+                            text = "Zrušit trasu",
                             color = TrailYellow,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
