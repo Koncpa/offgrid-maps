@@ -7,6 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
@@ -23,7 +26,9 @@ import cz.offgrid.maps.domain.model.TrackPoint
 class LocationTrackingService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private var locationManager: LocationManager? = null
     private lateinit var locationCallback: LocationCallback
+    private lateinit var hardwareGpsListener: LocationListener
     private lateinit var altimeterManager: BarometricAltimeterManager
     private var lastNotificationMillis = 0L
     private var lastNotifiedDistanceMeters = 0.0
@@ -59,37 +64,46 @@ class LocationTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         altimeterManager = BarometricAltimeterManager(this)
         createNotificationChannel()
+
+        hardwareGpsListener = LocationListener { location ->
+            handleIncomingLocation(location)
+        }
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.locations.forEach { location ->
-                    val gpsAlt = if (location.hasAltitude()) location.altitude else null
-                    val gpsAcc = if (location.hasAccuracy()) location.accuracy else null
-                    altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
-
-                    val point = TrackPoint(
-                        latitude = location.latitude,
-                        longitude = location.longitude,
-                        altitudeMeters = gpsAlt,
-                        timestampMillis = location.time,
-                        accuracyMeters = location.accuracy,
-                        speedMps = if (location.hasSpeed()) location.speed else null
-                    )
-                    TrackingManager.addPoint(point)
+                    handleIncomingLocation(location)
                 }
-
-                // Průběžná záloha na disk každých 10 zaznamenaných bodů (ochrana proti vybití/restartu)
-                val currentPoints = TrackingManager.trackPoints.value
-                if (currentPoints.size - lastCheckpointPointsCount >= 10) {
-                    lastCheckpointPointsCount = currentPoints.size
-                    GpxExporter.saveRecoveryCheckpoint(this@LocationTrackingService, currentPoints)
-                }
-
-                updateNotificationThrottled()
             }
         }
+    }
+
+    private fun handleIncomingLocation(location: Location) {
+        val gpsAlt = if (location.hasAltitude()) location.altitude else null
+        val gpsAcc = if (location.hasAccuracy()) location.accuracy else null
+        altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
+
+        val point = TrackPoint(
+            latitude = location.latitude,
+            longitude = location.longitude,
+            altitudeMeters = gpsAlt,
+            timestampMillis = location.time,
+            accuracyMeters = location.accuracy,
+            speedMps = if (location.hasSpeed()) location.speed else null
+        )
+        TrackingManager.addPoint(point)
+
+        // Průběžná záloha na disk každých 10 zaznamenaných bodů (ochrana proti vybití/restartu)
+        val currentPoints = TrackingManager.trackPoints.value
+        if (currentPoints.size - lastCheckpointPointsCount >= 10) {
+            lastCheckpointPointsCount = currentPoints.size
+            GpxExporter.saveRecoveryCheckpoint(this@LocationTrackingService, currentPoints)
+        }
+
+        updateNotificationThrottled()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -138,23 +152,17 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Okamžitě si vyžádáme 1. bod při startu
-        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+        // Okamžitě si vyžádáme čerstvý satelitní bod při startu (maxUpdateAgeMillis = 0)
+        val currentReq = CurrentLocationRequest.Builder()
+            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+            .setGranularity(Granularity.GRANULARITY_FINE)
+            .setMaxUpdateAgeMillis(0L)
+            .build()
+
+        fusedLocationClient.getCurrentLocation(currentReq, null)
             .addOnSuccessListener { loc ->
                 if (loc != null && TrackingManager.isTracking.value) {
-                    val gpsAlt = if (loc.hasAltitude()) loc.altitude else null
-                    val gpsAcc = if (loc.hasAccuracy()) loc.accuracy else null
-                    altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
-
-                    TrackingManager.addPoint(
-                        TrackPoint(
-                            latitude = loc.latitude,
-                            longitude = loc.longitude,
-                            altitudeMeters = gpsAlt,
-                            timestampMillis = loc.time,
-                            accuracyMeters = loc.accuracy
-                        )
-                    )
+                    handleIncomingLocation(loc)
                     GpxExporter.saveRecoveryCheckpoint(this, TrackingManager.trackPoints.value)
                 }
             }
@@ -169,13 +177,35 @@ class LocationTrackingService : Service() {
     @SuppressLint("MissingPermission")
     private fun registerLocationRequest(interactive: Boolean) {
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        try {
+            locationManager?.removeUpdates(hardwareGpsListener)
+        } catch (_: Exception) {
+        }
+
+        // Přímé buzení hardwarového GNSS čipu hodinek (zabraňuje přepnutí na hrubé BTS/Wi-Fi z telefonu)
+        try {
+            val lm = locationManager
+            if (lm != null && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
+                val minTimeMs = if (interactive) 3000L else 6000L
+                val minDistM = if (interactive) 2.0f else 3.5f
+                lm.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    minTimeMs,
+                    minDistM,
+                    hardwareGpsListener,
+                    Looper.getMainLooper()
+                )
+            }
+        } catch (_: Exception) {
+        }
 
         val locationRequest = if (interactive) {
             // Displej svítí: Živý režim bez zpoždění pro okamžité vykreslování stopy
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-                .setMinUpdateIntervalMillis(3000L)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 4000L)
+                .setMinUpdateIntervalMillis(2000L)
                 .setMinUpdateDistanceMeters(2.0f)
                 .setMaxUpdateDelayMillis(0L)
+                .setGranularity(Granularity.GRANULARITY_FINE)
                 .setWaitForAccurateLocation(false)
                 .build()
         } else {
@@ -184,6 +214,7 @@ class LocationTrackingService : Service() {
                 .setMinUpdateIntervalMillis(5000L)
                 .setMinUpdateDistanceMeters(3.5f)
                 .setMaxUpdateDelayMillis(30000L)
+                .setGranularity(Granularity.GRANULARITY_FINE)
                 .setWaitForAccurateLocation(false)
                 .build()
         }
@@ -197,6 +228,10 @@ class LocationTrackingService : Service() {
 
     private fun stopTracking(emergencyLowBattery: Boolean) {
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        try {
+            locationManager?.removeUpdates(hardwareGpsListener)
+        } catch (_: Exception) {
+        }
         altimeterManager.stop()
         unregisterBatteryReceiverSafely()
 

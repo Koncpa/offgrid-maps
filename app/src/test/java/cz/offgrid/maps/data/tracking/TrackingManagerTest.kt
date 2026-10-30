@@ -104,4 +104,31 @@ class TrackingManagerTest {
         TrackingManager.addPoint(TrackPoint(49.1200, 16.3400))
         assertTrue(TrackingManager.isOffRoute.value)
     }
+
+    @Test
+    fun addPoint_ignoresCoarseNetworkFixWhenAccurateSatelliteFixExists() {
+        val now = 1_700_000_000_000L
+        // Přesný satelitní fix na Zbýšovské haldě (přesnost 4.5 m)
+        val haldaGpsPoint = TrackPoint(
+            latitude = 49.1565,
+            longitude = 16.3510,
+            timestampMillis = now,
+            accuracyMeters = 4.5f
+        )
+        TrackingManager.addPoint(haldaGpsPoint)
+        assertEquals(49.1565, TrackingManager.currentLocation.value!!.latitude, 0.0001)
+
+        // O 5 sekund později přijde hrubý síťový odhad z Wi-Fi/BTS v Sičce (nepřesnost 42 m)
+        val coarseSickaNetworkPoint = TrackPoint(
+            latitude = 49.1607,
+            longitude = 16.3444,
+            timestampMillis = now + 5_000L,
+            accuracyMeters = 42.0f
+        )
+        TrackingManager.addPoint(coarseSickaNetworkPoint)
+
+        // Šipka musí zůstat na Zbýšovské haldě, nikoliv přeskočit do Sičky
+        assertEquals(49.1565, TrackingManager.currentLocation.value!!.latitude, 0.0001)
+        assertEquals(16.3510, TrackingManager.currentLocation.value!!.longitude, 0.0001)
+    }
 }

@@ -1,8 +1,6 @@
 package cz.offgrid.maps.presentation.ui
 
 import android.Manifest
-import android.annotation.SuppressLint
-import android.content.Context
 import android.content.pm.PackageManager
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
@@ -33,16 +31,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.wear.compose.material.*
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import cz.offgrid.maps.data.map.MapFileManager
 import cz.offgrid.maps.data.map.OfflineRegionHelper
 import cz.offgrid.maps.data.tracking.BarometricAltimeterManager
 import cz.offgrid.maps.data.tracking.CompassSensorManager
 import cz.offgrid.maps.data.tracking.GpxExporter
+import cz.offgrid.maps.data.tracking.LiveGpsManager
 import cz.offgrid.maps.data.tracking.LocationTrackingService
 import cz.offgrid.maps.data.tracking.TrackingManager
-import cz.offgrid.maps.domain.model.TrackPoint
 import cz.offgrid.maps.presentation.theme.*
 import cz.offgrid.maps.presentation.ui.map.MapLibreMapView
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -69,6 +65,7 @@ fun MapScreen(
     val defaultMapFile = remember { mapFileManager.getDefaultMap() }
     val compassManager = remember { CompassSensorManager(context) }
     val altimeterManager = remember { BarometricAltimeterManager(context) }
+    val liveGpsManager = remember { LiveGpsManager(context, altimeterManager) }
 
     var showGpxPicker by remember { mutableStateOf(false) }
     var availableGpxFiles by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -83,20 +80,22 @@ fun MapScreen(
 
     var isScreenVisible by remember { mutableStateOf(true) }
 
-    // Senzory a živý režim GPS běží výhradně při rozsvíceném displeji (0 mW při svěšené ruce)
-    DisposableEffect(lifecycleOwner, compassManager, altimeterManager) {
+    // Senzory a živý satelitní GPS přijímač běží při rozsvíceném displeji (0 mW při svěšené ruce)
+    DisposableEffect(lifecycleOwner, compassManager, altimeterManager, liveGpsManager) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     isScreenVisible = true
                     compassManager.start()
                     altimeterManager.start()
+                    liveGpsManager.start()
                     LocationTrackingService.notifyScreenState(context, interactive = true)
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     isScreenVisible = false
                     compassManager.stop()
                     altimeterManager.stop()
+                    liveGpsManager.stop()
                     LocationTrackingService.notifyScreenState(context, interactive = false)
                 }
                 else -> Unit
@@ -107,6 +106,7 @@ fun MapScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
             compassManager.stop()
             altimeterManager.stop()
+            liveGpsManager.stop()
         }
     }
 
@@ -163,7 +163,8 @@ fun MapScreen(
         val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (fineGranted || coarseGranted) {
-            fetchPassiveLastLocation(context, altimeterManager)
+            liveGpsManager.start()
+            liveGpsManager.requestImmediateHighAccuracyFix()
         }
     }
 
@@ -182,7 +183,8 @@ fun MapScreen(
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         if (hasLocation) {
-            fetchPassiveLastLocation(context, altimeterManager)
+            liveGpsManager.start()
+            liveGpsManager.requestImmediateHighAccuracyFix()
         } else {
             permissionLauncher.launch(
                 arrayOf(
@@ -445,7 +447,8 @@ fun MapScreen(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     isFollowingGps = true
-                    fetchActiveLocationOnDemand(context, altimeterManager)
+                    liveGpsManager.start()
+                    liveGpsManager.requestImmediateHighAccuracyFix()
                     maplibreMapInstance?.moveCamera(
                         CameraUpdateFactory.newLatLng(activeLocation)
                     )
@@ -726,53 +729,3 @@ private fun formatCompassCardinal(azimuthDeg: Float): String {
     return directions[index]
 }
 
-@SuppressLint("MissingPermission")
-private fun fetchPassiveLastLocation(
-    context: Context,
-    altimeterManager: BarometricAltimeterManager
-) {
-    val client = LocationServices.getFusedLocationProviderClient(context)
-    client.lastLocation.addOnSuccessListener { location ->
-        if (location != null) {
-            val gpsAlt = if (location.hasAltitude()) location.altitude else null
-            val gpsAcc = if (location.hasAccuracy()) location.accuracy else null
-            altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
-
-            TrackingManager.addPoint(
-                TrackPoint(
-                    latitude = location.latitude,
-                    longitude = location.longitude,
-                    altitudeMeters = gpsAlt,
-                    timestampMillis = location.time,
-                    accuracyMeters = location.accuracy
-                )
-            )
-        }
-    }
-}
-
-@SuppressLint("MissingPermission")
-private fun fetchActiveLocationOnDemand(
-    context: Context,
-    altimeterManager: BarometricAltimeterManager
-) {
-    val client = LocationServices.getFusedLocationProviderClient(context)
-    client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
-        .addOnSuccessListener { currentLoc ->
-            if (currentLoc != null) {
-                val gpsAlt = if (currentLoc.hasAltitude()) currentLoc.altitude else null
-                val gpsAcc = if (currentLoc.hasAccuracy()) currentLoc.accuracy else null
-                altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
-
-                TrackingManager.addPoint(
-                    TrackPoint(
-                        latitude = currentLoc.latitude,
-                        longitude = currentLoc.longitude,
-                        altitudeMeters = gpsAlt,
-                        timestampMillis = currentLoc.time,
-                        accuracyMeters = currentLoc.accuracy
-                    )
-                )
-            }
-        }
-}
