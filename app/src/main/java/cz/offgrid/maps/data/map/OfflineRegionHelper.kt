@@ -12,16 +12,25 @@ import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import kotlin.concurrent.thread
+import kotlin.math.hypot
 
 /**
- * Správce offline mapových regionů (MapLibre OfflineManager) s lokálním HTTP loopbackem pro OkHttp.
- *
- * Proč používáme lokální loopback `http://127.0.0.1:<port>/style.json`:
- * MapLibre Native v Androidu předává `styleURL` z `OfflineTilePyramidRegionDefinition` třídě
- * `Mbgl-HttpRequest` (`okhttp3.HttpUrl.parse`), která odmítá `file://` schémata s chybou
- * `Unable to parse resourceUrl file://...`. Lokální loopback na `127.0.0.1` poskytne `OfflineManageru`
- * platnou `http://` adresu bez jakéhokoliv externího provozu a stáhne přesně dlaždice `offline_source`.
+ * Datový model pro uloženou offline mapovou oblast zobrazenou v přehledu.
+ */
+data class SavedOfflineRegion(
+    val id: Long,
+    val rawMetadata: String,
+    val displayName: String,
+    val centerLat: Double,
+    val centerLon: Double,
+    val isDefaultJmk: Boolean
+)
+
+/**
+ * Správce offline mapových regionů (MapLibre OfflineManager) s lokálním HTTP loopbackem,
+ * seznamem stažených oblastí a automatickým pojmenováním českých pohoří a krajů.
  */
 object OfflineRegionHelper {
 
@@ -33,6 +42,9 @@ object OfflineRegionHelper {
     private val _isOfflineReady = MutableStateFlow(false)
     val isOfflineReady: StateFlow<Boolean> = _isOfflineReady.asStateFlow()
 
+    private val _savedRegions = MutableStateFlow<List<SavedOfflineRegion>>(emptyList())
+    val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
+
     private var isInitialized = false
     private var isDownloading = false
     private var isUserBrowsingMap = false
@@ -40,10 +52,6 @@ object OfflineRegionHelper {
     @Volatile
     private var localStyleServerPort: Int = 0
 
-    /**
-     * Minimální definice stylu pro `OfflineManager` obsahující pouze vzdálené HTTP zdroje dlaždic a fontů
-     * (bez lokálního `asset://` zdroje, který už je trvale zabalený v APK).
-     */
     private val OFFLINE_DOWNLOAD_STYLE_JSON = """
         {
           "version": 8,
@@ -73,10 +81,6 @@ object OfflineRegionHelper {
         }
     """.trimIndent()
 
-    /**
-     * Nastartuje miniaturní lokální socket na `127.0.0.1`, ze kterého si MapLibre `OfflineManager`
-     * přečte JSON definici stylu pro stahování offline dlaždic.
-     */
     @Synchronized
     private fun ensureLocalStyleServerUrl(): String {
         if (localStyleServerPort > 0) {
@@ -115,10 +119,6 @@ object OfflineRegionHelper {
         return "http://127.0.0.1:$localStyleServerPort/style.json"
     }
 
-    /**
-     * Když si uživatel posouvá mapu prstem mimo svou GPS polohu (např. hledá oblast v Čechách ke stažení)
-     * a neběží záznam trasy, povolíme načítání náhledu mapy. Jakmile se vrátí na GPS, síť se vypne.
-     */
     fun setBrowsingMode(browsing: Boolean) {
         isUserBrowsingMap = browsing
         if (browsing) {
@@ -129,10 +129,79 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Zkontroluje, zda je Jihomoravský kraj (až do Zoom 14) uložen v offline databázi hodinek.
+     * Aktualizuje seznam všech uložených offline oblastí v paměti hodinek.
      */
+    fun refreshSavedRegions(context: Context) {
+        val offlineManager = OfflineManager.getInstance(context)
+        offlineManager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
+            override fun onList(offlineRegions: Array<OfflineRegion>?) {
+                val mapped = mutableListOf<SavedOfflineRegion>()
+                offlineRegions?.forEach { region ->
+                    val rawMeta = String(region.metadata, StandardCharsets.UTF_8)
+                    val bounds = region.definition.bounds
+                    val centerLat = bounds?.center?.latitude ?: 49.1246
+                    val centerLon = bounds?.center?.longitude ?: 16.3353
+                    val isJmk = rawMeta.startsWith("Jihomoravsky_kraj")
+                    val title = if (isJmk) {
+                        "Jihomoravský kraj"
+                    } else if (rawMeta.contains("|")) {
+                        rawMeta.substringAfter("|")
+                    } else {
+                        resolveCzechRegionTitle(centerLat, centerLon)
+                    }
+                    mapped.add(
+                        SavedOfflineRegion(
+                            id = region.id,
+                            rawMetadata = rawMeta,
+                            displayName = title,
+                            centerLat = centerLat,
+                            centerLon = centerLon,
+                            isDefaultJmk = isJmk
+                        )
+                    )
+                }
+                // Výchozí Jihomoravský kraj vždy nahoře, ostatní od nejnovějších
+                _savedRegions.value = mapped.sortedWith(
+                    compareByDescending<SavedOfflineRegion> { it.isDefaultJmk }
+                        .thenByDescending { it.id }
+                )
+            }
+
+            override fun onError(error: String) {
+            }
+        })
+    }
+
+    /**
+     * Smaže vybranou offline oblast z interní databáze hodinek.
+     */
+    fun deleteOfflineRegion(context: Context, regionId: Long) {
+        val offlineManager = OfflineManager.getInstance(context)
+        offlineManager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
+            override fun onList(offlineRegions: Array<OfflineRegion>?) {
+                val target = offlineRegions?.firstOrNull { it.id == regionId } ?: return
+                target.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
+                    override fun onDelete() {
+                        refreshSavedRegions(context)
+                    }
+
+                    override fun onError(error: String) {
+                        refreshSavedRegions(context)
+                    }
+                })
+            }
+
+            override fun onError(error: String) {
+            }
+        })
+    }
+
     fun ensureSouthMoraviaOffline(context: Context, @Suppress("UNUSED_PARAMETER") styleJson: String) {
-        if (isInitialized) return
+        ContourTileManager.loadCachedCustomContours(context)
+        if (isInitialized) {
+            refreshSavedRegions(context)
+            return
+        }
         isInitialized = true
 
         val offlineManager = OfflineManager.getInstance(context)
@@ -140,6 +209,7 @@ object OfflineRegionHelper {
 
         offlineManager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
             override fun onList(offlineRegions: Array<OfflineRegion>?) {
+                refreshSavedRegions(context)
                 val existing = offlineRegions?.firstOrNull { region ->
                     val name = String(region.metadata, StandardCharsets.UTF_8)
                     name == REGION_NAME_JMK
@@ -149,14 +219,14 @@ object OfflineRegionHelper {
                     existing.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
                         override fun onStatus(status: OfflineRegionStatus?) {
                             if (status != null && status.isComplete) {
-                                finishDownloadAndUpdateConnectivity()
+                                finishDownloadAndUpdateConnectivity(context)
                             } else {
-                                startRegionDownload(existing)
+                                startRegionDownload(context, existing)
                             }
                         }
 
                         override fun onError(error: String?) {
-                            finishDownloadAndUpdateConnectivity()
+                            finishDownloadAndUpdateConnectivity(context)
                         }
                     })
                     return
@@ -166,10 +236,10 @@ object OfflineRegionHelper {
                 val styleUrl = ensureLocalStyleServerUrl()
 
                 val bounds = LatLngBounds.from(
-                    49.42, // Sever (Moravský kras / Tišnovsko / Boskovicko)
-                    16.82, // Východ (Slavkov / Bučovice)
-                    48.78, // Jih (Pálava / Mikulov / Znojmo)
-                    16.02  // Západ (Oslavany / Ivančice / Moravský Krumlov / Náměšť)
+                    49.42,
+                    16.82,
+                    48.78,
+                    16.02
                 )
 
                 val definition = OfflineTilePyramidRegionDefinition(
@@ -187,11 +257,12 @@ object OfflineRegionHelper {
                     metadata,
                     object : OfflineManager.CreateOfflineRegionCallback {
                         override fun onCreate(offlineRegion: OfflineRegion) {
-                            startRegionDownload(offlineRegion)
+                            refreshSavedRegions(context)
+                            startRegionDownload(context, offlineRegion)
                         }
 
                         override fun onError(error: String) {
-                            finishDownloadAndUpdateConnectivity()
+                            finishDownloadAndUpdateConnectivity(context)
                         }
                     }
                 )
@@ -203,7 +274,7 @@ object OfflineRegionHelper {
         })
     }
 
-    private fun startRegionDownload(offlineRegion: OfflineRegion) {
+    private fun startRegionDownload(context: Context, offlineRegion: OfflineRegion) {
         isDownloading = true
         MapLibre.setConnected(true)
         offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
@@ -211,7 +282,7 @@ object OfflineRegionHelper {
             override fun onStatusChanged(status: OfflineRegionStatus) {
                 if (status.isComplete) {
                     offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
-                    finishDownloadAndUpdateConnectivity()
+                    finishDownloadAndUpdateConnectivity(context)
                 } else if (status.requiredResourceCount > 0) {
                     val pct = (100.0 * status.completedResourceCount / status.requiredResourceCount)
                         .toInt()
@@ -221,18 +292,18 @@ object OfflineRegionHelper {
             }
 
             override fun onError(error: OfflineRegionError) {
-                // Při chvilkovém výpadku jednoho souboru necháme stahování pokračovat
             }
 
             override fun mapboxTileCountLimitExceeded(limit: Long) {
                 offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
-                finishDownloadAndUpdateConnectivity()
+                finishDownloadAndUpdateConnectivity(context)
             }
         })
     }
 
     /**
-     * Stáhne do offline paměti hodinek ~30×30 km oblast kolem aktuálního středu mapy (až do detailu Zoom 14).
+     * Stáhne do offline paměti hodinek ~30×30 km oblast kolem aktuálního středu mapy (až do detailu Zoom 14)
+     * a zároveň vygeneruje pro danou oblast offline vrstevnice po 10 m / 50 m.
      */
     fun downloadAreaAround(
         context: Context,
@@ -242,9 +313,11 @@ object OfflineRegionHelper {
         val offlineManager = OfflineManager.getInstance(context)
         offlineManager.setOfflineMapboxTileCountLimit(80000L)
 
+        // Souběžně vygenerujeme a uložíme offline vrstevnice (10 m / 50 m) pro tuto oblast
+        ContourTileManager.downloadContoursForArea(context, centerLat, centerLon)
+
         val styleUrl = ensureLocalStyleServerUrl()
 
-        // Obdélník cca 30 × 30 km kolem zvoleného středu mapy
         val bounds = LatLngBounds.from(
             (centerLat + 0.13).coerceAtMost(51.1),
             (centerLon + 0.18).coerceAtMost(18.9),
@@ -260,8 +333,9 @@ object OfflineRegionHelper {
             1.0f
         )
 
-        val regionName = "Custom_${"%.2f".format(java.util.Locale.US, centerLat)}_${"%.2f".format(java.util.Locale.US, centerLon)}"
-        val metadata = regionName.toByteArray(StandardCharsets.UTF_8)
+        val humanTitle = resolveCzechRegionTitle(centerLat, centerLon)
+        val regionMeta = "Custom_${"%.2f".format(Locale.US, centerLat)}_${"%.2f".format(Locale.US, centerLon)}|$humanTitle"
+        val metadata = regionMeta.toByteArray(StandardCharsets.UTF_8)
 
         isDownloading = true
         _statusText.value = "DL 0%"
@@ -272,22 +346,58 @@ object OfflineRegionHelper {
             metadata,
             object : OfflineManager.CreateOfflineRegionCallback {
                 override fun onCreate(offlineRegion: OfflineRegion) {
-                    startRegionDownload(offlineRegion)
+                    refreshSavedRegions(context)
+                    startRegionDownload(context, offlineRegion)
                 }
 
                 override fun onError(error: String) {
-                    finishDownloadAndUpdateConnectivity()
+                    finishDownloadAndUpdateConnectivity(context)
                 }
             }
         )
     }
 
-    private fun finishDownloadAndUpdateConnectivity() {
+    private fun finishDownloadAndUpdateConnectivity(context: Context) {
         isDownloading = false
         _isOfflineReady.value = true
         _statusText.value = "OFFLINE"
+        refreshSavedRegions(context)
         if (!isUserBrowsingMap) {
             MapLibre.setConnected(false)
         }
+    }
+
+    /**
+     * Automaticky přiřadí stažené oblasti srozumitelný český název podle nejbližšího pohoří nebo kraje.
+     */
+    fun resolveCzechRegionTitle(lat: Double, lon: Double): String {
+        data class Landmark(val name: String, val lat: Double, val lon: Double, val radiusDeg: Double)
+        val landmarks = listOf(
+            Landmark("Krkonoše", 50.73, 15.65, 0.30),
+            Landmark("Šumava", 49.02, 13.55, 0.40),
+            Landmark("Beskydy", 49.50, 18.42, 0.35),
+            Landmark("Jeseníky", 50.08, 17.22, 0.35),
+            Landmark("Jizerské hory", 50.83, 15.25, 0.25),
+            Landmark("Orlické hory", 50.28, 16.40, 0.28),
+            Landmark("Krušné hory", 50.42, 13.05, 0.40),
+            Landmark("Český ráj", 50.55, 15.20, 0.22),
+            Landmark("České Švýcarsko", 50.88, 14.35, 0.22),
+            Landmark("Brdy & Křivoklátsko", 49.75, 13.85, 0.32),
+            Landmark("Praha a okolí", 50.08, 14.43, 0.32),
+            Landmark("Vysočina & Žďárské vrchy", 49.58, 15.95, 0.40),
+            Landmark("Jižní Čechy", 49.05, 14.48, 0.45),
+            Landmark("Západní Čechy", 49.75, 13.35, 0.45),
+            Landmark("Východní Čechy", 50.15, 15.82, 0.45),
+            Landmark("Střední Čechy", 49.95, 14.85, 0.45),
+            Landmark("Severní Čechy", 50.62, 14.05, 0.45),
+            Landmark("Střední Morava", 49.55, 17.25, 0.45),
+            Landmark("Jihomoravský kraj", 49.15, 16.45, 0.45)
+        )
+        val match = landmarks.minByOrNull { hypot(lat - it.lat, lon - it.lon) }
+        if (match != null && hypot(lat - match.lat, lon - match.lon) <= match.radiusDeg) {
+            return match.name
+        }
+        val regionPrefix = if (lon < 15.6) "Čechy" else "Morava"
+        return "$regionPrefix (${"%.2f".format(Locale.US, lat)}, ${"%.2f".format(Locale.US, lon)})"
     }
 }

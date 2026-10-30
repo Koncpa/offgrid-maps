@@ -49,6 +49,10 @@ object StyleBuilder {
             "kct_trails_source": {
               "type": "geojson",
               "data": "asset://jmk_kct_trails.geojson"
+            },
+            "jmk_contours_source": {
+              "type": "geojson",
+              "data": "asset://jmk_contours.geojson"
             }
           },
           "layers": [
@@ -80,14 +84,44 @@ object StyleBuilder {
               }
             },
             {
-              "id": "contour",
+              "id": "contour_minor",
               "type": "line",
-              "source": "offline_source",
-              "source-layer": "contour",
+              "source": "jmk_contours_source",
               "minzoom": 12,
+              "filter": ["==", ["get", "major"], 0],
               "paint": {
-                "line-color": "#222222",
-                "line-width": 0.8
+                "line-color": "#45371E",
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.7, 14, 1.0]
+              }
+            },
+            {
+              "id": "contour_major",
+              "type": "line",
+              "source": "jmk_contours_source",
+              "minzoom": 11,
+              "filter": ["==", ["get", "major"], 1],
+              "paint": {
+                "line-color": "#755D32",
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.0, 14, 1.5]
+              }
+            },
+            {
+              "id": "contour_labels",
+              "type": "symbol",
+              "source": "jmk_contours_source",
+              "minzoom": 13,
+              "filter": ["==", ["get", "major"], 1],
+              "layout": {
+                "symbol-placement": "line",
+                "symbol-spacing": 220,
+                "text-field": ["concat", ["to-string", ["get", "ele"]], " m"],
+                "text-font": ["Noto Sans Regular"],
+                "text-size": 8.5
+              },
+              "paint": {
+                "text-color": "#9E804A",
+                "text-halo-color": "#000000",
+                "text-halo-width": 1.8
               }
             },
             {

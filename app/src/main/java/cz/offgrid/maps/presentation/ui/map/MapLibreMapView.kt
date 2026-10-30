@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import cz.offgrid.maps.data.map.ContourTileManager
 import cz.offgrid.maps.data.map.OfflineRegionHelper
 import cz.offgrid.maps.data.map.StyleBuilder
 import cz.offgrid.maps.domain.model.TrackPoint
@@ -45,6 +46,9 @@ private const val PLANNED_ROUTE_SOURCE_ID = "planned_gpx_route_source"
 private const val PLANNED_ROUTE_CASING_LAYER_ID = "planned_gpx_route_casing_layer"
 private const val PLANNED_ROUTE_LAYER_ID = "planned_gpx_route_layer"
 
+private const val CUSTOM_CONTOURS_SOURCE_ID = "custom_contours_source"
+private const val CUSTOM_CONTOURS_LAYER_ID = "custom_contours_layer"
+
 /**
  * Energeticky vysoce optimalizovaný Compose wrapper pro MapLibre MapView na Wear OS.
  */
@@ -70,6 +74,7 @@ fun MapLibreMapView(
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var isStyleLoaded by remember { mutableStateOf(false) }
     var isScreenVisible by remember { mutableStateOf(true) }
+    val customContoursGeoJson by ContourTileManager.customContoursGeoJson.collectAsState()
 
     val mapView = remember {
         MapView(context).apply {
@@ -144,6 +149,17 @@ fun MapLibreMapView(
 
             val styleJson = StyleBuilder.createAmoledOutdoorStyle(mbtilesFile)
             map.setStyle(Style.Builder().fromJson(styleJson)) { style ->
+                // -1. Zdroj a vrstva pro dodatečně stažené offline vrstevnice (např. v Čechách)
+                val customContourSource = GeoJsonSource(CUSTOM_CONTOURS_SOURCE_ID)
+                style.addSource(customContourSource)
+                style.addLayerBelow(
+                    LineLayer(CUSTOM_CONTOURS_LAYER_ID, CUSTOM_CONTOURS_SOURCE_ID).withProperties(
+                        lineColor("#5C4928"),
+                        lineWidth(1.0f)
+                    ).apply { minZoom = 11.5f },
+                    "roads_major"
+                )
+
                 // 0. Zdroj a vrstva pro načtenou GPX trasu k navigaci (černý podklad + čárkovaná vodicí linka)
                 val plannedSource = GeoJsonSource(PLANNED_ROUTE_SOURCE_ID)
                 style.addSource(plannedSource)
@@ -202,6 +218,17 @@ fun MapLibreMapView(
             }
 
             onMapReady(map)
+        }
+    }
+
+    // Aktualizace offline vrstevnic stažených pro oblasti mimo JMK
+    LaunchedEffect(customContoursGeoJson, isStyleLoaded) {
+        val geoJson = customContoursGeoJson
+        if (isStyleLoaded && !geoJson.isNullOrEmpty()) {
+            mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_CONTOURS_SOURCE_ID)?.let { source ->
+                source.setGeoJson(geoJson)
+                mapInstance?.triggerRepaint()
+            }
         }
     }
 

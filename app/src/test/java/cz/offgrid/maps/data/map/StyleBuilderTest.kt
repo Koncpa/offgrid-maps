@@ -25,11 +25,14 @@ class StyleBuilderTest {
             // Ověříme, že styl odkazuje na lokální MBTiles soubor
             assertTrue(styleJson.contains("mbtiles://${tempFile.absolutePath}"))
 
-            // Ověříme přítomnost vrstev pro české KČT značení
+            // Ověříme přítomnost vrstev pro české KČT značení a vrstevnice (10 m a 50 m)
             assertTrue(styleJson.contains("trail_kct_red"))
             assertTrue(styleJson.contains("trail_kct_blue"))
             assertTrue(styleJson.contains("trail_kct_green"))
             assertTrue(styleJson.contains("trail_kct_yellow"))
+            assertTrue(styleJson.contains("contour_minor"))
+            assertTrue(styleJson.contains("contour_major"))
+            assertTrue(styleJson.contains("contour_labels"))
         } finally {
             tempFile.delete()
         }
