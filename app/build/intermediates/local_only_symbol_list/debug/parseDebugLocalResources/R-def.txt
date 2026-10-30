@@ -10,3 +10,4 @@ string tracking_stop
 string zoom_in
 string zoom_out
 style Theme.OffGridMaps
+xml file_paths

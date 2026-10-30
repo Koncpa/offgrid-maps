@@ -131,4 +131,26 @@ class TrackingManagerTest {
         assertEquals(49.1565, TrackingManager.currentLocation.value!!.latitude, 0.0001)
         assertEquals(16.3510, TrackingManager.currentLocation.value!!.longitude, 0.0001)
     }
+
+    @Test
+    fun parseGpxContent_supportsMapyCzRteptAndMultilineTrkpt() {
+        val mapyCzGpx = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <gpx version="1.1" creator="Mapy.cz">
+              <rte>
+                <rtept lon="16.3510" lat="49.1565">
+                  <ele>348.5</ele>
+                </rtept>
+                <rtept lat="49.1580" lon="16.3490"/>
+              </rte>
+            </gpx>
+        """.trimIndent()
+
+        val points = GpxExporter.parseGpxContent(mapyCzGpx)
+        assertEquals(2, points.size)
+        assertEquals(49.1565, points[0].latitude, 0.0001)
+        assertEquals(16.3510, points[0].longitude, 0.0001)
+        assertEquals(348.5, points[0].altitudeMeters!!, 0.1)
+        assertEquals(49.1580, points[1].latitude, 0.0001)
+    }
 }

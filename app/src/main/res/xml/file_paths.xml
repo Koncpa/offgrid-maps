@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <files-path
+        name="tracks"
+        path="tracks/" />
+    <external-files-path
+        name="external_tracks"
+        path="tracks/" />
+</paths>

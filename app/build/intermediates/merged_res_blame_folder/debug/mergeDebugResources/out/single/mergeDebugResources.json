@@ -1,10 +1,10 @@
 [
     {
-        "merged": "/Users/koncpa/.gradle/daemon/8.9/cz.offgrid.maps.app-debug-61:/drawable_ic_launcher.xml.flat",
-        "source": "/Users/koncpa/.gradle/daemon/8.9/cz.offgrid.maps.app-main-63:/drawable/ic_launcher.xml"
+        "merged": "cz.offgrid.maps.app-debug-61:/xml_file_paths.xml.flat",
+        "source": "cz.offgrid.maps.app-main-63:/xml/file_paths.xml"
     },
     {
-        "merged": "cz.offgrid.maps.app-debug-61:/drawable_ic_launcher.xml.flat",
-        "source": "cz.offgrid.maps.app-main-63:/drawable/ic_launcher.xml"
+        "merged": "/Users/koncpa/.gradle/daemon/8.9/cz.offgrid.maps.app-debug-61:/drawable_ic_launcher.xml.flat",
+        "source": "/Users/koncpa/.gradle/daemon/8.9/cz.offgrid.maps.app-main-63:/drawable/ic_launcher.xml"
     }
 ]

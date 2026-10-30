@@ -1,6 +1,14 @@
 package cz.offgrid.maps.data.tracking
 
+import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
 import cz.offgrid.maps.domain.model.TrackPoint
 import java.io.File
 import java.text.SimpleDateFormat
@@ -9,26 +17,40 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Exportér a čtečka standardního formátu GPX 1.1 pro uložené, naplánované a nouzově obnovené túry.
+ * Exportér, importér a čtečka standardního formátu GPX 1.1 (kompatibilní s Mapy.cz, Garmin, Strava, Komoot).
  */
 object GpxExporter {
 
     private const val RECOVERY_FILE_NAME = ".active_recovery.gpx"
-    private val trkptRegex = Regex("""<trkpt\s+lat="([0-9.-]+)"\s+lon="([0-9.-]+)"""")
-    private val eleRegex = Regex("""<ele>([0-9.-]+)</ele>""")
+
+    // Podpora pro <trkpt> (zaznamenaná stopa) i <rtept> (naplánovaná trasa z Mapy.cz) včetně víceřádkového zápisu
+    private val pointTagRegex = Regex(
+        """<(?:trkpt|rtept)\b([^>]*?)(?:/>|>(.*?)</(?:trkpt|rtept)>)""",
+        setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+    )
+    private val latAttrRegex = Regex("""\blat\s*=\s*["']([0-9.+-]+)["']""", RegexOption.IGNORE_CASE)
+    private val lonAttrRegex = Regex("""\blon\s*=\s*["']([0-9.+-]+)["']""", RegexOption.IGNORE_CASE)
+    private val eleTagRegex = Regex("""<ele>\s*([0-9.+-]+)\s*</ele>""", RegexOption.IGNORE_CASE)
 
     /**
-     * Uloží seznam zaznamenaných bodů do souboru .gpx v interním úložišti hodinek (/files/tracks/).
+     * Uloží seznam zaznamenaných bodů do souboru .gpx v interním úložišti hodinek (/files/tracks/)
+     * a zároveň automaticky vyexportuje kopii do veřejné složky `Download/OffGridMaps/`.
      */
     fun saveTrackToGpx(context: Context, points: List<TrackPoint>, prefix: String = "tura"): File? {
         if (points.isEmpty()) return null
 
         val tracksDir = getTracksDir(context)
         val fileTimestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val gpxFile = File(tracksDir, "${prefix}_$fileTimestamp.gpx")
+        val fileName = "${prefix}_$fileTimestamp.gpx"
+        val gpxFile = File(tracksDir, fileName)
 
-        gpxFile.writeText(buildGpxXml("Túra $fileTimestamp", points))
+        val xmlContent = buildGpxXml("Túra $fileTimestamp", points)
+        gpxFile.writeText(xmlContent)
         clearRecoveryCheckpoint(context)
+
+        // Automaticky uložíme kopii také do veřejné složky Download/OffGridMaps/ pro snadné stažení do telefonu/PC
+        exportToPublicDownloads(context, fileName, xmlContent)
+
         return gpxFile
     }
 
@@ -68,9 +90,101 @@ object GpxExporter {
         }
 
         val fileTimestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(recoveryFile.lastModified()))
-        val recoveredFile = File(tracksDir, "obnoveno_$fileTimestamp.gpx")
+        val fileName = "obnoveno_$fileTimestamp.gpx"
+        val recoveredFile = File(tracksDir, fileName)
+        val xmlContent = recoveryFile.readText()
         recoveryFile.renameTo(recoveredFile)
+        exportToPublicDownloads(context, fileName, xmlContent)
         return recoveredFile
+    }
+
+    /**
+     * Importuje .gpx soubor z Uri (např. ze systémového výběru souborů nebo po přijetí přes Bluetooth / Quick Share).
+     */
+    fun importGpxFromUri(context: Context, uri: Uri): File? {
+        return try {
+            val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                ?: return null
+            val points = parseGpxContent(content)
+            if (points.isEmpty()) return null
+
+            val rawName = resolveDisplayName(context, uri)
+                ?.removeSuffix(".gpx")
+                ?.removeSuffix(".GPX")
+                ?.replace(Regex("""[^a-zA-Z0-9_\-ěščřžýáíéúůťďňĚŠČŘŽÝÁÍÉÚŮŤĎŇ ]"""), "_")
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: "import_${SimpleDateFormat("MMdd_HHmm", Locale.US).format(Date())}"
+
+            val targetFile = File(getTracksDir(context), "$rawName.gpx")
+            targetFile.writeText(content)
+            targetFile
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Vyexportuje .gpx soubor do veřejné složky `Download/OffGridMaps/` a otevře systémové sdílení
+     * (Quick Share / Bluetooth / odeslání do telefonu).
+     */
+    fun shareAndExportGpxFile(context: Context, file: File): Boolean {
+        if (!file.exists()) return false
+        val exportedToDownloads = exportToPublicDownloads(context, file.name, file.readText())
+
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/gpx+xml"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, file.name)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val chooser = Intent.createChooser(shareIntent, "Odeslat GPX").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+            return true
+        } catch (_: Exception) {
+            return exportedToDownloads
+        }
+    }
+
+    /**
+     * Zapíše kopii .gpx souboru do veřejné složky `Download/OffGridMaps/` (funguje bez oprávnění na Androidu 10+).
+     */
+    private fun exportToPublicDownloads(context: Context, fileName: String, xmlContent: String): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/gpx+xml")
+                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/OffGridMaps")
+                }
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { out ->
+                        out.write(xmlContent.toByteArray(Charsets.UTF_8))
+                    }
+                    true
+                } else {
+                    false
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val dlDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "OffGridMaps")
+                if (!dlDir.exists()) dlDir.mkdirs()
+                File(dlDir, fileName).writeText(xmlContent)
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun buildGpxXml(trackName: String, points: List<TrackPoint>): String {
@@ -102,40 +216,83 @@ object GpxExporter {
     }
 
     /**
-     * Vrátí seznam všech uložených .gpx tras (seřazených od nejnovějších).
+     * Vrátí seznam všech uložených .gpx tras (automaticky synchronizuje i .gpx soubory nahrané do složky Download nebo external files).
      */
     fun listSavedGpxFiles(context: Context): List<File> {
         val dir = getTracksDir(context)
         ensureSampleTrackExists(dir)
+        syncExternalGpxDirectories(context, dir)
         return dir.listFiles { f ->
             f.isFile && !f.name.startsWith(".") && f.extension.equals("gpx", ignoreCase = true)
         }?.sortedByDescending { it.lastModified() } ?: emptyList()
     }
 
     /**
-     * Načte body trasy ze souboru GPX 1.1.
+     * Zkontroluje veřejnou složku Download a externí složku aplikace (`/sdcard/Android/data/cz.offgrid.maps/files/tracks`)
+     * a automaticky naimportuje nově vložené .gpx trasy (např. z Mapy.cz).
+     */
+    private fun syncExternalGpxDirectories(context: Context, internalTracksDir: File) {
+        val candidateDirs = mutableListOf<File>()
+        context.getExternalFilesDir("tracks")?.let { candidateDirs.add(it) }
+        context.getExternalFilesDir(null)?.let { candidateDirs.add(it) }
+        @Suppress("DEPRECATION")
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)?.let { dl ->
+            candidateDirs.add(dl)
+            candidateDirs.add(File(dl, "OffGridMaps"))
+        }
+
+        for (extDir in candidateDirs) {
+            val files = try {
+                extDir.listFiles { f -> f.isFile && f.extension.equals("gpx", ignoreCase = true) }
+            } catch (_: Exception) {
+                null
+            } ?: continue
+
+            for (extFile in files) {
+                val target = File(internalTracksDir, extFile.name)
+                if (!target.exists() && extFile.length() > 0L) {
+                    try {
+                        extFile.copyTo(target, overwrite = false)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Načte body trasy ze souboru GPX 1.1 (podporuje `<trkpt>` i `<rtept>` z Mapy.cz).
      */
     fun parseGpxFile(file: File): List<TrackPoint> {
         if (!file.exists()) return emptyList()
+        return try {
+            parseGpxContent(file.readText())
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * Načte body trasy z textového obsahu GPX 1.1 (nezávisle na pořadí atributů lat/lon a řádkování).
+     */
+    fun parseGpxContent(xmlContent: String): List<TrackPoint> {
         val points = mutableListOf<TrackPoint>()
-        file.useLines { lines ->
-            lines.forEach { line ->
-                val match = trkptRegex.find(line)
-                if (match != null) {
-                    val lat = match.groupValues[1].toDoubleOrNull()
-                    val lon = match.groupValues[2].toDoubleOrNull()
-                    val ele = eleRegex.find(line)?.groupValues?.get(1)?.toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        points.add(
-                            TrackPoint(
-                                latitude = lat,
-                                longitude = lon,
-                                altitudeMeters = ele,
-                                timestampMillis = 0L
-                            )
-                        )
-                    }
-                }
+        for (match in pointTagRegex.findAll(xmlContent)) {
+            val attrs = match.groupValues[1]
+            val innerBody = match.groupValues[2]
+
+            val lat = latAttrRegex.find(attrs)?.groupValues?.get(1)?.toDoubleOrNull()
+            val lon = lonAttrRegex.find(attrs)?.groupValues?.get(1)?.toDoubleOrNull()
+            if (lat != null && lon != null) {
+                val ele = eleTagRegex.find(innerBody)?.groupValues?.get(1)?.toDoubleOrNull()
+                points.add(
+                    TrackPoint(
+                        latitude = lat,
+                        longitude = lon,
+                        altitudeMeters = ele,
+                        timestampMillis = 0L
+                    )
+                )
             }
         }
         return points
@@ -146,6 +303,18 @@ object GpxExporter {
      */
     fun deleteGpxFile(file: File): Boolean {
         return if (file.exists()) file.delete() else false
+    }
+
+    private fun resolveDisplayName(context: Context, uri: Uri): String? {
+        if (uri.scheme == "content") {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) return cursor.getString(idx)
+                }
+            }
+        }
+        return uri.lastPathSegment
     }
 
     private fun getTracksDir(context: Context): File {

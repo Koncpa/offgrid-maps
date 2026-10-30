@@ -1,3 +1,4 @@
+cz.offgrid.maps:xml/file_paths = 0x7f0f0000
 cz.offgrid.maps:styleable/maplibre_BubbleLayout = 0x7f0e0021
 cz.offgrid.maps:styleable/WearableNavigationDrawerView = 0x7f0e001f
 cz.offgrid.maps:styleable/WearableDrawerView = 0x7f0e001e

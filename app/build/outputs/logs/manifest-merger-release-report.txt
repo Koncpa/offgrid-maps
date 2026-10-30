@@ -1,9 +1,20 @@
 -- Merging decision tree log ---
+provider#androidx.core.content.FileProvider
+INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:72:9-80:20
+	android:grantUriPermissions
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:76:13-47
+	android:authorities
+		INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:74:13-64
+	android:exported
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:75:13-37
+	android:name
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:73:13-62
 manifest
-ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-54:12
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-89:12
+INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-89:12
+INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-89:12
+INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:2:1-89:12
 MERGED from [androidx.wear.compose:compose-material-core:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/639adebeadd06b1a611fa21e533bd607/transformed/compose-material-core-1.4.0/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.wear.compose:compose-navigation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/54be7336cd301b5e23cee264bbbcf8b5/transformed/compose-navigation-1.4.0/AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:17:1-28:12
@@ -151,8 +162,8 @@ ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:
 	android:name
 		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:23:22-63
 application
-ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:25:5-52:19
-INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:25:5-52:19
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:25:5-87:19
+INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:25:5-87:19
 MERGED from [androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:22:5-26:19
 MERGED from [androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:22:5-26:19
 MERGED from [androidx.wear:wear:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/897a6d60382c9b69bfb64468de9350e7/transformed/wear-1.3.0/AndroidManifest.xml:22:5-26:19
@@ -200,33 +211,67 @@ ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:
 	android:name
 		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:34:13-66
 activity#cz.offgrid.maps.MainActivity
-ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:37:9-45:20
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:37:9-70:20
+	android:launchMode
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:40:13-43
 	android:exported
 		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:39:13-36
 	android:theme
-		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:40:13-53
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:41:13-53
 	android:name
 		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:38:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:41:13-44:29
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:42:13-45:29
 action#android.intent.action.MAIN
-ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:42:17-69
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:17-69
 	android:name
-		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:42:25-66
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:17-77
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:44:17-77
 	android:name
-		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:27-74
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:44:27-74
+intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:mimeType:application/gpx+data:mimeType:application/gpx+xml+data:mimeType:application/xml+data:mimeType:text/xml+data:scheme:content+data:scheme:file
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:48:13-58:29
+action#android.intent.action.VIEW
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:17-69
+	android:name
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:25-66
+category#android.intent.category.DEFAULT
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:17-76
+	android:name
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:27-73
+category#android.intent.category.BROWSABLE
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:17-78
+	android:name
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:27-75
+data
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+	android:host
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:65:23-39
+	android:scheme
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:23-47
+	android:pathPattern
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:67:23-53
+	android:mimeType
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:54:23-61
+intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:host:*+data:mimeType:*/*+data:pathPattern:.*\\..*\\.gpx+data:pathPattern:.*\\.gpx+data:scheme:content+data:scheme:file
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:59:13-69:29
 service#cz.offgrid.maps.data.tracking.LocationTrackingService
-ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:47:9-51:56
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:82:9-86:56
 	android:enabled
-		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:13-35
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:84:13-35
 	android:exported
-		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:13-37
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:85:13-37
 	android:foregroundServiceType
-		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:13-53
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:86:13-53
 	android:name
-		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:48:13-66
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:83:13-66
+meta-data#android.support.FILE_PROVIDER_PATHS
+ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:77:13-79:54
+	android:resource
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:79:17-51
+	android:name
+		ADDED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:78:17-67
 uses-sdk
 INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml

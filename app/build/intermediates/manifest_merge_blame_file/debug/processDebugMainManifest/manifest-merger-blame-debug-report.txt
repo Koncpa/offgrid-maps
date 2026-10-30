@@ -86,7 +86,7 @@
 45-->[androidx.core:core:1.13.1] /Users/koncpa/.gradle/caches/8.9/transforms/5cd7ad6226c423e75c5a3b7e2c03e406/transformed/core-1.13.1/AndroidManifest.xml:26:22-94
 46
 47    <application
-47-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:25:5-52:19
+47-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:25:5-87:19
 48        android:allowBackup="true"
 48-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:26:9-35
 49        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
@@ -111,130 +111,215 @@
 60-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:35:13-33
 61
 62        <activity
-62-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:37:9-45:20
+62-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:37:9-70:20
 63            android:name="cz.offgrid.maps.MainActivity"
 63-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:38:13-41
 64            android:exported="true"
 64-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:39:13-36
-65            android:theme="@style/Theme.OffGridMaps" >
-65-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:40:13-53
-66            <intent-filter>
-66-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:41:13-44:29
-67                <action android:name="android.intent.action.MAIN" />
-67-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:42:17-69
-67-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:42:25-66
-68
-69                <category android:name="android.intent.category.LAUNCHER" />
-69-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:17-77
-69-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:27-74
-70            </intent-filter>
-71        </activity>
+65            android:launchMode="singleTop"
+65-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:40:13-43
+66            android:theme="@style/Theme.OffGridMaps" >
+66-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:41:13-53
+67            <intent-filter>
+67-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:42:13-45:29
+68                <action android:name="android.intent.action.MAIN" />
+68-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:17-69
+68-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:43:25-66
+69
+70                <category android:name="android.intent.category.LAUNCHER" />
+70-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:44:17-77
+70-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:44:27-74
+71            </intent-filter>
 72
-73        <service
-73-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:47:9-51:56
-74            android:name="cz.offgrid.maps.data.tracking.LocationTrackingService"
-74-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:48:13-66
-75            android:enabled="true"
-75-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:13-35
-76            android:exported="false"
-76-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:13-37
-77            android:foregroundServiceType="location" />
-77-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:13-53
-78
-79        <uses-library
-79-->[androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:23:9-25:40
-80            android:name="wear-sdk"
-80-->[androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:24:13-36
-81            android:required="false" />
-81-->[androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:25:13-37
-82        <uses-library
-82-->[androidx.wear:wear:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/897a6d60382c9b69bfb64468de9350e7/transformed/wear-1.3.0/AndroidManifest.xml:23:9-25:40
-83            android:name="com.google.android.wearable"
-83-->[androidx.wear:wear:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/897a6d60382c9b69bfb64468de9350e7/transformed/wear-1.3.0/AndroidManifest.xml:24:13-55
-84            android:required="false" />
-84-->[androidx.wear:wear:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/897a6d60382c9b69bfb64468de9350e7/transformed/wear-1.3.0/AndroidManifest.xml:25:13-37
-85
-86        <activity
-86-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:9-173
-87            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-87-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:19-85
-88            android:exported="false"
-88-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:146-170
-89            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-89-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:86-145
-90
-91        <meta-data
-91-->[com.google.android.gms:play-services-basement:18.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/712b51ca0fa88d02bf5259d74ad6483f/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:9-122
-92            android:name="com.google.android.gms.version"
-92-->[com.google.android.gms:play-services-basement:18.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/712b51ca0fa88d02bf5259d74ad6483f/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:20-65
-93            android:value="@integer/google_play_services_version" />
-93-->[com.google.android.gms:play-services-basement:18.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/712b51ca0fa88d02bf5259d74ad6483f/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:66-119
-94
-95        <provider
-95-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
-96            android:name="androidx.startup.InitializationProvider"
-96-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
-97            android:authorities="cz.offgrid.maps.androidx-startup"
-97-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
-98            android:exported="false" >
-98-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
-99            <meta-data
-99-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
-100                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-100-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
-101                android:value="androidx.startup" />
-101-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
-102            <meta-data
-102-->[androidx.lifecycle:lifecycle-process:2.8.5] /Users/koncpa/.gradle/caches/8.9/transforms/39d055dd234e8c407d0997f824cef8fe/transformed/lifecycle-process-2.8.5/AndroidManifest.xml:29:13-31:52
-103                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-103-->[androidx.lifecycle:lifecycle-process:2.8.5] /Users/koncpa/.gradle/caches/8.9/transforms/39d055dd234e8c407d0997f824cef8fe/transformed/lifecycle-process-2.8.5/AndroidManifest.xml:30:17-78
-104                android:value="androidx.startup" />
-104-->[androidx.lifecycle:lifecycle-process:2.8.5] /Users/koncpa/.gradle/caches/8.9/transforms/39d055dd234e8c407d0997f824cef8fe/transformed/lifecycle-process-2.8.5/AndroidManifest.xml:31:17-49
-105            <meta-data
-105-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
-106                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-106-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
-107                android:value="androidx.startup" />
-107-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
-108        </provider>
-109
-110        <receiver
-110-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
-111            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-111-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
-112            android:directBootAware="false"
-112-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
-113            android:enabled="true"
-113-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
-114            android:exported="true"
-114-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
-115            android:permission="android.permission.DUMP" >
-115-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
-116            <intent-filter>
-116-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
-117                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-117-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
-117-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
-118            </intent-filter>
-119            <intent-filter>
-119-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
-120                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-120-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
-120-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
-121            </intent-filter>
-122            <intent-filter>
-122-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
-123                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-123-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
-123-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
-124            </intent-filter>
-125            <intent-filter>
-125-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
-126                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-126-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
-126-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
-127            </intent-filter>
-128        </receiver>
-129    </application>
-130
-131</manifest>
+73            <!-- Otevření a automatický import .gpx tras přijatých přes Bluetooth / Quick Share / Soubory -->
+74            <intent-filter>
+74-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:48:13-58:29
+75                <action android:name="android.intent.action.VIEW" />
+75-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:17-69
+75-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:25-66
+76
+77                <category android:name="android.intent.category.DEFAULT" />
+77-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:17-76
+77-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:27-73
+78                <category android:name="android.intent.category.BROWSABLE" />
+78-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:17-78
+78-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:27-75
+79
+80                <data android:scheme="content" />
+80-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+80-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:23-47
+81                <data android:scheme="file" />
+81-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+81-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:23-47
+82                <data android:mimeType="application/gpx+xml" />
+82-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+82-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:54:23-61
+83                <data android:mimeType="application/gpx" />
+83-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+83-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:54:23-61
+84                <data android:mimeType="text/xml" />
+84-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+84-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:54:23-61
+85                <data android:mimeType="application/xml" />
+85-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+85-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:54:23-61
+86            </intent-filter>
+87            <intent-filter>
+87-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:59:13-69:29
+88                <action android:name="android.intent.action.VIEW" />
+88-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:17-69
+88-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:49:25-66
+89
+90                <category android:name="android.intent.category.DEFAULT" />
+90-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:17-76
+90-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:50:27-73
+91                <category android:name="android.intent.category.BROWSABLE" />
+91-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:17-78
+91-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:51:27-75
+92
+93                <data android:scheme="content" />
+93-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+93-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:23-47
+94                <data android:scheme="file" />
+94-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+94-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:23-47
+95                <data android:host="*" />
+95-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+95-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:65:23-39
+96                <data android:mimeType="*/*" />
+96-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+96-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:54:23-61
+97                <data android:pathPattern=".*\\.gpx" />
+97-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+97-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:67:23-53
+98                <data android:pathPattern=".*\\..*\\.gpx" />
+98-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:52:17-50
+98-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:67:23-53
+99            </intent-filter>
+100        </activity>
+101
+102        <provider
+103            android:name="androidx.core.content.FileProvider"
+103-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:73:13-62
+104            android:authorities="cz.offgrid.maps.fileprovider"
+104-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:74:13-64
+105            android:exported="false"
+105-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:75:13-37
+106            android:grantUriPermissions="true" >
+106-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:76:13-47
+107            <meta-data
+107-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:77:13-79:54
+108                android:name="android.support.FILE_PROVIDER_PATHS"
+108-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:78:17-67
+109                android:resource="@xml/file_paths" />
+109-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:79:17-51
+110        </provider>
+111
+112        <service
+112-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:82:9-86:56
+113            android:name="cz.offgrid.maps.data.tracking.LocationTrackingService"
+113-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:83:13-66
+114            android:enabled="true"
+114-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:84:13-35
+115            android:exported="false"
+115-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:85:13-37
+116            android:foregroundServiceType="location" />
+116-->/Users/koncpa/projects/offgrid-maps/app/src/main/AndroidManifest.xml:86:13-53
+117
+118        <uses-library
+118-->[androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:23:9-25:40
+119            android:name="wear-sdk"
+119-->[androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:24:13-36
+120            android:required="false" />
+120-->[androidx.wear.compose:compose-foundation:1.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/16820737b5df0bb3831d43f1654c5cb9/transformed/compose-foundation-1.4.0/AndroidManifest.xml:25:13-37
+121        <uses-library
+121-->[androidx.wear:wear:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/897a6d60382c9b69bfb64468de9350e7/transformed/wear-1.3.0/AndroidManifest.xml:23:9-25:40
+122            android:name="com.google.android.wearable"
+122-->[androidx.wear:wear:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/897a6d60382c9b69bfb64468de9350e7/transformed/wear-1.3.0/AndroidManifest.xml:24:13-55
+123            android:required="false" />
+123-->[androidx.wear:wear:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/897a6d60382c9b69bfb64468de9350e7/transformed/wear-1.3.0/AndroidManifest.xml:25:13-37
+124
+125        <activity
+125-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:9-173
+126            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+126-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:19-85
+127            android:exported="false"
+127-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:146-170
+128            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+128-->[com.google.android.gms:play-services-base:18.5.0] /Users/koncpa/.gradle/caches/8.9/transforms/b13fb5edab805d98ce0a2fbf598e8c0b/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:86-145
+129
+130        <meta-data
+130-->[com.google.android.gms:play-services-basement:18.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/712b51ca0fa88d02bf5259d74ad6483f/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:9-122
+131            android:name="com.google.android.gms.version"
+131-->[com.google.android.gms:play-services-basement:18.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/712b51ca0fa88d02bf5259d74ad6483f/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:20-65
+132            android:value="@integer/google_play_services_version" />
+132-->[com.google.android.gms:play-services-basement:18.4.0] /Users/koncpa/.gradle/caches/8.9/transforms/712b51ca0fa88d02bf5259d74ad6483f/transformed/play-services-basement-18.4.0/AndroidManifest.xml:6:66-119
+133
+134        <provider
+134-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+135            android:name="androidx.startup.InitializationProvider"
+135-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+136            android:authorities="cz.offgrid.maps.androidx-startup"
+136-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+137            android:exported="false" >
+137-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+138            <meta-data
+138-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+139                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+139-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+140                android:value="androidx.startup" />
+140-->[androidx.emoji2:emoji2:1.3.0] /Users/koncpa/.gradle/caches/8.9/transforms/91dafd708a8ee95ef95fa36639d5817a/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+141            <meta-data
+141-->[androidx.lifecycle:lifecycle-process:2.8.5] /Users/koncpa/.gradle/caches/8.9/transforms/39d055dd234e8c407d0997f824cef8fe/transformed/lifecycle-process-2.8.5/AndroidManifest.xml:29:13-31:52
+142                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+142-->[androidx.lifecycle:lifecycle-process:2.8.5] /Users/koncpa/.gradle/caches/8.9/transforms/39d055dd234e8c407d0997f824cef8fe/transformed/lifecycle-process-2.8.5/AndroidManifest.xml:30:17-78
+143                android:value="androidx.startup" />
+143-->[androidx.lifecycle:lifecycle-process:2.8.5] /Users/koncpa/.gradle/caches/8.9/transforms/39d055dd234e8c407d0997f824cef8fe/transformed/lifecycle-process-2.8.5/AndroidManifest.xml:31:17-49
+144            <meta-data
+144-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+145                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+146                android:value="androidx.startup" />
+146-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+147        </provider>
+148
+149        <receiver
+149-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+150            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+150-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+151            android:directBootAware="false"
+151-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+152            android:enabled="true"
+152-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+153            android:exported="true"
+153-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+154            android:permission="android.permission.DUMP" >
+154-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+155            <intent-filter>
+155-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+156                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+156-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+156-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+157            </intent-filter>
+158            <intent-filter>
+158-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+159                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+159-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+159-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+160            </intent-filter>
+161            <intent-filter>
+161-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+162                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+162-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+162-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+163            </intent-filter>
+164            <intent-filter>
+164-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+165                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+165-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+165-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/koncpa/.gradle/caches/8.9/transforms/540be8a05d5cf66a6c12ec8c5625a117/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+166            </intent-filter>
+167        </receiver>
+168    </application>
+169
+170</manifest>
