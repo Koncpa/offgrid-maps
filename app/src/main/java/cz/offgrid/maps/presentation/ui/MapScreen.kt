@@ -11,8 +11,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -623,7 +625,7 @@ private fun MapScaleBar(
 }
 
 /**
- * Čistě černý AMOLED překryvný panel se dvěma samostatnými záložkami:
+ * Čistě černý AMOLED překryvný panel se dvěma samostatnými záložkami a velkými dotykovými tlačítky:
  * 1) Trasy GPX (import, seznam tras, export/sdílení, smazání)
  * 2) Offline mapy (stažení aktuální oblasti + přehled uložených offline oblastí s rychlým přesunem kamery)
  */
@@ -645,41 +647,46 @@ private fun GpxRoutePickerOverlay(
 ) {
     // 0 = Trasy GPX, 1 = Offline mapy
     var selectedTab by remember { mutableIntStateOf(0) }
+    val scrollState = rememberScrollState()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(AmoledBlack.copy(alpha = 0.96f))
-            .padding(horizontal = 22.dp, vertical = 10.dp),
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.fillMaxWidth()
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(vertical = 8.dp)
         ) {
-            // Horní přepínač záložek: [Trasy GPX] | [Offline mapy]
+            // Horní přepínač záložek: [Trasy GPX] | [Offline]
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val isGpxTab = selectedTab == 0
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(if (isGpxTab) DarkSurface else AmoledBlack)
                         .border(
-                            width = if (isGpxTab) 1.5.dp else 1.dp,
+                            width = if (isGpxTab) 1.8.dp else 1.2.dp,
                             color = if (isGpxTab) TrailGreen else DarkSurfaceVariant,
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(14.dp)
                         )
                         .clickable { selectedTab = 0 }
-                        .padding(horizontal = 8.dp, vertical = 3.5.dp)
+                        .padding(horizontal = 13.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Trasy GPX (${files.size})",
+                        text = "Trasy (${files.size})",
                         color = if (isGpxTab) TrailGreen else OutdoorTextSecondary,
-                        fontSize = 8.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -687,20 +694,21 @@ private fun GpxRoutePickerOverlay(
                 val isOfflineTab = selectedTab == 1
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(if (isOfflineTab) DarkSurface else AmoledBlack)
                         .border(
-                            width = if (isOfflineTab) 1.5.dp else 1.dp,
+                            width = if (isOfflineTab) 1.8.dp else 1.2.dp,
                             color = if (isOfflineTab) TrailBlue else DarkSurfaceVariant,
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(14.dp)
                         )
                         .clickable { selectedTab = 1 }
-                        .padding(horizontal = 8.dp, vertical = 3.5.dp)
+                        .padding(horizontal = 13.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Offline (${savedRegions.size})",
                         color = if (isOfflineTab) TrailBlue else OutdoorTextSecondary,
-                        fontSize = 8.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -710,16 +718,18 @@ private fun GpxRoutePickerOverlay(
                 // --- ZÁLOŽKA 1: TRASY GPX ---
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
                         .background(DarkSurface)
-                        .border(1.dp, TrailGreen, RoundedCornerShape(10.dp))
+                        .border(1.5.dp, TrailGreen, RoundedCornerShape(14.dp))
                         .clickable { onImportGpx() }
-                        .padding(horizontal = 10.dp, vertical = 3.5.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.5.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "+ Importovat GPX trasu",
+                        text = "+ Importovat GPX",
                         color = TrailGreen,
-                        fontSize = 8.5.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -728,51 +738,70 @@ private fun GpxRoutePickerOverlay(
                     Text(
                         text = "Žádné uložené trasy",
                         color = OutdoorTextSecondary,
-                        fontSize = 9.sp,
-                        modifier = Modifier.padding(vertical = 6.dp)
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(vertical = 8.dp)
                     )
                 } else {
-                    files.take(2).forEach { file ->
+                    files.take(4).forEach { file ->
                         val isSelected = activeRouteName == file.nameWithoutExtension
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(DarkSurface)
-                                .border(1.dp, if (isSelected) TrailGreen else DarkSurfaceVariant, RoundedCornerShape(10.dp))
+                                .border(
+                                    width = if (isSelected) 1.6.dp else 1.2.dp,
+                                    color = if (isSelected) TrailGreen else DarkSurfaceVariant,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
                                 .clickable { onSelectFile(file) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
                                 text = file.nameWithoutExtension.replace("_", " "),
                                 color = if (isSelected) TrailGreen else OutdoorTextPrimary,
-                                fontSize = 9.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "↗",
-                                color = TrailBlue,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
                                 modifier = Modifier
-                                    .clickable { onShareFile(file) }
-                                    .padding(horizontal = 4.dp)
-                            )
-                            Text(
-                                text = "✕",
-                                color = TrailRed,
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(AmoledBlack)
+                                    .border(1.2.dp, TrailBlue, CircleShape)
+                                    .clickable { onShareFile(file) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "↗",
+                                    color = TrailBlue,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
                                 modifier = Modifier
-                                    .clickable { onDeleteFile(file) }
-                                    .padding(horizontal = 4.dp)
-                            )
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(AmoledBlack)
+                                    .border(1.2.dp, TrailRed, CircleShape)
+                                    .clickable { onDeleteFile(file) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "✕",
+                                    color = TrailRed,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -781,57 +810,70 @@ private fun GpxRoutePickerOverlay(
                 val isDownloading = offlineStatus.startsWith("DL")
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
                         .background(DarkSurface)
-                        .border(1.dp, if (isDownloading) TrailYellow else TrailBlue, RoundedCornerShape(10.dp))
+                        .border(
+                            width = 1.5.dp,
+                            color = if (isDownloading) TrailYellow else TrailBlue,
+                            shape = RoundedCornerShape(14.dp)
+                        )
                         .clickable(enabled = !isDownloading) { onDownloadCurrentArea() }
-                        .padding(horizontal = 10.dp, vertical = 3.5.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.5.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (isDownloading) "Stahuji oblast: $offlineStatus" else "⬇ Stáhnout tuto oblast (~30 km)",
+                        text = if (isDownloading) "Stahuji: $offlineStatus" else "⬇ Stáhnout tuto oblast",
                         color = if (isDownloading) TrailYellow else TrailBlue,
-                        fontSize = 8.5.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
                 // Seznam uložených offline oblastí (klepnutím vycentruje mapu na danou oblast)
-                savedRegions.take(3).forEach { region ->
+                savedRegions.take(4).forEach { region ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(DarkSurface)
                             .border(
-                                1.dp,
-                                if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.7f) else TrailBlue.copy(alpha = 0.7f),
-                                RoundedCornerShape(10.dp)
+                                width = 1.3.dp,
+                                color = if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.8f) else TrailBlue.copy(alpha = 0.8f),
+                                shape = RoundedCornerShape(14.dp)
                             )
                             .clickable { onSelectOfflineRegion(region) }
-                            .padding(horizontal = 8.dp, vertical = 3.5.dp),
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = if (region.isDefaultJmk) "★ ${region.displayName}" else "📍 ${region.displayName}",
                             color = OutdoorTextPrimary,
-                            fontSize = 8.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
                         if (!region.isDefaultJmk) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "✕",
-                                color = TrailRed,
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
                                 modifier = Modifier
-                                    .clickable { onDeleteOfflineRegion(region) }
-                                    .padding(horizontal = 4.dp)
-                            )
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(AmoledBlack)
+                                    .border(1.2.dp, TrailRed, CircleShape)
+                                    .clickable { onDeleteOfflineRegion(region) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "✕",
+                                    color = TrailRed,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -839,35 +881,39 @@ private fun GpxRoutePickerOverlay(
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 2.dp)
+                modifier = Modifier.padding(top = 4.dp)
             ) {
                 if (selectedTab == 0 && activeRouteName != null) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, TrailRed, RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(DarkSurface)
+                            .border(1.5.dp, TrailRed, RoundedCornerShape(14.dp))
                             .clickable { onRemoveActiveRoute() }
-                            .padding(horizontal = 8.dp, vertical = 3.5.dp)
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Odstranit trasu",
+                            text = "Smazat aktivní",
                             color = TrailRed,
-                            fontSize = 8.5.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .border(1.dp, OutdoorTextSecondary, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(DarkSurface)
+                        .border(1.5.dp, OutdoorTextSecondary, RoundedCornerShape(14.dp))
                         .clickable { onDismiss() }
-                        .padding(horizontal = 10.dp, vertical = 3.5.dp)
+                        .padding(horizontal = 18.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Zpět",
                         color = OutdoorTextPrimary,
-                        fontSize = 8.5.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -908,11 +954,12 @@ private fun KctTrailBlazeBadge(stripeColor: Color) {
 }
 
 /**
- * Převede azimut ve stupních (0..360) na českou zkratku světové strany.
+ * Převede azimut ve stupních (0..360) na mezinárodní anglickou zkratku světové strany (N, NE, E, SE, S, SW, W, NW).
  */
 private fun formatCompassCardinal(azimuthDeg: Float): String {
-    val directions = arrayOf("S", "SV", "V", "JV", "J", "JZ", "Z", "SZ")
+    val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
     val index = ((azimuthDeg + 22.5f) / 45.0f).toInt() and 7
     return directions[index]
 }
+
 
