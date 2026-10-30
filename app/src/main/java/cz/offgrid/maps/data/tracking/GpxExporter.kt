@@ -220,7 +220,7 @@ object GpxExporter {
      */
     fun listSavedGpxFiles(context: Context): List<File> {
         val dir = getTracksDir(context)
-        ensureSampleTrackExists(dir)
+        ensureSampleTrackExists(context, dir)
         syncExternalGpxDirectories(context, dir)
         return dir.listFiles { f ->
             f.isFile && !f.name.startsWith(".") && f.extension.equals("gpx", ignoreCase = true)
@@ -357,57 +357,37 @@ object GpxExporter {
         }
     }
 
-    private fun ensureSampleTrackExists(tracksDir: File) {
-        val initMarker = File(tracksDir, ".sample_seeded_v2")
+    private fun ensureSampleTrackExists(context: Context, tracksDir: File) {
+        val initMarker = File(tracksDir, ".sample_seeded_v3")
         if (initMarker.exists()) return
         initMarker.writeText("1")
 
-        // Ukázková trasa 1: Okruh přes Zbýšovskou haldu a Zakřany (pro otestování navigace a vrstevnic)
-        val zbysovFile = File(tracksDir, "Zbysovska_halda_okruh.gpx")
-        if (!zbysovFile.exists()) {
-            val zbysovGpx = """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <gpx version="1.1" creator="OffGrid Maps Wear OS">
-                  <trk>
-                    <name>Zbýšovská halda a Zakřany (Okruh)</name>
-                    <trkseg>
-                      <trkpt lat="49.1558" lon="16.3492"><ele>345.0</ele></trkpt>
-                      <trkpt lat="49.1535" lon="16.3461"><ele>362.0</ele></trkpt>
-                      <trkpt lat="49.1506" lon="16.3435"><ele>388.0</ele></trkpt>
-                      <trkpt lat="49.1489" lon="16.3398"><ele>374.0</ele></trkpt>
-                      <trkpt lat="49.1524" lon="16.3342"><ele>392.0</ele></trkpt>
-                      <trkpt lat="49.1578" lon="16.3315"><ele>412.0</ele></trkpt>
-                      <trkpt lat="49.1625" lon="16.3368"><ele>405.0</ele></trkpt>
-                      <trkpt lat="49.1607" lon="16.3443"><ele>368.0</ele></trkpt>
-                      <trkpt lat="49.1558" lon="16.3492"><ele>345.0</ele></trkpt>
-                    </trkseg>
-                  </trk>
-                </gpx>
-            """.trimIndent()
-            zbysovFile.writeText(zbysovGpx)
+        // Odstraníme staré zjednodušené (vzdušné) ukázkové trasy z předchozích verzí
+        listOf(
+            "oslavany_kct_okruh.gpx",
+            "Oslavany_zamecky_okruh.gpx",
+            "Zbysovska_halda_okruh.gpx"
+        ).forEach { oldName ->
+            File(tracksDir, oldName).takeIf { it.exists() }?.delete()
+            recordDeletedTrackName(tracksDir, oldName)
         }
 
-        // Ukázková trasa 2: Oslavany - Zámecký okruh KČT
-        val sampleFile = File(tracksDir, "Oslavany_zamecky_okruh.gpx")
-        if (!sampleFile.exists()) {
-            val sampleGpx = """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <gpx version="1.1" creator="OffGrid Maps Wear OS">
-                  <trk>
-                    <name>Oslavany - Zámecký okruh KČT</name>
-                    <trkseg>
-                      <trkpt lat="49.1246" lon="16.3353"><ele>228.0</ele></trkpt>
-                      <trkpt lat="49.1268" lon="16.3321"><ele>242.0</ele></trkpt>
-                      <trkpt lat="49.1295" lon="16.3274"><ele>268.0</ele></trkpt>
-                      <trkpt lat="49.1322" lon="16.3228"><ele>295.0</ele></trkpt>
-                      <trkpt lat="49.1301" lon="16.3180"><ele>310.0</ele></trkpt>
-                      <trkpt lat="49.1264" lon="16.3215"><ele>276.0</ele></trkpt>
-                      <trkpt lat="49.1246" lon="16.3353"><ele>228.0</ele></trkpt>
-                    </trkseg>
-                  </trk>
-                </gpx>
-            """.trimIndent()
-            sampleFile.writeText(sampleGpx)
+        // Zkopírujeme 2 věrné GPX trasy (143 bodů kopírujících každou zatáčku reálných lesních cest a KČT značek)
+        listOf(
+            "Oslavany_Zbysov_KCT.gpx",
+            "Oslavany_Ivancice_KCT.gpx"
+        ).forEach { assetName ->
+            val target = File(tracksDir, assetName)
+            if (!target.exists()) {
+                try {
+                    context.assets.open(assetName).use { input ->
+                        target.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
         }
     }
 }
