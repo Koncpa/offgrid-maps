@@ -519,13 +519,18 @@ fun MapScreen(
                 savedRegions = savedOfflineRegions,
                 offlineStatus = offlineStatus,
                 onSelectFile = { file ->
-                    val points = GpxExporter.parseGpxFile(file)
-                    if (points.isNotEmpty()) {
-                        TrackingManager.setPlannedRoute(file.nameWithoutExtension, points)
-                        isFollowingGps = false
-                        val startLatLng = LatLng(points.first().latitude, points.first().longitude)
-                        maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(startLatLng, 14.0))
-                        zoomLevel = 14.0f
+                    if (plannedRouteName == file.nameWithoutExtension) {
+                        // Opětovné klepnutí na již aktivní trasu ji pouze skryje z mapy (soubor zůstane uložený)
+                        TrackingManager.setPlannedRoute(null, emptyList())
+                    } else {
+                        val points = GpxExporter.parseGpxFile(file)
+                        if (points.isNotEmpty()) {
+                            TrackingManager.setPlannedRoute(file.nameWithoutExtension, points)
+                            isFollowingGps = false
+                            val startLatLng = LatLng(points.first().latitude, points.first().longitude)
+                            maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(startLatLng, 14.0))
+                            zoomLevel = 14.0f
+                        }
                     }
                     showGpxPicker = false
                 },
@@ -545,11 +550,8 @@ fun MapScreen(
                     availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
                 },
                 onRemoveActiveRoute = {
-                    availableGpxFiles.find { it.nameWithoutExtension == plannedRouteName }?.let { file ->
-                        GpxExporter.deleteGpxFile(file)
-                    }
+                    // Pouze zruší zobrazení/navigaci aktivní trasy na mapě, samotný .gpx soubor nemaže!
                     TrackingManager.setPlannedRoute(null, emptyList())
-                    availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
                     showGpxPicker = false
                 },
                 onImportGpx = {
@@ -888,15 +890,15 @@ private fun GpxRoutePickerOverlay(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(DarkSurface)
-                            .border(1.5.dp, TrailRed, RoundedCornerShape(14.dp))
+                            .border(1.5.dp, TrailYellow, RoundedCornerShape(14.dp))
                             .clickable { onRemoveActiveRoute() }
                             .padding(horizontal = 12.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Smazat aktivní",
-                            color = TrailRed,
-                            fontSize = 10.5.sp,
+                            text = "Skrýt trasu",
+                            color = TrailYellow,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }

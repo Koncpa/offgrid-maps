@@ -358,7 +358,7 @@ object GpxExporter {
     }
 
     private fun ensureSampleTrackExists(context: Context, tracksDir: File) {
-        val initMarker = File(tracksDir, ".sample_seeded_v4")
+        val initMarker = File(tracksDir, ".sample_seeded_v5")
         if (initMarker.exists()) return
         initMarker.writeText("1")
 
