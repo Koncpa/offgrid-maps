@@ -13,68 +13,167 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.*
 
 /**
- * Generátor a offline úložiště vrstevnic (10 m vedlejší a 50 m hlavní vrstevnice)
- * pro libovolnou staženou oblast v ČR nebo v Evropě pomocí algoritmu Marching Squares
- * nad výškovými daty Terrarium DEM (`elevation = R * 256 + G + B / 256 - 32768`).
+ * Dlaždicový generátor a offline úložiště vrstevnic (10 m vedlejší a 50 m hlavní vrstevnice)
+ * fungující na stejném principu jako vektorové mapové dlaždice:
+ * - Každá dlaždice `z=12` (`tile_12_{x}_{y}.features`) se ukládá samostatně do flash paměti hodinek
+ *   (`filesDir/contour_tiles/`), takže stažené oblasti (Šumava, Praha, Krkonoše, JMK...) se nikdy nepřepisují.
+ * - Při posunu mapy (`ensureViewportContours`) se okamžitě načtou dlaždice pro viditelnou oblast z offline cache
+ *   (a při aktivním prohlížení se chybějící dlaždice automaticky dopočítají a uloží).
+ * - Při stažení offline mapy (`downloadContoursForArea`) se předpočítá celá mřížka 3×3 dlaždic (~30×20 km).
  */
 object ContourTileManager {
 
-    private const val CUSTOM_CONTOURS_FILE = "custom_contours.geojson"
+    private const val TILES_DIR_NAME = "contour_tiles"
+    private const val TILE_ZOOM = 12
+
+    // Dlaždice z=12, které jsou již předbalené přímo v APK (assets/jmk_contours.geojson)
+    private val BUNDLED_JMK_TILES = setOf(
+        "2232_1412", "2233_1412", "2234_1412",
+        "2232_1413", "2233_1413", "2234_1413",
+        "2232_1414", "2233_1414", "2234_1414"
+    )
+
     private val scope = CoroutineScope(Dispatchers.IO)
+    private val memoryTileCache = ConcurrentHashMap<String, String>()
+    @Volatile
+    private var lastViewportKey: String = ""
 
     private val _customContoursGeoJson = MutableStateFlow<String?>(null)
     val customContoursGeoJson: StateFlow<String?> = _customContoursGeoJson.asStateFlow()
 
     /**
-     * Načte dříve uložené offline vrstevnice stažených oblastí z flash paměti hodinek.
+     * Načte vrstevnice pro aktuální výřez kamery z lokální dlaždicové cache (a při povolené síti
+     * chybějící dlaždice rovnou stáhne, vygeneruje a trvale uloží do offline cache).
      */
-    fun loadCachedCustomContours(context: Context) {
+    fun ensureViewportContours(
+        context: Context,
+        centerLat: Double,
+        centerLon: Double,
+        zoom: Double,
+        allowNetworkFetch: Boolean
+    ) {
+        if (zoom < 11.8) return
+
+        val centerTx = lonToTileX(centerLon, TILE_ZOOM)
+        val centerTy = latToTileY(centerLat, TILE_ZOOM)
+        val viewportKey = "${centerTx}_${centerTy}_$allowNetworkFetch"
+        if (viewportKey == lastViewportKey) return
+        lastViewportKey = viewportKey
+
         scope.launch {
-            val file = File(context.filesDir, CUSTOM_CONTOURS_FILE)
-            if (file.exists() && file.length() > 10L) {
-                try {
-                    _customContoursGeoJson.value = file.readText()
-                } catch (_: Exception) {
-                }
-            }
+            updateActiveViewportTiles(
+                context = context,
+                minTx = centerTx - 1,
+                maxTx = centerTx + 1,
+                minTy = centerTy - 1,
+                maxTy = centerTy + 1,
+                allowNetworkFetch = allowNetworkFetch
+            )
         }
     }
 
     /**
-     * Stáhne a vygeneruje offline vrstevnice (po 10 m / 50 m) pro oblast kolem [centerLat], [centerLon].
+     * Stáhne a trvale uloží do offline cache vrstevnice (mřížku 3×3 dlaždic z=12, ~30×20 km)
+     * pro nově stahovanou offline oblast kolem [centerLat], [centerLon].
      */
     fun downloadContoursForArea(context: Context, centerLat: Double, centerLon: Double) {
         scope.launch {
+            val centerTx = lonToTileX(centerLon, TILE_ZOOM)
+            val centerTy = latToTileY(centerLat, TILE_ZOOM)
+            lastViewportKey = "" // Vynutíme obnovení po stažení
+            updateActiveViewportTiles(
+                context = context,
+                minTx = centerTx - 1,
+                maxTx = centerTx + 1,
+                minTy = centerTy - 1,
+                maxTy = centerTy + 1,
+                allowNetworkFetch = true
+            )
+        }
+    }
+
+    /**
+     * Při startu aplikace načte offline dlaždice v okolí výchozí polohy.
+     */
+    fun loadCachedCustomContours(context: Context) {
+        ensureViewportContours(
+            context = context,
+            centerLat = 49.1246,
+            centerLon = 16.3353,
+            zoom = 13.0,
+            allowNetworkFetch = false
+        )
+    }
+
+    private fun updateActiveViewportTiles(
+        context: Context,
+        minTx: Int,
+        maxTx: Int,
+        minTy: Int,
+        maxTy: Int,
+        allowNetworkFetch: Boolean
+    ) {
+        val tilesDir = File(context.filesDir, TILES_DIR_NAME).apply {
+            if (!exists()) mkdirs()
+        }
+
+        val combinedFeatures = StringBuilder()
+        var first = true
+
+        for (tx in minTx..maxTx) {
+            for (ty in minTy..maxTy) {
+                val tileKey = "${tx}_${ty}"
+                // Přeskočíme dlaždice, které už jsou trvale v assets/jmk_contours.geojson
+                if (BUNDLED_JMK_TILES.contains(tileKey)) continue
+
+                val tileFeatures = getOrFetchTileFeatures(tilesDir, TILE_ZOOM, tx, ty, allowNetworkFetch)
+                if (tileFeatures.isNotEmpty()) {
+                    if (!first) combinedFeatures.append(",")
+                    combinedFeatures.append(tileFeatures)
+                    first = false
+                }
+            }
+        }
+
+        val geoJson = """{"type":"FeatureCollection","features":[$combinedFeatures]}"""
+        _customContoursGeoJson.value = geoJson
+    }
+
+    private fun getOrFetchTileFeatures(
+        tilesDir: File,
+        z: Int,
+        tx: Int,
+        ty: Int,
+        allowNetworkFetch: Boolean
+    ): String {
+        val key = "${z}_${tx}_${ty}"
+        memoryTileCache[key]?.let { return it }
+
+        val diskFile = File(tilesDir, "tile_$key.features")
+        if (diskFile.exists() && diskFile.length() > 2L) {
             try {
-                val z = 12
-                val centerTx = lonToTileX(centerLon, z)
-                val centerTy = latToTileY(centerLat, z)
-
-                val sbFeatures = StringBuilder()
-                var firstFeature = true
-
-                // Stáhneme 2×2 dlaždice kolem středu oblasti (~20 × 15 km detailních vrstevnic)
-                for (tx in centerTx..centerTx + 1) {
-                    for (ty in centerTy..centerTy + 1) {
-                        val tileFeatures = fetchAndGenerateTileContours(z, tx, ty)
-                        if (tileFeatures.isNotEmpty()) {
-                            if (!firstFeature) sbFeatures.append(",")
-                            sbFeatures.append(tileFeatures)
-                            firstFeature = false
-                        }
-                    }
-                }
-
-                if (sbFeatures.isNotEmpty()) {
-                    val geoJson = """{"type":"FeatureCollection","features":[$sbFeatures]}"""
-                    File(context.filesDir, CUSTOM_CONTOURS_FILE).writeText(geoJson)
-                    _customContoursGeoJson.value = geoJson
-                }
+                val cached = diskFile.readText()
+                memoryTileCache[key] = cached
+                return cached
             } catch (_: Exception) {
             }
+        }
+
+        if (!allowNetworkFetch) return ""
+
+        return try {
+            val generated = fetchAndGenerateTileContours(z, tx, ty)
+            if (generated.isNotEmpty()) {
+                diskFile.writeText(generated)
+                memoryTileCache[key] = generated
+            }
+            generated
+        } catch (_: Exception) {
+            ""
         }
     }
 

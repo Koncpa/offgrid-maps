@@ -53,6 +53,10 @@ object StyleBuilder {
             "jmk_contours_source": {
               "type": "geojson",
               "data": "asset://jmk_contours.geojson"
+            },
+            "custom_contours_source": {
+              "type": "geojson",
+              "data": {"type": "FeatureCollection", "features": []}
             }
           },
           "layers": [
@@ -91,18 +95,20 @@ object StyleBuilder {
               "filter": ["==", ["get", "major"], 0],
               "paint": {
                 "line-color": "#45371E",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.7, 14, 1.0]
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.8, 14, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.65, 14, 0.95]
               }
             },
             {
               "id": "contour_major",
               "type": "line",
               "source": "jmk_contours_source",
-              "minzoom": 11,
+              "minzoom": 12,
               "filter": ["==", ["get", "major"], 1],
               "paint": {
-                "line-color": "#755D32",
-                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.0, 14, 1.5]
+                "line-color": "#594727",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.85, 14, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.9, 14, 1.25]
               }
             },
             {
@@ -113,13 +119,56 @@ object StyleBuilder {
               "filter": ["==", ["get", "major"], 1],
               "layout": {
                 "symbol-placement": "line",
-                "symbol-spacing": 220,
+                "symbol-spacing": 240,
                 "text-field": ["concat", ["to-string", ["get", "ele"]], " m"],
                 "text-font": ["Noto Sans Regular"],
                 "text-size": 8.5
               },
               "paint": {
-                "text-color": "#9E804A",
+                "text-color": "#8A6F3E",
+                "text-halo-color": "#000000",
+                "text-halo-width": 1.8
+              }
+            },
+            {
+              "id": "custom_contour_minor",
+              "type": "line",
+              "source": "custom_contours_source",
+              "minzoom": 12,
+              "filter": ["==", ["get", "major"], 0],
+              "paint": {
+                "line-color": "#45371E",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.8, 14, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.65, 14, 0.95]
+              }
+            },
+            {
+              "id": "custom_contour_major",
+              "type": "line",
+              "source": "custom_contours_source",
+              "minzoom": 12,
+              "filter": ["==", ["get", "major"], 1],
+              "paint": {
+                "line-color": "#594727",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.25, 12.6, 0.85, 14, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.9, 14, 1.25]
+              }
+            },
+            {
+              "id": "custom_contour_labels",
+              "type": "symbol",
+              "source": "custom_contours_source",
+              "minzoom": 13,
+              "filter": ["==", ["get", "major"], 1],
+              "layout": {
+                "symbol-placement": "line",
+                "symbol-spacing": 240,
+                "text-field": ["concat", ["to-string", ["get", "ele"]], " m"],
+                "text-font": ["Noto Sans Regular"],
+                "text-size": 8.5
+              },
+              "paint": {
+                "text-color": "#8A6F3E",
                 "text-halo-color": "#000000",
                 "text-halo-width": 1.8
               }

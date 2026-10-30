@@ -47,7 +47,6 @@ private const val PLANNED_ROUTE_CASING_LAYER_ID = "planned_gpx_route_casing_laye
 private const val PLANNED_ROUTE_LAYER_ID = "planned_gpx_route_layer"
 
 private const val CUSTOM_CONTOURS_SOURCE_ID = "custom_contours_source"
-private const val CUSTOM_CONTOURS_LAYER_ID = "custom_contours_layer"
 
 /**
  * Energeticky vysoce optimalizovaný Compose wrapper pro MapLibre MapView na Wear OS.
@@ -142,6 +141,19 @@ fun MapLibreMapView(
                 }
             }
 
+            // Stejný přístup jako u mapových dlaždic: Po zastavení posunu/zoomu načteme vrstevnice pro aktuální výřez
+            map.addOnCameraIdleListener {
+                val camPos = map.cameraPosition
+                val target = camPos.target ?: return@addOnCameraIdleListener
+                ContourTileManager.ensureViewportContours(
+                    context = context,
+                    centerLat = target.latitude,
+                    centerLon = target.longitude,
+                    zoom = camPos.zoom,
+                    allowNetworkFetch = true
+                )
+            }
+
             map.cameraPosition = CameraPosition.Builder()
                 .target(targetLocation)
                 .zoom(zoomLevel.toDouble())
@@ -149,16 +161,6 @@ fun MapLibreMapView(
 
             val styleJson = StyleBuilder.createAmoledOutdoorStyle(mbtilesFile)
             map.setStyle(Style.Builder().fromJson(styleJson)) { style ->
-                // -1. Zdroj a vrstva pro dodatečně stažené offline vrstevnice (např. v Čechách)
-                val customContourSource = GeoJsonSource(CUSTOM_CONTOURS_SOURCE_ID)
-                style.addSource(customContourSource)
-                style.addLayerBelow(
-                    LineLayer(CUSTOM_CONTOURS_LAYER_ID, CUSTOM_CONTOURS_SOURCE_ID).withProperties(
-                        lineColor("#5C4928"),
-                        lineWidth(1.0f)
-                    ).apply { minZoom = 11.5f },
-                    "roads_major"
-                )
 
                 // 0. Zdroj a vrstva pro načtenou GPX trasu k navigaci (černý podklad + čárkovaná vodicí linka)
                 val plannedSource = GeoJsonSource(PLANNED_ROUTE_SOURCE_ID)
