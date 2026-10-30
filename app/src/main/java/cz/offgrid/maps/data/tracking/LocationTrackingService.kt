@@ -35,6 +35,8 @@ class LocationTrackingService : Service() {
     private var lastCheckpointPointsCount = 0
     private var isScreenInteractive = true
     private var isBatteryReceiverRegistered = false
+    private var isWatchHardwareGpsActive = false
+    private var consecutiveAccurateFusedFixes = 0
 
     /**
      * Pasivní posluchač systémového vysílání stavu baterie (0 mW spotřeba, žádné dotazování ve smyčce).
@@ -75,6 +77,16 @@ class LocationTrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.locations.forEach { location ->
+                    val acc = if (location.hasAccuracy()) location.accuracy else 999.0f
+                    if (acc <= LiveGpsManager.STRICT_ACCURACY_METERS) {
+                        consecutiveAccurateFusedFixes++
+                        if (isWatchHardwareGpsActive && consecutiveAccurateFusedFixes >= 3) {
+                            disableWatchHardwareGps()
+                        }
+                    } else {
+                        consecutiveAccurateFusedFixes = 0
+                        enableWatchHardwareGps()
+                    }
                     handleIncomingLocation(location)
                 }
             }
@@ -135,6 +147,7 @@ class LocationTrackingService : Service() {
         lastNotifiedDistanceMeters = 0.0
         lastCheckpointPointsCount = 0
         isScreenInteractive = true
+        consecutiveAccurateFusedFixes = 0
 
         if (!isBatteryReceiverRegistered) {
             registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -162,8 +175,14 @@ class LocationTrackingService : Service() {
         fusedLocationClient.getCurrentLocation(currentReq, null)
             .addOnSuccessListener { loc ->
                 if (loc != null && TrackingManager.isTracking.value) {
+                    val acc = if (loc.hasAccuracy()) loc.accuracy else 999.0f
+                    if (acc > LiveGpsManager.STRICT_ACCURACY_METERS) {
+                        enableWatchHardwareGps()
+                    }
                     handleIncomingLocation(loc)
                     GpxExporter.saveRecoveryCheckpoint(this, TrackingManager.trackPoints.value)
+                } else if (TrackingManager.isTracking.value) {
+                    enableWatchHardwareGps()
                 }
             }
 
@@ -177,26 +196,9 @@ class LocationTrackingService : Service() {
     @SuppressLint("MissingPermission")
     private fun registerLocationRequest(interactive: Boolean) {
         fusedLocationClient.removeLocationUpdates(locationCallback)
-        try {
-            locationManager?.removeUpdates(hardwareGpsListener)
-        } catch (_: Exception) {
-        }
-
-        // Přímé buzení hardwarového GNSS čipu hodinek (zabraňuje přepnutí na hrubé BTS/Wi-Fi z telefonu)
-        try {
-            val lm = locationManager
-            if (lm != null && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
-                val minTimeMs = if (interactive) 3000L else 6000L
-                val minDistM = if (interactive) 2.0f else 3.5f
-                lm.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    minTimeMs,
-                    minDistM,
-                    hardwareGpsListener,
-                    Looper.getMainLooper()
-                )
-            }
-        } catch (_: Exception) {
+        if (isWatchHardwareGpsActive) {
+            disableWatchHardwareGps()
+            enableWatchHardwareGps()
         }
 
         val locationRequest = if (interactive) {
@@ -226,12 +228,39 @@ class LocationTrackingService : Service() {
         )
     }
 
-    private fun stopTracking(emergencyLowBattery: Boolean) {
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+    @SuppressLint("MissingPermission")
+    private fun enableWatchHardwareGps() {
+        if (isWatchHardwareGpsActive) return
+        try {
+            val lm = locationManager
+            if (lm != null && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
+                val minTimeMs = if (isScreenInteractive) 3000L else 6000L
+                val minDistM = if (isScreenInteractive) 2.0f else 3.5f
+                lm.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    minTimeMs,
+                    minDistM,
+                    hardwareGpsListener,
+                    Looper.getMainLooper()
+                )
+                isWatchHardwareGpsActive = true
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun disableWatchHardwareGps() {
+        if (!isWatchHardwareGpsActive) return
         try {
             locationManager?.removeUpdates(hardwareGpsListener)
         } catch (_: Exception) {
         }
+        isWatchHardwareGpsActive = false
+    }
+
+    private fun stopTracking(emergencyLowBattery: Boolean) {
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+        disableWatchHardwareGps()
         altimeterManager.stop()
         unregisterBatteryReceiverSafely()
 

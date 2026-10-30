@@ -116,25 +116,24 @@ object TrackingManager {
 
     /**
      * Přidá nový bod trasy, přičte vzdálenost a zkontroluje odchylku od naplánované GPX trasy.
-     * Automaticky zahazuje hrubé síťové odhady (Wi-Fi / BTS vysílače s nepřesností > 35 m),
-     * pokud už máme přesný satelitní GPS fix nebo pokud probíhá záznam trasy.
+     * Striktně chrání přesnou polohu (<= 10 m) před přepsáním méně přesným odhadem (> 10 m).
      */
     fun addPoint(point: TrackPoint) {
         val incomingAcc = point.accuracyMeters
         val existingLoc = _currentLocation.value
 
-        // Pokud už máme přesnější fix (např. ze satelitů s přesností <= 25 m) a přijde hrubý
-        // síťový odhad z okolní zástavby (Wi-Fi/BTS, např. > 35 m), hrubý odhad zcela ignorujeme.
-        if (incomingAcc > 35.0f && existingLoc != null) {
+        // Pokud už máme striktně přesný satelitní fix (<= 10 m) a přijde méně přesný odhad (> 10 m,
+        // např. z telefonu v kapse nebo z BTS/Wi-Fi v obci), méně přesný bod zcela ignorujeme.
+        if (incomingAcc > 10.0f && existingLoc != null) {
             val existingAcc = existingLoc.accuracyMeters
             val ageDeltaMs = point.timestampMillis - existingLoc.timestampMillis
-            if (existingAcc <= 25.0f && ageDeltaMs < 180_000L) {
+            if (existingAcc <= 10.0f && ageDeltaMs < 180_000L) {
                 return
             }
         }
 
-        // Během aktivního nahrávání (REC) vůbec nepouštíme do záznamu ani na mapu hrubé BTS/Wi-Fi body (> 35 m)
-        if (_isTracking.value && incomingAcc > 35.0f) {
+        // Během aktivního nahrávání (REC) nepouštíme do GPX záznamu nepřesné body (> 15 m)
+        if (_isTracking.value && incomingAcc > 15.0f) {
             return
         }
 
