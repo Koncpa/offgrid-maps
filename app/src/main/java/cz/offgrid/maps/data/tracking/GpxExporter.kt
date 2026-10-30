@@ -358,35 +358,33 @@ object GpxExporter {
     }
 
     private fun ensureSampleTrackExists(context: Context, tracksDir: File) {
-        val initMarker = File(tracksDir, ".sample_seeded_v3")
+        val initMarker = File(tracksDir, ".sample_seeded_v4")
         if (initMarker.exists()) return
         initMarker.writeText("1")
 
-        // Odstraníme staré zjednodušené (vzdušné) ukázkové trasy z předchozích verzí
+        // Odstraníme staré testovací/ukázkové trasy z předchozích verzí
         listOf(
             "oslavany_kct_okruh.gpx",
             "Oslavany_zamecky_okruh.gpx",
-            "Zbysovska_halda_okruh.gpx"
+            "Zbysovska_halda_okruh.gpx",
+            "Oslavany_Zbysov_KCT.gpx",
+            "Oslavany_Ivancice_KCT.gpx"
         ).forEach { oldName ->
             File(tracksDir, oldName).takeIf { it.exists() }?.delete()
             recordDeletedTrackName(tracksDir, oldName)
         }
 
-        // Zkopírujeme 2 věrné GPX trasy (143 bodů kopírujících každou zatáčku reálných lesních cest a KČT značek)
-        listOf(
-            "Oslavany_Zbysov_KCT.gpx",
-            "Oslavany_Ivancice_KCT.gpx"
-        ).forEach { assetName ->
-            val target = File(tracksDir, assetName)
-            if (!target.exists()) {
-                try {
-                    context.assets.open(assetName).use { input ->
-                        target.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
+        // Nahrajeme reálnou trasu Údolí řeky Oslavy (3 131 bodů) z assets
+        val assetName = "Udoli_Oslava.gpx"
+        val target = File(tracksDir, assetName)
+        if (!target.exists()) {
+            try {
+                context.assets.open(assetName).use { input ->
+                    target.outputStream().use { output ->
+                        input.copyTo(output)
                     }
-                } catch (_: Exception) {
                 }
+            } catch (_: Exception) {
             }
         }
     }

@@ -162,22 +162,24 @@ fun MapLibreMapView(
             val styleJson = StyleBuilder.createAmoledOutdoorStyle(mbtilesFile)
             map.setStyle(Style.Builder().fromJson(styleJson)) { style ->
 
-                // 0. Zdroj a vrstva pro načtenou GPX trasu k navigaci (černý podklad + čárkovaná vodicí linka)
+                // 0. Zdroj a vrstva pro načtenou GPX trasu k navigaci
+                // Čistě černý podklad (#000000 = 0 mW) + přerušovaná jantarově oranžová (#E66800 = 0 % modrého OLED subpixelu,
+                // o >52 % nižší spotřeba než bílá barva a přitom nezasahuje do červené, žluté, zelené ani modré značky KČT)
                 val plannedSource = GeoJsonSource(PLANNED_ROUTE_SOURCE_ID)
                 style.addSource(plannedSource)
                 style.addLayer(
                     LineLayer(PLANNED_ROUTE_CASING_LAYER_ID, PLANNED_ROUTE_SOURCE_ID).withProperties(
                         lineColor("#000000"),
-                        lineWidth(6.0f),
+                        lineWidth(5.6f),
                         lineCap(Property.LINE_CAP_ROUND),
                         lineJoin(Property.LINE_JOIN_ROUND)
                     )
                 )
                 style.addLayer(
                     LineLayer(PLANNED_ROUTE_LAYER_ID, PLANNED_ROUTE_SOURCE_ID).withProperties(
-                        lineColor("#D8D8D0"),
-                        lineWidth(3.2f),
-                        lineDasharray(arrayOf(2.0f, 1.5f)),
+                        lineColor("#E66800"),
+                        lineWidth(3.0f),
+                        lineDasharray(arrayOf(2.2f, 1.8f)),
                         lineCap(Property.LINE_CAP_ROUND),
                         lineJoin(Property.LINE_JOIN_ROUND)
                     )
