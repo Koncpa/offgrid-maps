@@ -45,11 +45,11 @@ class LiveGpsManager(
     private var consecutiveAccurateFusedFixes = 0
     private var currentLocTokenSource: CancellationTokenSource? = null
 
-    // Pojistný časovač: pokud do 5 s od rozsvícení displeje nedorazí z telefonu fix <= 10 m, zapneme GPS v hodinkách
+    // Pojistný časovač: pokud do 1.5 s od rozsvícení displeje nedorazí fix <= 10 m, zapneme GPS v hodinkách
     private val fallbackToWatchGpsRunnable = Runnable {
         if (!isRunning) return@Runnable
         val nsSinceStrictFix = SystemClock.elapsedRealtimeNanos() - lastStrictFixElapsedRealtimeNs
-        val hasRecentStrictFix = lastStrictFixElapsedRealtimeNs > 0L && nsSinceStrictFix < 5_000_000_000L
+        val hasRecentStrictFix = lastStrictFixElapsedRealtimeNs > 0L && nsSinceStrictFix < 2_000_000_000L
         if (!hasRecentStrictFix) {
             enableWatchHardwareGps()
         }
@@ -58,7 +58,7 @@ class LiveGpsManager(
     private val hardwareGpsListener = LocationListener { location ->
         if (!isRunning) return@LocationListener
         lastHardwareGpsElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
-        if (location.hasAccuracy() && location.accuracy <= STRICT_ACCURACY_METERS) {
+        if (location.hasAccuracy() && location.accuracy <= FOREST_SAT_ACCURACY_METERS) {
             lastStrictFixElapsedRealtimeNs = lastHardwareGpsElapsedRealtimeNs
         }
         processLocation(location, isDirectWatchSatellite = true)
@@ -69,25 +69,30 @@ class LiveGpsManager(
             if (!isRunning) return
             for (location in result.locations) {
                 val acc = if (location.hasAccuracy()) location.accuracy else 999.0f
+                val nowNs = SystemClock.elapsedRealtimeNanos()
+                val nsSinceHwGps = nowNs - lastHardwareGpsElapsedRealtimeNs
+                val isEchoFromWatchHwGps = isWatchHardwareGpsActive &&
+                        lastHardwareGpsElapsedRealtimeNs > 0L &&
+                        nsSinceHwGps < 5_000_000_000L
 
                 if (acc <= STRICT_ACCURACY_METERS) {
-                    // Telefon posílá špičkovou satelitní polohu (<= 10 m)
-                    lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
-                    consecutiveAccurateFusedFixes++
-
-                    // Pokud už 3× po sobě dorazila z telefonu přesnost <= 10 m, můžeme uspat čip v hodinkách
-                    if (isWatchHardwareGpsActive && consecutiveAccurateFusedFixes >= 3) {
-                        disableWatchHardwareGps()
+                    lastStrictFixElapsedRealtimeNs = nowNs
+                    // POZOR: FusedLocationProvider na Wear OS přeposílá i body z lokálního GPS_PROVIDERu hodinek!
+                    // Pokud běží aktivní trek nebo body pochází z čipu hodinek, NIKDY čip v hodinkách nevypínáme,
+                    // jinak by se v lese cyklicky vypínal a ztrácel satelitní zámek.
+                    if (!isEchoFromWatchHwGps && !TrackingManager.isTracking.value) {
+                        consecutiveAccurateFusedFixes++
+                        if (isWatchHardwareGpsActive && consecutiveAccurateFusedFixes >= 6) {
+                            disableWatchHardwareGps()
+                        }
                     }
-                    processLocation(location, isDirectWatchSatellite = false)
+                    processLocation(location, isDirectWatchSatellite = isEchoFromWatchHwGps)
                 } else {
-                    // Přesnost z telefonu je horší než 10 m (kapsa, batoh, nebo BTS v Sičce) -> okamžitě zapínáme čip v hodinkách!
                     consecutiveAccurateFusedFixes = 0
                     enableWatchHardwareGps()
 
                     // Pokud už čip v hodinkách nedávno dodal satelitní fix, horší fúzovaný bod zahodíme
-                    val nsSinceHwGps = SystemClock.elapsedRealtimeNanos() - lastHardwareGpsElapsedRealtimeNs
-                    val hasRecentHwGps = lastHardwareGpsElapsedRealtimeNs > 0L && nsSinceHwGps < 12_000_000_000L
+                    val hasRecentHwGps = lastHardwareGpsElapsedRealtimeNs > 0L && nsSinceHwGps < 10_000_000_000L
                     if (!hasRecentHwGps) {
                         processLocation(location, isDirectWatchSatellite = false)
                     }
@@ -105,8 +110,7 @@ class LiveGpsManager(
 
     /**
      * Spustí příjem GPS při rozsvícení displeje (`ON_RESUME`).
-     * Začne úsporně přes FusedLocationProvider (Bluetooth z telefonu) a pokud přesnost není <= 10 m,
-     * automaticky zapne vestavěný GPS čip v hodinkách.
+     * Při aktivním treku okamžitě zapíná i přímý satelitní čip v hodinkách.
      */
     @SuppressLint("MissingPermission")
     fun start() {
@@ -114,19 +118,28 @@ class LiveGpsManager(
         isRunning = true
         consecutiveAccurateFusedFixes = 0
 
-        // 1. Použijeme poslední známou polohu pouze tehdy, pokud je čerstvá (< 60 s) a má přesnost <= 10 m
+        // 1. Použijeme poslední známou polohu z Fused i z přímého GPS čipu, pokud je čerstvá (< 30 s)
+        try {
+            val lastHw = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            if (lastHw != null && isLocationFreshAndAccurate(lastHw, maxAgeMs = 30_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
+                lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
+                processLocation(lastHw, isDirectWatchSatellite = true)
+            }
+        } catch (_: Exception) {
+        }
+
         fusedClient.lastLocation.addOnSuccessListener { lastLoc ->
             if (!isRunning) return@addOnSuccessListener
-            if (lastLoc != null && isLocationFreshAndAccurate(lastLoc, maxAgeMs = 60_000L, maxAccMeters = STRICT_ACCURACY_METERS)) {
+            if (lastLoc != null && isLocationFreshAndAccurate(lastLoc, maxAgeMs = 30_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
                 lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
                 processLocation(lastLoc, isDirectWatchSatellite = false)
             }
         }
 
-        // 2. Primárně požádáme FusedLocationProvider o satelitní přesnost (umožní brát GPS z telefonu, pokud <= 10 m)
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2500L)
-            .setMinUpdateIntervalMillis(1000L)
-            .setMinUpdateDistanceMeters(1.0f)
+        // 2. Požádáme FusedLocationProvider o rychlou satelitní polohu (1 s interval)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1500L)
+            .setMinUpdateIntervalMillis(800L)
+            .setMinUpdateDistanceMeters(0.5f)
             .setMaxUpdateDelayMillis(0L)
             .setGranularity(Granularity.GRANULARITY_FINE)
             .setWaitForAccurateLocation(false)
@@ -138,9 +151,13 @@ class LiveGpsManager(
             Looper.getMainLooper()
         )
 
-        // 3. Pokud do 5 sekund nedorazí z telefonu fix s přesností <= 10 m, zapneme přímo GPS čip v hodinkách
+        // 3. Při aktivním treku zapneme čip v hodinkách okamžitě (0 ms), jinak do 1.5 s
         mainHandler.removeCallbacks(fallbackToWatchGpsRunnable)
-        mainHandler.postDelayed(fallbackToWatchGpsRunnable, 5000L)
+        if (TrackingManager.isTracking.value) {
+            enableWatchHardwareGps()
+        } else {
+            mainHandler.postDelayed(fallbackToWatchGpsRunnable, 1500L)
+        }
     }
 
     /**
@@ -157,10 +174,26 @@ class LiveGpsManager(
 
     /**
      * Vyžádá si okamžitý čerstvý satelitní fix (`maxUpdateAgeMillis = 0`) po stisku tlačítka GPS.
+     * V lese a na horách okamžitě zapne hardwarový GPS čip v hodinkách bez čekání na telefon v batohu.
      */
     @SuppressLint("MissingPermission")
     fun requestImmediateHighAccuracyFix() {
         if (!isRunning || !hasFineLocationPermission()) return
+
+        // 1. Okamžitě zapneme hardwarový satelitní čip v hodinkách (0 ms prodleva)
+        enableWatchHardwareGps()
+
+        // 2. Okamžitě vyčteme poslední satelitní fix z GPS_PROVIDERu, pokud je čerstvý (< 15 s)
+        try {
+            val lastHwGps = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            if (lastHwGps != null && isLocationFreshAndAccurate(lastHwGps, maxAgeMs = 15_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
+                processLocation(lastHwGps, isDirectWatchSatellite = true)
+            }
+        } catch (_: Exception) {
+        }
+
+        // 3. Vyprázdníme případnou dávkovací frontu
+        fusedClient.flushLocations()
 
         currentLocTokenSource?.cancel()
         val tokenSource = CancellationTokenSource()
@@ -170,7 +203,7 @@ class LiveGpsManager(
             .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
             .setGranularity(Granularity.GRANULARITY_FINE)
             .setMaxUpdateAgeMillis(0L)
-            .setDurationMillis(8_000L)
+            .setDurationMillis(4_000L)
             .build()
 
         fusedClient.getCurrentLocation(currentRequest, tokenSource.token)
@@ -196,8 +229,8 @@ class LiveGpsManager(
             if (lm != null && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    2000L,
-                    1.0f,
+                    1000L,
+                    0.5f,
                     hardwareGpsListener,
                     Looper.getMainLooper()
                 )
@@ -235,7 +268,7 @@ class LiveGpsManager(
         } else {
             System.currentTimeMillis() - location.time
         }
-        if (!isDirectWatchSatellite && ageMs > 30_000L) {
+        if (!isDirectWatchSatellite && ageMs > 20_000L) {
             return
         }
 
@@ -258,5 +291,7 @@ class LiveGpsManager(
     companion object {
         /** Striktní práh přesnosti (10 metrů) pro rozhodnutí, zda stačí GPS z telefonu, nebo se zapne čip v hodinkách. */
         const val STRICT_ACCURACY_METERS = 10.0f
+        /** Přesnost plnohodnotného satelitního zámku v lese / hlubokém údolí (do 20 m). */
+        const val FOREST_SAT_ACCURACY_METERS = 20.0f
     }
 }

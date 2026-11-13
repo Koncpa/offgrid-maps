@@ -224,4 +224,44 @@ class TrackingManagerTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun addPoint_duringActiveTrekInForest_updatesLocationAndTrackSmoothly() {
+        val now = 1_700_000_000_000L
+        TrackingManager.setTrackingActive(true)
+
+        // 1. Otevřená paseka (přesnost 5.0 m)
+        val clearingPoint = TrackPoint(
+            latitude = 49.1246,
+            longitude = 16.3353,
+            timestampMillis = now,
+            accuracyMeters = 5.0f
+        )
+        TrackingManager.addPoint(clearingPoint)
+        assertEquals(1, TrackingManager.trackPoints.value.size)
+
+        // 2. O 12 sekund později vejdeme do hustého lesa v údolí Oslavy (přesnost satelitů 14.5 m)
+        val forestPoint = TrackPoint(
+            latitude = 49.1252,
+            longitude = 16.3345,
+            timestampMillis = now + 12_000L,
+            accuracyMeters = 14.5f
+        )
+        TrackingManager.addPoint(forestPoint)
+
+        // Šipka polohy i zaznamenávaná GPX trasa se musí v lese plynule posunout (žádné 3minutové zamrznutí)
+        assertEquals(49.1252, TrackingManager.currentLocation.value!!.latitude, 0.0001)
+        assertEquals(2, TrackingManager.trackPoints.value.size)
+
+        // 3. Hrubý odhad z BTS vysílače (přesnost 85 m) je však nadále spolehlivě zahozen
+        val btsJump = TrackPoint(
+            latitude = 49.1500,
+            longitude = 16.3600,
+            timestampMillis = now + 20_000L,
+            accuracyMeters = 85.0f
+        )
+        TrackingManager.addPoint(btsJump)
+        assertEquals(49.1252, TrackingManager.currentLocation.value!!.latitude, 0.0001)
+        assertEquals(2, TrackingManager.trackPoints.value.size)
+    }
 }

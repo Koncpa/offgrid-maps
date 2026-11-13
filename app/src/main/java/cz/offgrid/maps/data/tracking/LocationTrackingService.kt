@@ -77,14 +77,10 @@ class LocationTrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.locations.forEach { location ->
-                    val acc = if (location.hasAccuracy()) location.accuracy else 999.0f
-                    if (acc <= LiveGpsManager.STRICT_ACCURACY_METERS) {
-                        consecutiveAccurateFusedFixes++
-                        if (isWatchHardwareGpsActive && consecutiveAccurateFusedFixes >= 3) {
-                            disableWatchHardwareGps()
-                        }
-                    } else {
-                        consecutiveAccurateFusedFixes = 0
+                    // Během aktivního treku v přírodě necháváme hardwarový GPS čip hodinek trvale zapnutý,
+                    // aby v lese neztrácel satelitní zámek (FusedLocationProvider na Wear OS přeposílá
+                    // i body z čipu hodinek, takže vypínání po 3 bodech by způsobilo cyklické výpadky).
+                    if (!isWatchHardwareGpsActive) {
                         enableWatchHardwareGps()
                     }
                     handleIncomingLocation(location)
@@ -118,6 +114,7 @@ class LocationTrackingService : Service() {
         updateNotificationThrottled()
     }
 
+    @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startTracking()
@@ -133,6 +130,18 @@ class LocationTrackingService : Service() {
                 if (TrackingManager.isTracking.value && isScreenInteractive) {
                     isScreenInteractive = false
                     registerLocationRequest(interactive = false)
+                }
+            }
+            ACTION_FLUSH_NOW -> {
+                if (TrackingManager.isTracking.value) {
+                    fusedLocationClient.flushLocations()
+                    try {
+                        val lastHw = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                        if (lastHw != null && (System.currentTimeMillis() - lastHw.time) in 0..15_000L) {
+                            handleIncomingLocation(lastHw)
+                        }
+                    } catch (_: Exception) {
+                    }
                 }
             }
         }
@@ -165,24 +174,22 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Okamžitě si vyžádáme čerstvý satelitní bod při startu (maxUpdateAgeMillis = 0)
+        // 1. Okamžitě zapneme přímý hardwarový GPS čip v hodinkách (0 ms), aby v lese nečekal na telefon v batohu
+        enableWatchHardwareGps()
+
+        // 2. Okamžitě si vyžádáme čerstvý satelitní bod při startu (maxUpdateAgeMillis = 0)
         val currentReq = CurrentLocationRequest.Builder()
             .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
             .setGranularity(Granularity.GRANULARITY_FINE)
             .setMaxUpdateAgeMillis(0L)
+            .setDurationMillis(4_000L)
             .build()
 
         fusedLocationClient.getCurrentLocation(currentReq, null)
             .addOnSuccessListener { loc ->
                 if (loc != null && TrackingManager.isTracking.value) {
-                    val acc = if (loc.hasAccuracy()) loc.accuracy else 999.0f
-                    if (acc > LiveGpsManager.STRICT_ACCURACY_METERS) {
-                        enableWatchHardwareGps()
-                    }
                     handleIncomingLocation(loc)
                     GpxExporter.saveRecoveryCheckpoint(this, TrackingManager.trackPoints.value)
-                } else if (TrackingManager.isTracking.value) {
-                    enableWatchHardwareGps()
                 }
             }
 
@@ -190,32 +197,30 @@ class LocationTrackingService : Service() {
     }
 
     /**
-     * Přepíná mezi živým GPS režimem (když se uživatel dívá na displej)
-     * a úsporným hardwarovým FIFO dávkováním (když je ruka svěšená a displej zhasnutý).
+     * Přepíná mezi rychlým 1.5s intervalem (když se uživatel dívá na displej)
+     * a 4s intervalem (když je ruka svěšená), aniž by vypínal satelitní zámek v hodinkách.
      */
     @SuppressLint("MissingPermission")
     private fun registerLocationRequest(interactive: Boolean) {
         fusedLocationClient.removeLocationUpdates(locationCallback)
-        if (isWatchHardwareGpsActive) {
-            disableWatchHardwareGps()
-            enableWatchHardwareGps()
-        }
+        // Hardwarový GPS čip nevypínáme, pouze jej ujistíme, že běží
+        enableWatchHardwareGps()
 
         val locationRequest = if (interactive) {
-            // Displej svítí: Živý režim bez zpoždění pro okamžité vykreslování stopy
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 4000L)
-                .setMinUpdateIntervalMillis(2000L)
-                .setMinUpdateDistanceMeters(2.0f)
+            // Displej svítí: Rychlý živý režim bez zpoždění pro okamžitou odezvu tlačítka GPS a šipky
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1500L)
+                .setMinUpdateIntervalMillis(1000L)
+                .setMinUpdateDistanceMeters(1.0f)
                 .setMaxUpdateDelayMillis(0L)
                 .setGranularity(Granularity.GRANULARITY_FINE)
                 .setWaitForAccurateLocation(false)
                 .build()
         } else {
-            // Displej zhasnutý: Hardwarový FIFO batching v GNSS čipu (hlavní CPU spí 30 s v kuse)
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 8000L)
-                .setMinUpdateIntervalMillis(5000L)
-                .setMinUpdateDistanceMeters(3.5f)
-                .setMaxUpdateDelayMillis(30000L)
+            // Displej zhasnutý: Kontinuální záznam bez 30s prodlevy, aby po zvednutí ruky byla poloha hned aktuální
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 4000L)
+                .setMinUpdateIntervalMillis(2500L)
+                .setMinUpdateDistanceMeters(2.0f)
+                .setMaxUpdateDelayMillis(5000L)
                 .setGranularity(Granularity.GRANULARITY_FINE)
                 .setWaitForAccurateLocation(false)
                 .build()
@@ -234,12 +239,10 @@ class LocationTrackingService : Service() {
         try {
             val lm = locationManager
             if (lm != null && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
-                val minTimeMs = if (isScreenInteractive) 3000L else 6000L
-                val minDistM = if (isScreenInteractive) 2.0f else 3.5f
                 lm.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    minTimeMs,
-                    minDistM,
+                    1500L,
+                    1.0f,
                     hardwareGpsListener,
                     Looper.getMainLooper()
                 )
@@ -363,6 +366,7 @@ class LocationTrackingService : Service() {
         const val ACTION_STOP = "cz.offgrid.maps.ACTION_STOP"
         const val ACTION_SCREEN_ON = "cz.offgrid.maps.ACTION_SCREEN_ON"
         const val ACTION_SCREEN_OFF = "cz.offgrid.maps.ACTION_SCREEN_OFF"
+        const val ACTION_FLUSH_NOW = "cz.offgrid.maps.ACTION_FLUSH_NOW"
         private const val CHANNEL_ID = "offgrid_tracking_channel"
         private const val NOTIFICATION_ID = 1001
         private const val LOW_BATTERY_THRESHOLD_PCT = 5
@@ -389,6 +393,14 @@ class LocationTrackingService : Service() {
             if (!TrackingManager.isTracking.value) return
             val intent = Intent(context, LocationTrackingService::class.java).apply {
                 action = if (interactive) ACTION_SCREEN_ON else ACTION_SCREEN_OFF
+            }
+            context.startService(intent)
+        }
+
+        fun flushNow(context: Context) {
+            if (!TrackingManager.isTracking.value) return
+            val intent = Intent(context, LocationTrackingService::class.java).apply {
+                action = ACTION_FLUSH_NOW
             }
             context.startService(intent)
         }

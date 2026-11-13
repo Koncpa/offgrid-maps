@@ -483,21 +483,29 @@ fun MapScreen(
                 )
             }
 
-            // Indikátor přesného zaměření satelitů (Zelená = přesnost <= 10 m, Žlutá = hledá satelity / > 10 m)
+            // Indikátor satelitního zaměření (Zelená = satelitní fix včetně lesa <= 20 m, Žlutá = hledá satelity)
             val hasStrictGpsLock = latestGpsPoint?.let {
-                it.accuracyMeters in 0.1f..LiveGpsManager.STRICT_ACCURACY_METERS
+                it.accuracyMeters in 0.1f..LiveGpsManager.FOREST_SAT_ACCURACY_METERS
             } == true
             val gpsIndicatorColor = if (hasStrictGpsLock) TrailGreen else TrailYellow
 
-            // Tlačítko pro vycentrování, uzamčení sledování a indikaci satelitního fixu (<= 10 m)
+            // Tlačítko pro okamžité vycentrování, vynucení čerstvého satelitního fixu a uzamčení sledování
             Button(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     isFollowingGps = true
+                    LocationTrackingService.flushNow(context)
                     liveGpsManager.start()
                     liveGpsManager.requestImmediateHighAccuracyFix()
+                    val latest = TrackingManager.currentLocation.value
+                    val targetLatLng = if (latest != null) {
+                        LatLng(latest.latitude, latest.longitude)
+                    } else {
+                        activeLocation
+                    }
+                    activeLocation = targetLatLng
                     maplibreMapInstance?.moveCamera(
-                        CameraUpdateFactory.newLatLng(activeLocation)
+                        CameraUpdateFactory.newLatLng(targetLatLng)
                     )
                 },
                 modifier = Modifier

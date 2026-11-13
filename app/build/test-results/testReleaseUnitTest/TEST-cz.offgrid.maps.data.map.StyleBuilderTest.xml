@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="cz.offgrid.maps.data.map.StyleBuilderTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-30T21:30:37" hostname="Patriks-Air.home" time="0.035">
+<testsuite name="cz.offgrid.maps.data.map.StyleBuilderTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-13T19:53:13" hostname="Patriks-Air.home" time="0.064">
   <properties/>
-  <testcase name="createAmoledOutdoorStyle_withMbtilesFile_containsMbtilesSourceAndKctLayers" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.021"/>
-  <testcase name="createAmoledOutdoorStyle_withoutFile_containsAmoledBackground" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.002"/>
-  <testcase name="contourTileManager_webMercatorTileCoordinates_matchBundledJmkGrid" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.011"/>
-  <testcase name="resolveCzechRegionTitle_identifiesCzechRegionsAndMountainsCorrectly" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.001"/>
+  <testcase name="createAmoledOutdoorStyle_withMbtilesFile_containsMbtilesSourceAndKctLayers" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.037"/>
+  <testcase name="createAmoledOutdoorStyle_withoutFile_containsAmoledBackground" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.003"/>
+  <testcase name="contourTileManager_webMercatorTileCoordinates_matchBundledJmkGrid" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.021"/>
+  <testcase name="resolveCzechRegionTitle_identifiesCzechRegionsAndMountainsCorrectly" classname="cz.offgrid.maps.data.map.StyleBuilderTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

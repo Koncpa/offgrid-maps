@@ -116,25 +116,26 @@ object TrackingManager {
 
     /**
      * Přidá nový bod trasy, přičte vzdálenost a zkontroluje odchylku od naplánované GPX trasy.
-     * Striktně chrání přesnou polohu (<= 10 m) před přepsáním méně přesným odhadem (> 10 m).
+     * Chrání přesnou polohu před skoky na BTS/Wi-Fi, ale v lese a hlubokých údolích plynule
+     * přijímá reálné satelitní body (do 22 m), aby při aktivním treku nezamrzala šipka ani tlačítko GPS.
      */
     fun addPoint(point: TrackPoint) {
         val incomingAcc = point.accuracyMeters
         val existingLoc = _currentLocation.value
 
-        // Pokud už máme striktně přesný satelitní fix (<= 10 m) a přijde méně přesný odhad (> 10 m,
-        // např. z telefonu v kapse nebo z BTS/Wi-Fi v obci), méně přesný bod zcela ignorujeme.
-        if (incomingAcc > 10.0f && existingLoc != null) {
+        if (existingLoc != null) {
             val existingAcc = existingLoc.accuracyMeters
             val ageDeltaMs = point.timestampMillis - existingLoc.timestampMillis
-            if (existingAcc <= 10.0f && ageDeltaMs < 180_000L) {
+
+            // 1. Krátkodobá ochrana (do 8 s) proti okamžitému přepsání čerstvého <=10m fixu horším odhadem (>10m)
+            if (incomingAcc > 10.0f && existingAcc <= 10.0f && ageDeltaMs in 0..8_000L) {
                 return
             }
-        }
 
-        // Během aktivního nahrávání (REC) nepouštíme do GPX záznamu nepřesné body (> 15 m)
-        if (_isTracking.value && incomingAcc > 15.0f) {
-            return
+            // 2. Dlouhodobá ochrana (do 3 min) proti hrubým nesatelitním skokům z BTS vysílačů (> 25 m)
+            if (incomingAcc > 25.0f && existingAcc <= 22.0f && ageDeltaMs in 0..180_000L) {
+                return
+            }
         }
 
         val enrichedPoint = if (_currentAltitudeMeters.value != null) {
@@ -142,22 +143,32 @@ object TrackingManager {
         } else {
             point
         }
-        _currentLocation.value = enrichedPoint
+
+        // Šipku aktuální polohy na mapě aktualizujeme pro každý validní satelitní fix (včetně lesa do 25 m),
+        // a to i během aktivního nahrávání treku, aby tlačítko GPS reagovalo okamžitě.
+        if (incomingAcc <= 25.0f || _currentLocation.value == null) {
+            _currentLocation.value = enrichedPoint
+        }
 
         // Kontrola odchylky od naplánované GPX trasy (> 60 metrů od nejbližšího úseku trasy = mimo trasu)
         val route = _plannedRoutePoints.value
-        if (route.isNotEmpty()) {
+        if (route.isNotEmpty() && incomingAcc <= 25.0f) {
             val minDistanceToRoute = calculateMinDistanceToRouteMeters(
                 enrichedPoint.latitude,
                 enrichedPoint.longitude,
                 route
             )
             _isOffRoute.value = minDistanceToRoute > 60.0
-        } else {
+        } else if (route.isEmpty()) {
             _isOffRoute.value = false
         }
 
         if (!_isTracking.value) return
+
+        // Do ukládaného GPX záznamu trasy pouštíme satelitní body do 22 m (pokryje i hustý les a skalní údolí)
+        if (incomingAcc > 22.0f) {
+            return
+        }
 
         val previous = _trackPoints.value.lastOrNull()
         if (previous != null) {
