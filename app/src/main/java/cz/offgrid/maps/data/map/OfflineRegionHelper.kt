@@ -50,7 +50,8 @@ data class OfflinePresetRegion(
     val lonSpanDeg: Double = 0.75,
     val countryCode: String = "CZ",
     val countryName: String = "Czechia – Regions",
-    val packagePath: String = "maps/cz/$id"
+    val packagePath: String = "maps/cz/$id",
+    val continent: String = OfflineRegionHelper.resolveContinent(countryCode)
 )
 
 /**
@@ -61,6 +62,7 @@ object OfflineRegionHelper {
 
     private const val REGION_NAME_JMK = "Jihomoravsky_kraj_z14_v3"
     private const val CACHED_CATALOG_FILE = "cached_github_catalog.json"
+    private const val ASSET_DEFAULT_CATALOG_FILE = "default_catalog.json"
     private const val PACKAGES_DIR = "github_regions"
     private const val TRAILS_FRAGMENT_FILE = "trails.features"
 
@@ -72,11 +74,22 @@ object OfflineRegionHelper {
     private val _activeDownloadTitle = MutableStateFlow<String?>(null)
     val activeDownloadTitle: StateFlow<String?> = _activeDownloadTitle.asStateFlow()
 
+    private val _downloadError = MutableStateFlow<String?>(null)
+    val downloadError: StateFlow<String?> = _downloadError.asStateFlow()
+
     private val _isOfflineReady = MutableStateFlow(false)
     val isOfflineReady: StateFlow<Boolean> = _isOfflineReady.asStateFlow()
 
     private val _savedRegions = MutableStateFlow<List<SavedOfflineRegion>>(emptyList())
     val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
+
+    fun resolveContinent(countryCode: String): String {
+        return when (countryCode.uppercase(Locale.US)) {
+            "US", "CA", "MX" -> "North America"
+            "AU", "NZ" -> "Australia & NZ"
+            else -> "Europe"
+        }
+    }
 
     /**
      * Built-in default catalog of Czech regions (available even offline before first GitHub sync).
@@ -353,12 +366,14 @@ object OfflineRegionHelper {
 
     private fun startRegionDownload(context: Context, offlineRegion: OfflineRegion) {
         isDownloading = true
+        _downloadError.value = null
         MapLibre.setConnected(true)
         offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
         offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
             override fun onStatusChanged(status: OfflineRegionStatus) {
                 if (status.isComplete) {
                     offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
+                    _downloadError.value = null
                     finishDownloadAndUpdateConnectivity(context)
                 } else if (status.requiredResourceCount > 0) {
                     val pct = (100.0 * status.completedResourceCount / status.requiredResourceCount)
@@ -369,10 +384,12 @@ object OfflineRegionHelper {
             }
 
             override fun onError(error: OfflineRegionError) {
+                _downloadError.value = "Connection lost – check Wi-Fi"
             }
 
             override fun mapboxTileCountLimitExceeded(limit: Long) {
                 offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
+                _downloadError.value = "Storage limit reached – delete old region"
                 finishDownloadAndUpdateConnectivity(context)
             }
         })
@@ -380,7 +397,7 @@ object OfflineRegionHelper {
 
     /**
      * Loads the latest `catalog.json` from the private GitHub repository (`BuildConfig.MAPS_GITHUB_REPO`)
-     * listing all countries and regions (or falls back to the local cache when offline).
+     * listing all countries and regions (or falls back to the local cache / bundled asset when offline).
      */
     fun syncCatalogFromGithub(context: Context) {
         val cacheFile = File(context.filesDir, CACHED_CATALOG_FILE)
@@ -389,6 +406,16 @@ object OfflineRegionHelper {
                 if (cachedList.isNotEmpty()) {
                     _catalogRegions.value = cachedList
                 }
+            }
+        } else {
+            try {
+                val assetJson = context.assets.open(ASSET_DEFAULT_CATALOG_FILE).bufferedReader().use { it.readText() }
+                parseCatalogJson(assetJson)?.let { bundledList ->
+                    if (bundledList.isNotEmpty()) {
+                        _catalogRegions.value = bundledList
+                    }
+                }
+            } catch (_: Exception) {
             }
         }
 
@@ -460,6 +487,7 @@ object OfflineRegionHelper {
         context: Context,
         preset: OfflinePresetRegion
     ) {
+        _downloadError.value = null
         // 1. Download pre-built regional packages (trails + contour tiles) from the private GitHub repository.
         //    If the contour package is missing (older repository layout), the watch falls back to
         //    generating contours from DEM tiles itself.
@@ -470,7 +498,7 @@ object OfflineRegionHelper {
             downloadPackageFile(preset, "region_meta.json") { input ->
                 File(pkgDir, "region_meta.json").outputStream().use { input.copyTo(it) }
             }
-            downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
+            val trailsOk = downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
                 val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
                 File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
             }
@@ -487,6 +515,9 @@ object OfflineRegionHelper {
                 )
             } else {
                 ContourTileManager.downloadContoursForArea(context, preset.centerLat, preset.centerLon)
+            }
+            if (!trailsOk && !contoursImported) {
+                _downloadError.value = "Package sync failed – check Wi-Fi"
             }
             trailExecutor.execute { invalidateTrailPackages() }
             updateTrailsForViewport(context, preset.centerLat, preset.centerLon)

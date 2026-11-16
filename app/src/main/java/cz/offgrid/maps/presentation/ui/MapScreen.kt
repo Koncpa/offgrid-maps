@@ -11,10 +11,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,6 +128,7 @@ fun MapScreen(
     val lastSavedSummary by TrackingManager.lastSavedSummary.collectAsState()
     val offlineStatus by OfflineRegionHelper.statusText.collectAsState()
     val activeDownloadTitle by OfflineRegionHelper.activeDownloadTitle.collectAsState()
+    val downloadError by OfflineRegionHelper.downloadError.collectAsState()
     val savedOfflineRegions by OfflineRegionHelper.savedRegions.collectAsState()
     val azimuthDegrees by compassManager.azimuthDegrees.collectAsState()
 
@@ -599,6 +600,9 @@ fun MapScreen(
                     OfflineRegionHelper.downloadPresetRegion(context, preset)
                 },
                 activeDownloadTitle = activeDownloadTitle,
+                downloadError = downloadError,
+                currentLat = activeLocation.latitude,
+                currentLon = activeLocation.longitude,
                 onSelectOfflineRegion = { region ->
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     isFollowingGps = false
@@ -674,7 +678,7 @@ private fun MapScaleBar(
 /**
  * Pure black AMOLED overlay menu with two tabs:
  * 1) Routes (GPX import, route list, export/share, delete, clear active route)
- * 2) Offline (saved regions + multi-country GitHub catalog for 1-click download)
+ * 2) Offline (Nearby GPS shortcut, saved regions, and 3-level Continent -> Country -> Region catalog)
  */
 @Composable
 private fun GpxRoutePickerOverlay(
@@ -683,6 +687,9 @@ private fun GpxRoutePickerOverlay(
     savedRegions: List<SavedOfflineRegion>,
     offlineStatus: String,
     activeDownloadTitle: String?,
+    downloadError: String?,
+    currentLat: Double,
+    currentLon: Double,
     onSelectFile: (File) -> Unit,
     onShareFile: (File) -> Unit,
     onDeleteFile: (File) -> Unit,
@@ -695,102 +702,143 @@ private fun GpxRoutePickerOverlay(
 ) {
     // 0 = Routes, 1 = Offline Maps
     var selectedTab by remember { mutableIntStateOf(0) }
-    val scrollState = rememberScrollState()
+    var selectedContinent by remember { mutableStateOf<String?>(null) }
+    var selectedCountry by remember { mutableStateOf<String?>(null) }
+
+    val stepBackOrDismiss = {
+        when {
+            selectedTab == 1 && selectedCountry != null -> selectedCountry = null
+            selectedTab == 1 && selectedContinent != null -> selectedContinent = null
+            else -> onDismiss()
+        }
+    }
+
+    BackHandler(enabled = true) {
+        stepBackOrDismiss()
+    }
+
+    val catalogRegions by OfflineRegionHelper.catalogRegions.collectAsState()
+    val savedByTitle = remember(savedRegions) {
+        savedRegions.associateBy { it.displayName }
+    }
+    val nearbyRegions = remember(catalogRegions, savedByTitle, currentLat, currentLon) {
+        catalogRegions
+            .filter { it.title !in savedByTitle }
+            .map { preset ->
+                val distKm = (TrackingManager.calculateDistanceMeters(
+                    currentLat, currentLon, preset.centerLat, preset.centerLon
+                ) / 1000.0).roundToInt()
+                preset to distKm
+            }
+            .sortedBy { it.second }
+            .take(2)
+    }
+    val continentOrder = listOf("Europe", "North America", "Australia & NZ")
+    val regionsByContinent = remember(catalogRegions) {
+        val grouped = catalogRegions.groupBy { it.continent }
+        continentOrder.mapNotNull { cont -> grouped[cont]?.let { cont to it } }
+    }
+
+    val isDownloading = offlineStatus.startsWith("DL")
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(AmoledBlack.copy(alpha = 0.96f))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
+        LazyColumn(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(7.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(scrollState)
-                .padding(vertical = 8.dp)
+            contentPadding = PaddingValues(vertical = 8.dp),
+            modifier = Modifier.fillMaxSize()
         ) {
             // Top tab switcher: [Routes] | [Offline]
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val isGpxTab = selectedTab == 0
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (isGpxTab) DarkSurface else AmoledBlack)
-                        .border(
-                            width = if (isGpxTab) 1.8.dp else 1.2.dp,
-                            color = if (isGpxTab) TrailGreen else DarkSurfaceVariant,
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                        .clickable { selectedTab = 0 }
-                        .padding(horizontal = 13.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
+            item(key = "tab_switcher") {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Routes (${files.size})",
-                        color = if (isGpxTab) TrailGreen else OutdoorTextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                    val isGpxTab = selectedTab == 0
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isGpxTab) DarkSurface else AmoledBlack)
+                            .border(
+                                width = if (isGpxTab) 1.8.dp else 1.2.dp,
+                                color = if (isGpxTab) TrailGreen else DarkSurfaceVariant,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { selectedTab = 0 }
+                            .padding(horizontal = 13.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Routes (${files.size})",
+                            color = if (isGpxTab) TrailGreen else OutdoorTextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                val isOfflineTab = selectedTab == 1
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (isOfflineTab) DarkSurface else AmoledBlack)
-                        .border(
-                            width = if (isOfflineTab) 1.8.dp else 1.2.dp,
-                            color = if (isOfflineTab) TrailBlue else DarkSurfaceVariant,
-                            shape = RoundedCornerShape(14.dp)
+                    val isOfflineTab = selectedTab == 1
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isOfflineTab) DarkSurface else AmoledBlack)
+                            .border(
+                                width = if (isOfflineTab) 1.8.dp else 1.2.dp,
+                                color = if (isOfflineTab) TrailBlue else DarkSurfaceVariant,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { selectedTab = 1 }
+                            .padding(horizontal = 13.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Offline (${savedRegions.size})",
+                            color = if (isOfflineTab) TrailBlue else OutdoorTextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                        .clickable { selectedTab = 1 }
-                        .padding(horizontal = 13.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Offline (${savedRegions.size})",
-                        color = if (isOfflineTab) TrailBlue else OutdoorTextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    }
                 }
             }
 
             if (selectedTab == 0) {
                 // --- TAB 1: GPX ROUTES ---
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DarkSurface)
-                        .border(1.5.dp, TrailGreen, RoundedCornerShape(14.dp))
-                        .clickable { onImportGpx() }
-                        .padding(horizontal = 12.dp, vertical = 8.5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "+ Import GPX",
-                        color = TrailGreen,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                item(key = "import_gpx_btn") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(DarkSurface)
+                            .border(1.5.dp, TrailGreen, RoundedCornerShape(14.dp))
+                            .clickable { onImportGpx() }
+                            .padding(horizontal = 12.dp, vertical = 8.5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "+ Import GPX",
+                            color = TrailGreen,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 if (files.isEmpty()) {
-                    Text(
-                        text = "No saved routes",
-                        color = OutdoorTextSecondary,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                    item(key = "no_routes") {
+                        Text(
+                            text = "No saved routes",
+                            color = OutdoorTextSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                 } else {
-                    files.forEach { file ->
+                    items(files, key = { it.name }) { file ->
                         val isSelected = activeRouteName == file.nameWithoutExtension
                         Row(
                             modifier = Modifier
@@ -854,200 +902,423 @@ private fun GpxRoutePickerOverlay(
                     }
                 }
             } else {
-                // --- TAB 2: OFFLINE MAPS ---
-                val isDownloading = offlineStatus.startsWith("DL")
-
+                // --- TAB 2: OFFLINE MAPS (3-Level Drill-Down) ---
                 if (isDownloading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(DarkSurface)
-                            .border(1.6.dp, TrailYellow, RoundedCornerShape(14.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val dlLabel = if (!activeDownloadTitle.isNullOrBlank()) {
-                            "⏳ $activeDownloadTitle ($offlineStatus)"
-                        } else {
-                            "⏳ Downloading ($offlineStatus)"
-                        }
-                        Text(
-                            text = dlLabel,
-                            color = TrailYellow,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                // 1) Downloaded offline regions stored on the watch
-                Text(
-                    text = "SAVED ON WATCH",
-                    color = TrailGreen,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-
-                savedRegions.forEach { region ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(DarkSurface)
-                            .border(
-                                width = 1.3.dp,
-                                color = if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.85f) else TrailGreen.copy(alpha = 0.85f),
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .clickable { onSelectOfflineRegion(region) }
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = if (region.isDefaultJmk) "★ ${region.displayName}" else "✓ ${region.displayName}",
-                            color = OutdoorTextPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (!region.isDefaultJmk) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(AmoledBlack)
-                                    .border(1.2.dp, TrailRed, CircleShape)
-                                    .clickable { onDeleteOfflineRegion(region) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "✕",
-                                    color = TrailRed,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                    item(key = "dl_banner") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(1.6.dp, TrailYellow, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val dlLabel = if (!activeDownloadTitle.isNullOrBlank()) {
+                                "⏳ $activeDownloadTitle ($offlineStatus)"
+                            } else {
+                                "⏳ Downloading ($offlineStatus)"
                             }
+                            Text(
+                                text = dlLabel,
+                                color = TrailYellow,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
 
-                // 2) Multi-country catalog loaded from GitHub (Koncpa/offgrid-maps-data)
-                val catalogRegions by OfflineRegionHelper.catalogRegions.collectAsState()
-                val savedTitles = remember(savedRegions) {
-                    savedRegions.map { it.displayName }.toSet()
-                }
-                val availableByCountry = remember(savedTitles, catalogRegions) {
-                    catalogRegions
-                        .filter { it.title !in savedTitles }
-                        .groupBy { it.countryName }
+                if (!downloadError.isNullOrBlank()) {
+                    item(key = "dl_error") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(1.4.dp, TrailRed, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "⚠ $downloadError",
+                                color = TrailRed,
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
 
-                availableByCountry.forEach { (countryHeader, regions) ->
-                    Text(
-                        text = countryHeader.uppercase(),
-                        color = TrailBlue,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
+                val activeContinent = selectedContinent
+                val activeCountry = selectedCountry
 
-                    regions.forEach { preset ->
+                if (activeContinent == null) {
+                    // --- LEVEL 0: OFFLINE ROOT (Nearby + Saved + Continents) ---
+                    if (nearbyRegions.isNotEmpty()) {
+                        item(key = "nearby_header") {
+                            Text(
+                                text = "NEARBY BY GPS",
+                                color = TrailYellow,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        items(nearbyRegions, key = { "nearby_${it.first.id}" }) { (preset, distKm) ->
+                            OfflinePresetRow(
+                                preset = preset,
+                                subtitleOverride = "~$distKm km · ${preset.subtitle}",
+                                isSaved = false,
+                                isDownloading = isDownloading,
+                                accentColor = TrailYellow,
+                                onClick = { onDownloadPresetRegion(preset) }
+                            )
+                        }
+                    }
+
+                    item(key = "saved_header") {
+                        Text(
+                            text = "SAVED ON WATCH (${savedRegions.size})",
+                            color = TrailGreen,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    items(savedRegions, key = { "saved_${it.id}" }) { region ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(DarkSurface)
-                                .border(1.2.dp, TrailBlue.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
-                                .clickable(enabled = !isDownloading) { onDownloadPresetRegion(preset) }
-                                .padding(horizontal = 10.dp, vertical = 6.5.dp),
+                                .border(
+                                    width = 1.3.dp,
+                                    color = if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.85f) else TrailGreen.copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .clickable { onSelectOfflineRegion(region) }
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = preset.title,
-                                    color = OutdoorTextPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = preset.subtitle,
-                                    color = OutdoorTextSecondary,
-                                    fontSize = 8.5.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(AmoledBlack)
-                                    .border(1.2.dp, TrailBlue, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "⬇",
-                                    color = TrailBlue,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Text(
+                                text = if (region.isDefaultJmk) "★ ${region.displayName}" else "✓ ${region.displayName}",
+                                color = OutdoorTextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (!region.isDefaultJmk) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(AmoledBlack)
+                                        .border(1.2.dp, TrailRed, CircleShape)
+                                        .clickable { onDeleteOfflineRegion(region) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "✕",
+                                        color = TrailRed,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
+                    }
+
+                    item(key = "continents_header") {
+                        Text(
+                            text = "BROWSE CATALOG (${catalogRegions.size})",
+                            color = TrailBlue,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+
+                    items(regionsByContinent, key = { "cont_${it.first}" }) { (continentName, contRegions) ->
+                        val countryCount = contRegions.map { it.countryName }.distinct().size
+                        val savedInCont = contRegions.count { it.title in savedByTitle }
+                        val savedInfo = if (savedInCont > 0) " · $savedInCont saved" else ""
+                        DrillDownFolderRow(
+                            title = continentName,
+                            subtitle = "$countryCount countries · ${contRegions.size} regions$savedInfo",
+                            onClick = {
+                                selectedContinent = continentName
+                                selectedCountry = null
+                            }
+                        )
+                    }
+                } else if (activeCountry == null) {
+                    // --- LEVEL 1: CONTINENT -> COUNTRIES ---
+                    item(key = "back_to_continents") {
+                        BreadcrumbBackPill(
+                            label = "← All Continents",
+                            onClick = { selectedContinent = null }
+                        )
+                    }
+                    item(key = "continent_title") {
+                        Text(
+                            text = activeContinent.uppercase(),
+                            color = TrailBlue,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+
+                    val countriesInContinent = catalogRegions
+                        .filter { it.continent == activeContinent }
+                        .groupBy { it.countryName }
+                        .entries
+                        .toList()
+
+                    items(countriesInContinent, key = { "country_${it.key}" }) { (countryName, cRegions) ->
+                        val savedInCountry = cRegions.count { it.title in savedByTitle }
+                        val sub = if (savedInCountry > 0) {
+                            "${cRegions.size} regions · $savedInCountry saved"
+                        } else {
+                            "${cRegions.size} regions"
+                        }
+                        DrillDownFolderRow(
+                            title = countryName,
+                            subtitle = sub,
+                            onClick = { selectedCountry = countryName }
+                        )
+                    }
+                } else {
+                    // --- LEVEL 2: COUNTRY -> REGIONS ---
+                    item(key = "back_to_countries") {
+                        BreadcrumbBackPill(
+                            label = "← $activeContinent",
+                            onClick = { selectedCountry = null }
+                        )
+                    }
+                    item(key = "country_title") {
+                        Text(
+                            text = activeCountry.uppercase(),
+                            color = TrailBlue,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+
+                    val regionsInCountry = catalogRegions.filter { it.countryName == activeCountry }
+
+                    items(regionsInCountry, key = { "reg_${it.id}" }) { preset ->
+                        val existingSaved = savedByTitle[preset.title]
+                        OfflinePresetRow(
+                            preset = preset,
+                            subtitleOverride = null,
+                            isSaved = existingSaved != null,
+                            isDownloading = isDownloading,
+                            accentColor = if (existingSaved != null) TrailGreen else TrailBlue,
+                            onClick = {
+                                if (existingSaved != null) {
+                                    onSelectOfflineRegion(existingSaved)
+                                } else {
+                                    onDownloadPresetRegion(preset)
+                                }
+                            }
+                        )
                     }
                 }
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                if (selectedTab == 0 && activeRouteName != null) {
+            item(key = "bottom_actions") {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    if (selectedTab == 0 && activeRouteName != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(1.5.dp, TrailYellow, RoundedCornerShape(14.dp))
+                                .clickable { onRemoveActiveRoute() }
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Clear route",
+                                color = TrailYellow,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(DarkSurface)
-                            .border(1.5.dp, TrailYellow, RoundedCornerShape(14.dp))
-                            .clickable { onRemoveActiveRoute() }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                            .border(1.5.dp, OutdoorTextSecondary, RoundedCornerShape(14.dp))
+                            .clickable { stepBackOrDismiss() }
+                            .padding(horizontal = 18.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        val backLabel = if (selectedTab == 1 && (selectedCountry != null || selectedContinent != null)) {
+                            "← Up"
+                        } else {
+                            "Close"
+                        }
                         Text(
-                            text = "Clear route",
-                            color = TrailYellow,
+                            text = backLabel,
+                            color = OutdoorTextPrimary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DarkSurface)
-                        .border(1.5.dp, OutdoorTextSecondary, RoundedCornerShape(14.dp))
-                        .clickable { onDismiss() }
-                        .padding(horizontal = 18.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Back",
-                        color = OutdoorTextPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
             }
+        }
+    }
+}
+
+@Composable
+private fun BreadcrumbBackPill(
+    label: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(AmoledBlack)
+            .border(1.2.dp, OutdoorTextSecondary, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.5.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = label,
+            color = OutdoorTextPrimary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun DrillDownFolderRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(DarkSurface)
+            .border(1.2.dp, TrailBlue.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = OutdoorTextPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                color = OutdoorTextSecondary,
+                fontSize = 8.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(AmoledBlack)
+                .border(1.2.dp, TrailBlue, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "›",
+                color = TrailBlue,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun OfflinePresetRow(
+    preset: OfflinePresetRegion,
+    subtitleOverride: String?,
+    isSaved: Boolean,
+    isDownloading: Boolean,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(DarkSurface)
+            .border(1.2.dp, accentColor.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+            .clickable(enabled = isSaved || !isDownloading) { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (isSaved) "✓ ${preset.title}" else preset.title,
+                color = OutdoorTextPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitleOverride ?: preset.subtitle,
+                color = OutdoorTextSecondary,
+                fontSize = 8.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(AmoledBlack)
+                .border(1.2.dp, accentColor, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (isSaved) "✓" else "⬇",
+                color = accentColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

@@ -1,0 +1,761 @@
+{
+  "version": 3,
+  "updatedAt": "2026-11-16",
+  "countries": [
+    {
+      "countryCode": "CZ",
+      "countryName": "Czechia – Regions",
+      "geofabrik": "europe/czech-republic",
+      "regions": [
+        {
+          "id": "kraj_vysocina",
+          "title": "Vysočina Region",
+          "subtitle": "Jihlava, Třebíč, Žďár n. S., Havl. Brod",
+          "centerLat": 49.45,
+          "centerLon": 15.68,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.75,
+          "packagePath": "maps/cz/kraj_vysocina"
+        },
+        {
+          "id": "jihocesky_kraj",
+          "title": "South Bohemia",
+          "subtitle": "Č. Budějovice, Tábor, Č. Krumlov, Písek",
+          "centerLat": 49.05,
+          "centerLon": 14.48,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 0.90,
+          "packagePath": "maps/cz/jihocesky_kraj"
+        },
+        {
+          "id": "zlinsky_kraj",
+          "title": "Zlín Region",
+          "subtitle": "Zlín, Vsetín, Uh. Hradiště, Kroměříž",
+          "centerLat": 49.22,
+          "centerLon": 17.72,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.70,
+          "packagePath": "maps/cz/zlinsky_kraj"
+        },
+        {
+          "id": "olomoucky_kraj",
+          "title": "Olomouc Region",
+          "subtitle": "Olomouc, Přerov, Prostějov, Šumperk",
+          "centerLat": 49.72,
+          "centerLon": 17.18,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 0.75,
+          "packagePath": "maps/cz/olomoucky_kraj"
+        },
+        {
+          "id": "moravskoslezsky_kraj",
+          "title": "Moravian-Silesian",
+          "subtitle": "Ostrava, Opava, Frýdek-Místek, Bruntál",
+          "centerLat": 49.78,
+          "centerLon": 18.12,
+          "latSpanDeg": 0.60,
+          "lonSpanDeg": 0.85,
+          "packagePath": "maps/cz/moravskoslezsky_kraj"
+        },
+        {
+          "id": "pardubicky_kraj",
+          "title": "Pardubice Region",
+          "subtitle": "Pardubice, Chrudim, Svitavy, Ústí n. O.",
+          "centerLat": 49.92,
+          "centerLon": 16.15,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.80,
+          "packagePath": "maps/cz/pardubicky_kraj"
+        },
+        {
+          "id": "kralovehradecky_kraj",
+          "title": "Hradec Králové Region",
+          "subtitle": "Hradec Králové, Trutnov, Náchod, Jičín",
+          "centerLat": 50.38,
+          "centerLon": 15.82,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.75,
+          "packagePath": "maps/cz/kralovehradecky_kraj"
+        },
+        {
+          "id": "stredocesky_kraj",
+          "title": "Central Bohemia",
+          "subtitle": "Beroun, Kladno, M. Boleslav, Příbram",
+          "centerLat": 49.98,
+          "centerLon": 14.55,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 0.95,
+          "packagePath": "maps/cz/stredocesky_kraj"
+        },
+        {
+          "id": "praha",
+          "title": "Prague & Surroundings",
+          "subtitle": "Prague, Karlštejn, Bohemian Karst",
+          "centerLat": 50.08,
+          "centerLon": 14.43,
+          "latSpanDeg": 0.30,
+          "lonSpanDeg": 0.42,
+          "packagePath": "maps/cz/praha"
+        },
+        {
+          "id": "plzensky_kraj",
+          "title": "Plzeň Region",
+          "subtitle": "Plzeň, Klatovy, Domažlice, Tachov",
+          "centerLat": 49.58,
+          "centerLon": 13.28,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 0.80,
+          "packagePath": "maps/cz/plzensky_kraj"
+        },
+        {
+          "id": "liberecky_kraj",
+          "title": "Liberec Region",
+          "subtitle": "Liberec, Jablonec n. N., Česká Lípa, Semily",
+          "centerLat": 50.72,
+          "centerLon": 15.05,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.65,
+          "packagePath": "maps/cz/liberecky_kraj"
+        },
+        {
+          "id": "ustecky_kraj",
+          "title": "Ústí nad Labem Region",
+          "subtitle": "Ústí n. L., Děčín, Most, Teplice, Chomutov",
+          "centerLat": 50.55,
+          "centerLon": 13.85,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.85,
+          "packagePath": "maps/cz/ustecky_kraj"
+        },
+        {
+          "id": "karlovarsky_kraj",
+          "title": "Karlovy Vary Region",
+          "subtitle": "Karlovy Vary, Cheb, Sokolov, Mar. Lázně",
+          "centerLat": 50.18,
+          "centerLon": 12.75,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.65,
+          "packagePath": "maps/cz/karlovarsky_kraj"
+        }
+      ]
+    },
+    {
+      "countryCode": "SK",
+      "countryName": "Slovakia – Regions",
+      "geofabrik": "europe/slovakia",
+      "regions": [
+        {
+          "id": "sk_zilinsky_kraj",
+          "title": "Žilina Region (Tatras & Fatra)",
+          "subtitle": "Žilina, Liptovský Mikuláš, Martin, Roháče",
+          "centerLat": 49.15,
+          "centerLon": 19.35,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.85,
+          "packagePath": "maps/sk/sk_zilinsky_kraj"
+        },
+        {
+          "id": "sk_presovsky_kraj",
+          "title": "Prešov Region (High Tatras)",
+          "subtitle": "Poprad, High Tatras, Prešov, Pieniny",
+          "centerLat": 49.12,
+          "centerLon": 20.55,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.85,
+          "packagePath": "maps/sk/sk_presovsky_kraj"
+        },
+        {
+          "id": "sk_trenciansky_kraj",
+          "title": "Trenčín Region",
+          "subtitle": "Trenčín, Považská Bystrica, White Carpathians",
+          "centerLat": 48.90,
+          "centerLon": 18.18,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.70,
+          "packagePath": "maps/sk/sk_trenciansky_kraj"
+        },
+        {
+          "id": "sk_bratislavsky_kraj",
+          "title": "Bratislava Region",
+          "subtitle": "Bratislava, Pezinok, Small Carpathians",
+          "centerLat": 48.30,
+          "centerLon": 17.20,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.60,
+          "packagePath": "maps/sk/sk_bratislavsky_kraj"
+        }
+      ]
+    },
+    {
+      "countryCode": "AT",
+      "countryName": "Austria – Regions",
+      "geofabrik": "europe/austria",
+      "regions": [
+        {
+          "id": "at_niederoesterreich",
+          "title": "Lower Austria",
+          "subtitle": "Wachau, Schneeberg, Rax, Thayatal",
+          "centerLat": 48.20,
+          "centerLon": 15.75,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 0.90,
+          "packagePath": "maps/at/at_niederoesterreich"
+        },
+        {
+          "id": "at_steiermark",
+          "title": "Styria (Steiermark)",
+          "subtitle": "Dachstein, Schladming, Hochschwab",
+          "centerLat": 47.45,
+          "centerLon": 14.55,
+          "latSpanDeg": 0.60,
+          "lonSpanDeg": 0.85,
+          "packagePath": "maps/at/at_steiermark"
+        },
+        {
+          "id": "at_salzburg_tirol",
+          "title": "Salzburg & Tyrol (Alps)",
+          "subtitle": "Zell am See, Hohe Tauern, Innsbruck",
+          "centerLat": 47.28,
+          "centerLon": 12.55,
+          "latSpanDeg": 0.60,
+          "lonSpanDeg": 0.90,
+          "packagePath": "maps/at/at_salzburg_tirol"
+        }
+      ]
+    },
+    {
+      "countryCode": "CH",
+      "countryName": "Switzerland – Alps",
+      "geofabrik": "europe/switzerland",
+      "regions": [
+        {
+          "id": "ch_valais",
+          "title": "Valais (Zermatt & Matterhorn)",
+          "subtitle": "Zermatt, Verbier, Saas-Fee, Monte Rosa",
+          "centerLat": 46.12,
+          "centerLon": 7.75,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.80,
+          "packagePath": "maps/ch/ch_valais"
+        },
+        {
+          "id": "ch_bernese_oberland",
+          "title": "Bernese Oberland (Jungfrau)",
+          "subtitle": "Interlaken, Grindelwald, Lauterbrunnen, Eiger",
+          "centerLat": 46.62,
+          "centerLon": 7.95,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.70,
+          "packagePath": "maps/ch/ch_bernese_oberland"
+        },
+        {
+          "id": "ch_graubuenden",
+          "title": "Graubünden (Engadin & Davos)",
+          "subtitle": "St. Moritz, Davos, Pontresina, Bernina",
+          "centerLat": 46.62,
+          "centerLon": 9.85,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.85,
+          "packagePath": "maps/ch/ch_graubuenden"
+        }
+      ]
+    },
+    {
+      "countryCode": "IT",
+      "countryName": "Italy – Dolomites & Alps",
+      "regions": [
+        {
+          "id": "it_dolomites",
+          "title": "Dolomites (South Tyrol)",
+          "subtitle": "Cortina d'Ampezzo, Ortisei, Tre Cime, Sella",
+          "centerLat": 46.58,
+          "centerLon": 11.95,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.85,
+          "geofabrik": "europe/italy/nord-est",
+          "packagePath": "maps/it/it_dolomites"
+        },
+        {
+          "id": "it_garda_brenta",
+          "title": "Lake Garda & Brenta Dolomites",
+          "subtitle": "Riva del Garda, Madonna di Campiglio, Adamello",
+          "centerLat": 46.02,
+          "centerLon": 10.82,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.65,
+          "geofabrik": "europe/italy/nord-est",
+          "packagePath": "maps/it/it_garda_brenta"
+        },
+        {
+          "id": "it_aosta",
+          "title": "Aosta Valley (Gran Paradiso)",
+          "subtitle": "Courmayeur, Cogne, Cervinia, Monte Rosa",
+          "centerLat": 45.72,
+          "centerLon": 7.38,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.75,
+          "geofabrik": "europe/italy/nord-ovest",
+          "packagePath": "maps/it/it_aosta"
+        }
+      ]
+    },
+    {
+      "countryCode": "FR",
+      "countryName": "France – Alps, Pyrenees & Corsica",
+      "regions": [
+        {
+          "id": "fr_chamonix",
+          "title": "Chamonix & Mont Blanc",
+          "subtitle": "Chamonix, Tour du Mont Blanc, Aiguille du Midi",
+          "centerLat": 45.92,
+          "centerLon": 6.86,
+          "latSpanDeg": 0.40,
+          "lonSpanDeg": 0.65,
+          "geofabrik": "europe/france/rhone-alpes",
+          "packagePath": "maps/fr/fr_chamonix"
+        },
+        {
+          "id": "fr_pyrenees",
+          "title": "French Pyrenees (Gavarnie)",
+          "subtitle": "Cirque de Gavarnie, Cauterets, Vignemale",
+          "centerLat": 42.82,
+          "centerLon": -0.05,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.80,
+          "geofabrik": "europe/france/midi-pyrenees",
+          "packagePath": "maps/fr/fr_pyrenees"
+        },
+        {
+          "id": "fr_corsica_gr20",
+          "title": "Corsica (GR20 Mountain Spine)",
+          "subtitle": "Calenzana, Vizzavona, Monte Cinto, Bavella",
+          "centerLat": 42.20,
+          "centerLon": 9.05,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 0.55,
+          "geofabrik": "europe/france/corse",
+          "packagePath": "maps/fr/fr_corsica_gr20"
+        }
+      ]
+    },
+    {
+      "countryCode": "DE",
+      "countryName": "Germany – Alps & Uplands",
+      "regions": [
+        {
+          "id": "de_bavarian_alps",
+          "title": "Bavarian Alps (Zugspitze)",
+          "subtitle": "Garmisch-Partenkirchen, Mittenwald, Tegernsee",
+          "centerLat": 47.52,
+          "centerLon": 11.20,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.80,
+          "geofabrik": "europe/germany/bayern",
+          "packagePath": "maps/de/de_bavarian_alps"
+        },
+        {
+          "id": "de_berchtesgaden",
+          "title": "Berchtesgaden Alps (Königssee)",
+          "subtitle": "Watzmann, Königssee, Jenner, Bad Reichenhall",
+          "centerLat": 47.56,
+          "centerLon": 12.95,
+          "latSpanDeg": 0.35,
+          "lonSpanDeg": 0.50,
+          "geofabrik": "europe/germany/bayern",
+          "packagePath": "maps/de/de_berchtesgaden"
+        },
+        {
+          "id": "de_black_forest",
+          "title": "Black Forest (Schwarzwald)",
+          "subtitle": "Feldberg, Titisee, Freiburg, Schluchsee",
+          "centerLat": 47.92,
+          "centerLon": 8.05,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.60,
+          "geofabrik": "europe/germany/baden-wuerttemberg",
+          "packagePath": "maps/de/de_black_forest"
+        },
+        {
+          "id": "de_saxon_switzerland",
+          "title": "Saxon Switzerland (Elbe Sandstones)",
+          "subtitle": "Bastei, Schrammsteine, Bad Schandau",
+          "centerLat": 50.92,
+          "centerLon": 14.18,
+          "latSpanDeg": 0.28,
+          "lonSpanDeg": 0.42,
+          "geofabrik": "europe/germany/sachsen",
+          "packagePath": "maps/de/de_saxon_switzerland"
+        }
+      ]
+    },
+    {
+      "countryCode": "PL",
+      "countryName": "Poland – Mountains",
+      "regions": [
+        {
+          "id": "pl_tatras",
+          "title": "Polish Tatras (Zakopane)",
+          "subtitle": "Zakopane, Kasprowy Wierch, Morskie Oko, Rysy",
+          "centerLat": 49.26,
+          "centerLon": 19.95,
+          "latSpanDeg": 0.30,
+          "lonSpanDeg": 0.50,
+          "geofabrik": "europe/poland/malopolskie",
+          "packagePath": "maps/pl/pl_tatras"
+        },
+        {
+          "id": "pl_karkonosze",
+          "title": "Karkonosze & Sudetes",
+          "subtitle": "Karpacz, Szklarska Poręba, Śnieżka",
+          "centerLat": 50.78,
+          "centerLon": 15.72,
+          "latSpanDeg": 0.35,
+          "lonSpanDeg": 0.65,
+          "geofabrik": "europe/poland/dolnoslaskie",
+          "packagePath": "maps/pl/pl_karkonosze"
+        }
+      ]
+    },
+    {
+      "countryCode": "SI",
+      "countryName": "Slovenia – Julian Alps",
+      "geofabrik": "europe/slovenia",
+      "regions": [
+        {
+          "id": "si_julian_alps",
+          "title": "Julian Alps (Triglav & Bled)",
+          "subtitle": "Triglav, Lake Bled, Bohinj, Kranjska Gora",
+          "centerLat": 46.36,
+          "centerLon": 13.85,
+          "latSpanDeg": 0.40,
+          "lonSpanDeg": 0.65,
+          "packagePath": "maps/si/si_julian_alps"
+        }
+      ]
+    },
+    {
+      "countryCode": "ES",
+      "countryName": "Spain – Mountains",
+      "regions": [
+        {
+          "id": "es_pyrenees_ordesa",
+          "title": "Spanish Pyrenees (Ordesa & Aneto)",
+          "subtitle": "Ordesa y Monte Perdido, Benasque, Torla",
+          "centerLat": 42.65,
+          "centerLon": 0.25,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.80,
+          "geofabrik": "europe/spain/aragon",
+          "packagePath": "maps/es/es_pyrenees_ordesa"
+        },
+        {
+          "id": "es_picos_de_europa",
+          "title": "Picos de Europa",
+          "subtitle": "Cares Gorge, Covadonga, Fuente Dé, Naranjo",
+          "centerLat": 43.18,
+          "centerLon": -4.85,
+          "latSpanDeg": 0.35,
+          "lonSpanDeg": 0.55,
+          "geofabrik": "europe/spain/asturias",
+          "packagePath": "maps/es/es_picos_de_europa"
+        }
+      ]
+    },
+    {
+      "countryCode": "NO",
+      "countryName": "Norway & Sweden – Nordics",
+      "regions": [
+        {
+          "id": "no_jotunheimen",
+          "title": "Jotunheimen & Sognefjord",
+          "subtitle": "Galdhøpiggen, Besseggen, Flam, Aurland",
+          "centerLat": 61.45,
+          "centerLon": 8.15,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 1.15,
+          "geofabrik": "europe/norway",
+          "packagePath": "maps/no/no_jotunheimen"
+        },
+        {
+          "id": "no_lofoten",
+          "title": "Lofoten Islands",
+          "subtitle": "Reinebringen, Svolvær, Reine, Henningsvær",
+          "centerLat": 68.15,
+          "centerLon": 13.85,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 1.25,
+          "geofabrik": "europe/norway",
+          "packagePath": "maps/no/no_lofoten"
+        },
+        {
+          "id": "se_kungsleden_north",
+          "title": "Kungsleden (Abisko & Kebnekaise)",
+          "subtitle": "Abisko National Park, Kebnekaise, Nikkaluokta",
+          "centerLat": 68.05,
+          "centerLon": 18.55,
+          "latSpanDeg": 0.60,
+          "lonSpanDeg": 1.15,
+          "geofabrik": "europe/sweden",
+          "packagePath": "maps/se/se_kungsleden_north"
+        }
+      ]
+    },
+    {
+      "countryCode": "GB",
+      "countryName": "United Kingdom – Peaks",
+      "regions": [
+        {
+          "id": "gb_scottish_highlands",
+          "title": "Scottish Highlands (Ben Nevis)",
+          "subtitle": "Fort William, Ben Nevis, Glen Coe, West Highland Way",
+          "centerLat": 56.78,
+          "centerLon": -5.00,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.90,
+          "geofabrik": "europe/united-kingdom/scotland",
+          "packagePath": "maps/gb/gb_scottish_highlands"
+        },
+        {
+          "id": "gb_lake_district",
+          "title": "Lake District (Scafell Pike)",
+          "subtitle": "Keswick, Windermere, Helvellyn, Ambleside",
+          "centerLat": 54.45,
+          "centerLon": -3.12,
+          "latSpanDeg": 0.40,
+          "lonSpanDeg": 0.65,
+          "geofabrik": "europe/united-kingdom/england",
+          "packagePath": "maps/gb/gb_lake_district"
+        },
+        {
+          "id": "gb_snowdonia",
+          "title": "Snowdonia / Eryri (Wales)",
+          "subtitle": "Yr Wyddfa (Snowdon), Llanberis, Betws-y-Coed",
+          "centerLat": 53.05,
+          "centerLon": -3.95,
+          "latSpanDeg": 0.40,
+          "lonSpanDeg": 0.60,
+          "geofabrik": "europe/united-kingdom/wales",
+          "packagePath": "maps/gb/gb_snowdonia"
+        }
+      ]
+    },
+    {
+      "countryCode": "RO",
+      "countryName": "Romania – Carpathians",
+      "geofabrik": "europe/romania",
+      "regions": [
+        {
+          "id": "ro_fagaras",
+          "title": "Făgăraș & Bucegi Mountains",
+          "subtitle": "Moldoveanu, Bâlea Lake, Sinaia, Brașov",
+          "centerLat": 45.55,
+          "centerLon": 24.90,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.95,
+          "packagePath": "maps/ro/ro_fagaras"
+        }
+      ]
+    },
+    {
+      "countryCode": "US",
+      "countryName": "USA – National Parks",
+      "regions": [
+        {
+          "id": "us_yosemite",
+          "title": "Yosemite & High Sierra (CA)",
+          "subtitle": "Yosemite Valley, Half Dome, Tuolumne Meadows",
+          "centerLat": 37.75,
+          "centerLon": -119.55,
+          "latSpanDeg": 0.60,
+          "lonSpanDeg": 0.80,
+          "geofabrik": "north-america/us/california",
+          "packagePath": "maps/us/us_yosemite"
+        },
+        {
+          "id": "us_yellowstone_teton",
+          "title": "Yellowstone & Grand Teton (WY)",
+          "subtitle": "Old Faithful, Teton Crest Trail, Jackson Hole",
+          "centerLat": 44.15,
+          "centerLon": -110.55,
+          "latSpanDeg": 0.70,
+          "lonSpanDeg": 0.85,
+          "geofabrik": "north-america/us/wyoming",
+          "packagePath": "maps/us/us_yellowstone_teton"
+        },
+        {
+          "id": "us_rocky_mountain",
+          "title": "Rocky Mountain NP (CO)",
+          "subtitle": "Estes Park, Longs Peak, Trail Ridge, Bear Lake",
+          "centerLat": 40.35,
+          "centerLon": -105.70,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.70,
+          "geofabrik": "north-america/us/colorado",
+          "packagePath": "maps/us/us_rocky_mountain"
+        },
+        {
+          "id": "us_zion_bryce",
+          "title": "Zion & Bryce Canyon (UT)",
+          "subtitle": "Zion Canyon, Angels Landing, Bryce Amphitheater",
+          "centerLat": 37.45,
+          "centerLon": -112.70,
+          "latSpanDeg": 0.60,
+          "lonSpanDeg": 0.90,
+          "geofabrik": "north-america/us/utah",
+          "packagePath": "maps/us/us_zion_bryce"
+        },
+        {
+          "id": "us_mount_rainier",
+          "title": "Mount Rainier & Cascades (WA)",
+          "subtitle": "Wonderland Trail, Paradise, Sunrise",
+          "centerLat": 46.85,
+          "centerLon": -121.75,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.75,
+          "geofabrik": "north-america/us/washington",
+          "packagePath": "maps/us/us_mount_rainier"
+        },
+        {
+          "id": "us_grand_canyon",
+          "title": "Grand Canyon (AZ)",
+          "subtitle": "South Rim, Bright Angel, North Rim, Rim-to-Rim",
+          "centerLat": 36.15,
+          "centerLon": -112.15,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.80,
+          "geofabrik": "north-america/us/arizona",
+          "packagePath": "maps/us/us_grand_canyon"
+        },
+        {
+          "id": "us_glacier_np",
+          "title": "Glacier National Park (MT)",
+          "subtitle": "Going-to-the-Sun Road, Logan Pass, Many Glacier",
+          "centerLat": 48.68,
+          "centerLon": -113.80,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.80,
+          "geofabrik": "north-america/us/montana",
+          "packagePath": "maps/us/us_glacier_np"
+        },
+        {
+          "id": "us_smoky_mountains",
+          "title": "Great Smoky Mountains (NC/TN)",
+          "subtitle": "Clingmans Dome, Gatlinburg, Appalachian Trail",
+          "centerLat": 35.60,
+          "centerLon": -83.50,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.75,
+          "geofabrik": [
+            "north-america/us/north-carolina",
+            "north-america/us/tennessee"
+          ],
+          "packagePath": "maps/us/us_smoky_mountains"
+        }
+      ]
+    },
+    {
+      "countryCode": "CA",
+      "countryName": "Canada – Rockies & Coast",
+      "regions": [
+        {
+          "id": "ca_banff_lake_louise",
+          "title": "Banff & Lake Louise (AB)",
+          "subtitle": "Banff, Lake Louise, Moraine Lake, Sunshine",
+          "centerLat": 51.35,
+          "centerLon": -116.00,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.85,
+          "geofabrik": "north-america/canada/alberta",
+          "packagePath": "maps/ca/ca_banff_lake_louise"
+        },
+        {
+          "id": "ca_whistler_garibaldi",
+          "title": "Whistler & Garibaldi (BC)",
+          "subtitle": "Whistler, Garibaldi Lake, Squamish, Blackcomb",
+          "centerLat": 50.05,
+          "centerLon": -122.95,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.80,
+          "geofabrik": "north-america/canada/british-columbia",
+          "packagePath": "maps/ca/ca_whistler_garibaldi"
+        }
+      ]
+    },
+    {
+      "countryCode": "AU",
+      "countryName": "Australia – Bush & Mountains",
+      "regions": [
+        {
+          "id": "au_blue_mountains",
+          "title": "Blue Mountains (NSW)",
+          "subtitle": "Katoomba, Three Sisters, Grose Valley, Six Foot Track",
+          "centerLat": -33.72,
+          "centerLon": 150.32,
+          "latSpanDeg": 0.50,
+          "lonSpanDeg": 0.70,
+          "geofabrik": "australia-oceania/australia/new-south-wales",
+          "packagePath": "maps/au/au_blue_mountains"
+        },
+        {
+          "id": "au_snowy_mountains",
+          "title": "Snowy Mountains & Kosciuszko",
+          "subtitle": "Thredbo, Mount Kosciuszko, Jindabyne, Main Range",
+          "centerLat": -36.45,
+          "centerLon": 148.28,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.75,
+          "geofabrik": "australia-oceania/australia/new-south-wales",
+          "packagePath": "maps/au/au_snowy_mountains"
+        },
+        {
+          "id": "au_tasmania_overland",
+          "title": "Tasmania (Overland & Cradle Mtn)",
+          "subtitle": "Cradle Mountain, Lake St Clair, Walls of Jerusalem",
+          "centerLat": -41.80,
+          "centerLon": 145.98,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.75,
+          "geofabrik": "australia-oceania/australia/tasmania",
+          "packagePath": "maps/au/au_tasmania_overland"
+        }
+      ]
+    },
+    {
+      "countryCode": "NZ",
+      "countryName": "New Zealand – Great Walks",
+      "geofabrik": "australia-oceania/new-zealand",
+      "regions": [
+        {
+          "id": "nz_fiordland_milford",
+          "title": "Fiordland (Milford & Routeburn)",
+          "subtitle": "Milford Track, Routeburn, Te Anau, Kepler Track",
+          "centerLat": -44.85,
+          "centerLon": 167.92,
+          "latSpanDeg": 0.60,
+          "lonSpanDeg": 0.85,
+          "packagePath": "maps/nz/nz_fiordland_milford"
+        },
+        {
+          "id": "nz_aoraki_wanaka",
+          "title": "Aoraki / Mount Cook & Wanaka",
+          "subtitle": "Mount Cook Village, Hooker Valley, Roy's Peak",
+          "centerLat": -44.05,
+          "centerLon": 169.85,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 0.90,
+          "packagePath": "maps/nz/nz_aoraki_wanaka"
+        },
+        {
+          "id": "nz_tongariro",
+          "title": "Tongariro Alpine Crossing",
+          "subtitle": "Mount Tongariro, Ngauruhoe, Ruapehu, Northern Circuit",
+          "centerLat": -39.18,
+          "centerLon": 175.60,
+          "latSpanDeg": 0.45,
+          "lonSpanDeg": 0.60,
+          "packagePath": "maps/nz/nz_tongariro"
+        }
+      ]
+    }
+  ]
+}

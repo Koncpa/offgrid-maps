@@ -92,4 +92,15 @@ class StyleBuilderTest {
         val empty = """{"type":"FeatureCollection","features":[]}"""
         assertEquals("", OfflineRegionHelper.extractFeatureArray(empty))
     }
+
+    @Test
+    fun resolveContinent_groupsEuropeNorthAmericaAndOceaniaCleanly() {
+        assertEquals("Europe", OfflineRegionHelper.resolveContinent("CZ"))
+        assertEquals("Europe", OfflineRegionHelper.resolveContinent("CH"))
+        assertEquals("Europe", OfflineRegionHelper.resolveContinent("NO"))
+        assertEquals("North America", OfflineRegionHelper.resolveContinent("US"))
+        assertEquals("North America", OfflineRegionHelper.resolveContinent("CA"))
+        assertEquals("Australia & NZ", OfflineRegionHelper.resolveContinent("AU"))
+        assertEquals("Australia & NZ", OfflineRegionHelper.resolveContinent("NZ"))
+    }
 }
