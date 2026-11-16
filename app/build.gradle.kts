@@ -1,8 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+val mapsGithubRepo: String = localProps.getProperty("MAPS_GITHUB_REPO", "Koncpa/offgrid-maps-data")
+val mapsGithubToken: String = localProps.getProperty("MAPS_GITHUB_TOKEN", "")
 
 android {
     namespace = "cz.offgrid.maps"
@@ -17,6 +28,8 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        buildConfigField("String", "MAPS_GITHUB_REPO", "\"$mapsGithubRepo\"")
+        buildConfigField("String", "MAPS_GITHUB_TOKEN", "\"$mapsGithubToken\"")
     }
 
     buildTypes {
@@ -42,6 +55,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

@@ -294,6 +294,7 @@ fun MapScreen(
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
                     OfflineRegionHelper.refreshSavedRegions(context)
+                    OfflineRegionHelper.syncCatalogFromGithub(context)
                     showGpxPicker = true
                 }
                 .padding(horizontal = 9.dp, vertical = 3.dp),
@@ -945,24 +946,27 @@ private fun GpxRoutePickerOverlay(
                     }
                 }
 
-                // 2) Katalog českých pohoří a oblastí ke stažení jedním klepnutím
+                // 2) Katalog zemí a jejich krajů/oblastí načtený z GitHub repozitáře (Koncpa/offgrid-maps-data)
+                val catalogRegions by OfflineRegionHelper.catalogRegions.collectAsState()
                 val savedTitles = remember(savedRegions) {
                     savedRegions.map { it.displayName }.toSet()
                 }
-                val availablePresets = remember(savedTitles) {
-                    OfflineRegionHelper.presetRegions.filter { it.title !in savedTitles }
+                val availableByCountry = remember(savedTitles, catalogRegions) {
+                    catalogRegions
+                        .filter { it.title !in savedTitles }
+                        .groupBy { it.countryName }
                 }
 
-                if (availablePresets.isNotEmpty()) {
+                availableByCountry.forEach { (countryHeader, regions) ->
                     Text(
-                        text = "ČESKÁ REPUBLIKA – KRAJE",
+                        text = countryHeader.uppercase(),
                         color = TrailBlue,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 6.dp)
                     )
 
-                    availablePresets.forEach { preset ->
+                    regions.forEach { preset ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

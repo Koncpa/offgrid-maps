@@ -1,18 +1,24 @@
 package cz.offgrid.maps.data.map
 
 import android.content.Context
+import cz.offgrid.maps.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.offline.*
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
+import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import java.util.zip.GZIPInputStream
 import kotlin.concurrent.thread
 import kotlin.math.hypot
 
@@ -29,7 +35,8 @@ data class SavedOfflineRegion(
 )
 
 /**
- * Předdefinovaná turistická oblast / pohoří v katalogu pro rychlé stažení jedním klepnutím.
+ * Předdefinovaná oblast / kraj v katalogu (`catalog.json` v soukromém GitHub repozitáři)
+ * pro rychlé stažení jedním klepnutím.
  */
 data class OfflinePresetRegion(
     val id: String,
@@ -37,17 +44,22 @@ data class OfflinePresetRegion(
     val subtitle: String,
     val centerLat: Double,
     val centerLon: Double,
-    val latSpanDeg: Double = 0.26,
-    val lonSpanDeg: Double = 0.36
+    val latSpanDeg: Double = 0.50,
+    val lonSpanDeg: Double = 0.75,
+    val countryCode: String = "CZ",
+    val countryName: String = "Česká republika – Kraje",
+    val packagePath: String = "maps/cz/$id"
 )
 
 /**
- * Správce offline mapových regionů (MapLibre OfflineManager) s lokálním HTTP loopbackem,
- * seznamem stažených oblastí a katalogem českých pohoří a krajů.
+ * Správce offline mapových regionů napojený na soukromý GitHub repozitář (`Koncpa/offgrid-maps-data`),
+ * odkud dynamicky načítá `catalog.json` (ČR, Slovensko, Rakousko a další země) a předpřipravené
+ * komprimované mapové podklady.
  */
 object OfflineRegionHelper {
 
     private const val REGION_NAME_JMK = "Jihomoravsky_kraj_z14_v3"
+    private const val CACHED_CATALOG_FILE = "cached_github_catalog.json"
 
     private val _statusText = MutableStateFlow("JMK")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
@@ -62,8 +74,7 @@ object OfflineRegionHelper {
     val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
 
     /**
-     * Katalog krajů České republiky podle struktury Mapy.com pro rychlé stažení jedním klepnutím
-     * bez nutnosti ručního posouvání mapy na malém displeji hodinek.
+     * Výchozí vestavěný katalog krajů ČR (k dispozici i zcela offline před prvním načtením z GitHubu).
      */
     val presetRegions: List<OfflinePresetRegion> = listOf(
         OfflinePresetRegion("kraj_vysocina", "Kraj Vysočina", "Jihlava, Třebíč, Žďár n. S., Havl. Brod", 49.45, 15.68, 0.55, 0.75),
@@ -80,6 +91,9 @@ object OfflineRegionHelper {
         OfflinePresetRegion("ustecky_kraj", "Ústecký kraj", "Ústí n. L., Děčín, Most, Teplice, Chomutov", 50.55, 13.85, 0.55, 0.85),
         OfflinePresetRegion("karlovarsky_kraj", "Karlovarský kraj", "Karlovy Vary, Cheb, Sokolov, Mar. Lázně", 50.18, 12.75, 0.45, 0.65)
     )
+
+    private val _catalogRegions = MutableStateFlow<List<OfflinePresetRegion>>(presetRegions)
+    val catalogRegions: StateFlow<List<OfflinePresetRegion>> = _catalogRegions.asStateFlow()
 
     private var isInitialized = false
     private var isDownloading = false
@@ -353,12 +367,119 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Stáhne vybranou oblast z katalogu ČR ([preset]) jedním klepnutím včetně 10m/50m vrstevnic.
+     * Načte ze soukromého GitHub repozitáře (`BuildConfig.MAPS_GITHUB_REPO`) aktuální `catalog.json`
+     * se seznamem všech zemí a jejich krajů/oblastí (nebo použije lokální cache, pokud není internet).
+     */
+    fun syncCatalogFromGithub(context: Context) {
+        val cacheFile = File(context.filesDir, CACHED_CATALOG_FILE)
+        if (cacheFile.exists() && cacheFile.length() > 10L) {
+            parseCatalogJson(cacheFile.readText())?.let { cachedList ->
+                if (cachedList.isNotEmpty()) {
+                    _catalogRegions.value = cachedList
+                }
+            }
+        }
+
+        thread(name = "OffGridCatalogSync", isDaemon = true) {
+            try {
+                val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
+                val url = URL("https://raw.githubusercontent.com/$repo/main/catalog.json")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    val token = BuildConfig.MAPS_GITHUB_TOKEN
+                    if (token.isNotBlank()) {
+                        setRequestProperty("Authorization", "Bearer $token")
+                    }
+                }
+                if (conn.responseCode in 200..299) {
+                    val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
+                    val parsed = parseCatalogJson(jsonText)
+                    if (!parsed.isNullOrEmpty()) {
+                        cacheFile.writeText(jsonText)
+                        _catalogRegions.value = parsed
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    internal fun parseCatalogJson(jsonText: String): List<OfflinePresetRegion>? {
+        return try {
+            val root = JSONObject(jsonText)
+            val countries = root.optJSONArray("countries") ?: return null
+            val result = mutableListOf<OfflinePresetRegion>()
+            for (i in 0 until countries.length()) {
+                val countryObj = countries.getJSONObject(i)
+                val countryCode = countryObj.optString("countryCode", "CZ")
+                val countryName = countryObj.optString("countryName", "Česká republika – Kraje")
+                val regions = countryObj.optJSONArray("regions") ?: continue
+                for (j in 0 until regions.length()) {
+                    val reg = regions.getJSONObject(j)
+                    val id = reg.getString("id")
+                    result.add(
+                        OfflinePresetRegion(
+                            id = id,
+                            title = reg.getString("title"),
+                            subtitle = reg.optString("subtitle", ""),
+                            centerLat = reg.getDouble("centerLat"),
+                            centerLon = reg.getDouble("centerLon"),
+                            latSpanDeg = reg.optDouble("latSpanDeg", 0.50),
+                            lonSpanDeg = reg.optDouble("lonSpanDeg", 0.75),
+                            countryCode = countryCode,
+                            countryName = countryName,
+                            packagePath = reg.optString("packagePath", "maps/${countryCode.lowercase()}/$id")
+                        )
+                    )
+                }
+            }
+            result
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Stáhne vybranou oblast z katalogu ([preset]) jedním klepnutím včetně předpřipravených
+     * podkladů ze soukromého GitHub repozitáře (`Koncpa/offgrid-maps-data`) a 10m/50m vrstevnic.
      */
     fun downloadPresetRegion(
         context: Context,
         preset: OfflinePresetRegion
     ) {
+        // 1. Stáhneme předpřipravené komprimované podklady regionu ze soukromého GitHub repozitáře
+        thread(name = "OffGridGithubPkg_${preset.id}", isDaemon = true) {
+            try {
+                val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
+                val token = BuildConfig.MAPS_GITHUB_TOKEN
+                val pkgDir = File(context.filesDir, "github_regions/${preset.id}").apply {
+                    if (!exists()) mkdirs()
+                }
+                for (fileName in listOf("kct_trails.geojson.gz", "contours.geojson.gz")) {
+                    val url = URL("https://raw.githubusercontent.com/$repo/main/${preset.packagePath}/$fileName")
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 8000
+                        readTimeout = 15000
+                        if (token.isNotBlank()) {
+                            setRequestProperty("Authorization", "Bearer $token")
+                        }
+                    }
+                    if (conn.responseCode in 200..299) {
+                        val outName = fileName.removeSuffix(".gz")
+                        val outFile = File(pkgDir, outName)
+                        GZIPInputStream(conn.inputStream).use { gis ->
+                            outFile.outputStream().use { fos ->
+                                gis.copyTo(fos)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        // 2. Stáhneme vektorovou pyramidu dlaždic a vrstevnice pro daný kraj/region
         downloadCustomBounds(
             context = context,
             centerLat = preset.centerLat,
@@ -366,26 +487,6 @@ object OfflineRegionHelper {
             halfLatSpan = preset.latSpanDeg / 2.0,
             halfLonSpan = preset.lonSpanDeg / 2.0,
             explicitTitle = preset.title
-        )
-    }
-
-    /**
-     * Stáhne do offline paměti hodinek ~30×30 km oblast kolem aktuálního středu mapy (až do detailu Zoom 14)
-     * a zároveň vygeneruje pro danou oblast offline vrstevnice po 10 m / 50 m.
-     */
-    fun downloadAreaAround(
-        context: Context,
-        centerLat: Double,
-        centerLon: Double
-    ) {
-        val humanTitle = resolveCzechRegionTitle(centerLat, centerLon)
-        downloadCustomBounds(
-            context = context,
-            centerLat = centerLat,
-            centerLon = centerLon,
-            halfLatSpan = 0.13,
-            halfLonSpan = 0.18,
-            explicitTitle = humanTitle
         )
     }
 
