@@ -321,6 +321,19 @@ object StyleBuilder {
               }
             },
             {
+              "id": "custom_trail_other",
+              "type": "line",
+              "source": "custom_kct_trails_source",
+              "minzoom": 10,
+              "filter": ["==", ["get", "colour"], "other"],
+              "layout": { "line-cap": "round", "line-join": "round" },
+              "paint": {
+                "line-color": "#B266FF",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.7, 12, 0.9],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 12, 1.9, 14, 2.8, 16, 3.9]
+              }
+            },
+            {
               "id": "custom_trail_kct_yellow",
               "type": "line",
               "source": "custom_kct_trails_source",

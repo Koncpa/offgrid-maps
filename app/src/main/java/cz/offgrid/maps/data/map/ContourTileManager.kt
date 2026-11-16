@@ -10,9 +10,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.zip.GZIPInputStream
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.*
 
@@ -24,6 +26,8 @@ import kotlin.math.*
  * - On camera movement (`ensureViewportContours`), tiles for the visible viewport are loaded from cache
  *   (and missing tiles are generated and cached when network access is permitted).
  * - When downloading an offline map region (`downloadContoursForArea`), the entire 3x3 tile grid (~30x20 km) is pre-cached.
+ * - Catalog regions ship pre-built tiles for the whole region (`importTilePackage`), so the watch
+ *   does not need to decode DEM images at all for them.
  */
 object ContourTileManager {
 
@@ -106,6 +110,37 @@ object ContourTileManager {
             zoom = 13.0,
             allowNetworkFetch = false
         )
+    }
+
+    /**
+     * Imports a pre-built regional contour package (`contours_z12.tiles.gz` from the map data repository).
+     *
+     * Format: one tile per line, `12/{x}/{y}<TAB>{comma-joined GeoJSON features}`.
+     * The stream is processed line by line, so peak memory stays at a single tile (~100 KB)
+     * even for packages with hundreds of tiles. Tiles land in the same cache that
+     * [ensureViewportContours] reads, so they are rendered offline without further work.
+     *
+     * @return number of imported tiles
+     */
+    fun importTilePackage(context: Context, gzipStream: InputStream): Int {
+        val tilesDir = File(context.filesDir, TILES_DIR_NAME).apply {
+            if (!exists()) mkdirs()
+        }
+        var imported = 0
+        GZIPInputStream(gzipStream).bufferedReader().useLines { lines ->
+            for (line in lines) {
+                val tab = line.indexOf('\t')
+                if (tab <= 0) continue
+                val parts = line.substring(0, tab).split('/')
+                if (parts.size != 3) continue
+                val key = "${parts[0]}_${parts[1]}_${parts[2]}"
+                File(tilesDir, "tile_$key.features").writeText(line.substring(tab + 1))
+                memoryTileCache.remove(key)
+                imported++
+            }
+        }
+        lastViewportKey = "" // Force the next camera idle to reload tiles from disk
+        return imported
     }
 
     private fun updateActiveViewportTiles(

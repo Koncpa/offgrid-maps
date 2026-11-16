@@ -145,7 +145,7 @@ fun MapLibreMapView(
                 }
             }
 
-            // Load contour tiles for the active camera viewport once camera movement settles
+            // Load contour tiles and downloaded trail packages for the active camera viewport once camera movement settles
             map.addOnCameraIdleListener {
                 val camPos = map.cameraPosition
                 val target = camPos.target ?: return@addOnCameraIdleListener
@@ -156,6 +156,7 @@ fun MapLibreMapView(
                     zoom = camPos.zoom,
                     allowNetworkFetch = true
                 )
+                OfflineRegionHelper.updateTrailsForViewport(context, target.latitude, target.longitude)
             }
 
             map.cameraPosition = CameraPosition.Builder()

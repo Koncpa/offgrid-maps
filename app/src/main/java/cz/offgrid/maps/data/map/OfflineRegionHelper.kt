@@ -11,6 +11,7 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.offline.*
 import java.io.BufferedReader
 import java.io.File
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.InetAddress
@@ -18,6 +19,7 @@ import java.net.ServerSocket
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import java.util.concurrent.Executors
 import java.util.zip.GZIPInputStream
 import kotlin.concurrent.thread
 import kotlin.math.hypot
@@ -59,6 +61,10 @@ object OfflineRegionHelper {
 
     private const val REGION_NAME_JMK = "Jihomoravsky_kraj_z14_v3"
     private const val CACHED_CATALOG_FILE = "cached_github_catalog.json"
+    private const val PACKAGES_DIR = "github_regions"
+    private const val TRAILS_FRAGMENT_FILE = "trails.features"
+
+    private val trailExecutor = Executors.newSingleThreadExecutor()
 
     private val _statusText = MutableStateFlow("JMK")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
@@ -244,6 +250,9 @@ object OfflineRegionHelper {
      * Deletes the selected offline region from the watch database.
      */
     fun deleteOfflineRegion(context: Context, regionId: Long) {
+        _savedRegions.value.firstOrNull { it.id == regionId }?.let { region ->
+            deleteTrailPackage(context, region.displayName)
+        }
         val offlineManager = OfflineManager.getInstance(context)
         offlineManager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
             override fun onList(offlineRegions: Array<OfflineRegion>?) {
@@ -451,41 +460,39 @@ object OfflineRegionHelper {
         context: Context,
         preset: OfflinePresetRegion
     ) {
-        // 1. Download pre-built compressed regional packages from the private GitHub repository
+        // 1. Download pre-built regional packages (trails + contour tiles) from the private GitHub repository.
+        //    If the contour package is missing (older repository layout), the watch falls back to
+        //    generating contours from DEM tiles itself.
         thread(name = "OffGridGithubPkg_${preset.id}", isDaemon = true) {
-            try {
-                val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
-                val token = BuildConfig.MAPS_GITHUB_TOKEN
-                val pkgDir = File(context.filesDir, "github_regions/${preset.id}").apply {
-                    if (!exists()) mkdirs()
-                }
-                for (fileName in listOf("kct_trails.geojson.gz", "contours.geojson.gz")) {
-                    val url = URL("https://raw.githubusercontent.com/$repo/main/${preset.packagePath}/$fileName")
-                    val conn = (url.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 8000
-                        readTimeout = 15000
-                        if (token.isNotBlank()) {
-                            setRequestProperty("Authorization", "Bearer $token")
-                        }
-                    }
-                    if (conn.responseCode in 200..299) {
-                        val outName = fileName.removeSuffix(".gz")
-                        val outFile = File(pkgDir, outName)
-                        GZIPInputStream(conn.inputStream).use { gis ->
-                            outFile.outputStream().use { fos ->
-                                gis.copyTo(fos)
-                            }
-                        }
-                        if (outName == "kct_trails.geojson" && outFile.length() > 10L) {
-                            _customTrailsGeoJson.value = outFile.readText()
-                        }
-                    }
-                }
-            } catch (_: Exception) {
+            val pkgDir = File(context.filesDir, "$PACKAGES_DIR/${preset.id}").apply {
+                if (!exists()) mkdirs()
             }
+            downloadPackageFile(preset, "region_meta.json") { input ->
+                File(pkgDir, "region_meta.json").outputStream().use { input.copyTo(it) }
+            }
+            downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
+                val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
+                File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+            }
+            val contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
+                ContourTileManager.importTilePackage(context, input)
+            }
+            if (contoursImported) {
+                ContourTileManager.ensureViewportContours(
+                    context = context,
+                    centerLat = preset.centerLat,
+                    centerLon = preset.centerLon,
+                    zoom = 13.0,
+                    allowNetworkFetch = false
+                )
+            } else {
+                ContourTileManager.downloadContoursForArea(context, preset.centerLat, preset.centerLon)
+            }
+            trailExecutor.execute { invalidateTrailPackages() }
+            updateTrailsForViewport(context, preset.centerLat, preset.centerLon)
         }
 
-        // 2. Download the vector tile pyramid and contour tiles for the region
+        // 2. Download the vector tile pyramid for the region
         downloadCustomBounds(
             context = context,
             centerLat = preset.centerLat,
@@ -494,6 +501,107 @@ object OfflineRegionHelper {
             halfLonSpan = preset.lonSpanDeg / 2.0,
             explicitTitle = preset.title
         )
+    }
+
+    /**
+     * Streams one package file from the map data repository into [consume].
+     * @return true when the file was downloaded and processed successfully
+     */
+    private fun downloadPackageFile(
+        preset: OfflinePresetRegion,
+        fileName: String,
+        consume: (InputStream) -> Unit
+    ): Boolean {
+        return try {
+            val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
+            val url = URL("https://raw.githubusercontent.com/$repo/main/${preset.packagePath}/$fileName")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 30000
+                val token = BuildConfig.MAPS_GITHUB_TOKEN
+                if (token.isNotBlank()) {
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+            }
+            try {
+                if (conn.responseCode !in 200..299) return false
+                conn.inputStream.use(consume)
+                true
+            } finally {
+                conn.disconnect()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Returns the content of the `features` array of a FeatureCollection without parsing it.
+     * The package builder always writes `features` as the last key, so the array spans from
+     * `"features":[` to the final `]`. Avoiding a full JSON parse keeps memory low on the watch.
+     */
+    internal fun extractFeatureArray(featureCollection: String): String {
+        val marker = "\"features\":["
+        val start = featureCollection.indexOf(marker)
+        val end = featureCollection.lastIndexOf(']')
+        if (start < 0 || end < start + marker.length) return ""
+        return featureCollection.substring(start + marker.length, end).trim()
+    }
+
+    /** Downloaded trail package: bounds are [north, east, south, west] as in `region_meta.json`. */
+    private class TrailPackage(val dir: File, val title: String, val bounds: DoubleArray)
+
+    @Volatile
+    private var trailPackages: List<TrailPackage>? = null
+    @Volatile
+    private var activeTrailKey: String? = null
+
+    private fun invalidateTrailPackages() {
+        trailPackages = null
+        activeTrailKey = null
+    }
+
+    private fun loadTrailPackages(context: Context): List<TrailPackage> {
+        trailPackages?.let { return it }
+        val dirs = File(context.filesDir, PACKAGES_DIR).listFiles() ?: emptyArray()
+        val loaded = dirs.mapNotNull { dir ->
+            try {
+                val meta = JSONObject(File(dir, "region_meta.json").readText())
+                val b = meta.getJSONArray("bounds")
+                TrailPackage(dir, meta.optString("title"), DoubleArray(4) { b.getDouble(it) })
+            } catch (_: Exception) {
+                null
+            }
+        }
+        trailPackages = loaded
+        return loaded
+    }
+
+    /**
+     * Shows the marked trails of every downloaded region that covers the given map position.
+     * Only nearby regions are kept in memory, so having many regions on the watch does not
+     * increase RAM use. Called on camera idle; does nothing when the region set is unchanged.
+     */
+    fun updateTrailsForViewport(context: Context, lat: Double, lon: Double) = trailExecutor.execute {
+        val margin = 0.05
+        val visible = loadTrailPackages(context).filter { p ->
+            lat <= p.bounds[0] + margin && lat >= p.bounds[2] - margin &&
+                lon <= p.bounds[1] + margin && lon >= p.bounds[3] - margin
+        }
+        val key = visible.joinToString(",") { it.dir.name }
+        if (key == activeTrailKey) return@execute
+        activeTrailKey = key
+
+        val fragments = visible.mapNotNull { p ->
+            File(p.dir, TRAILS_FRAGMENT_FILE).takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
+        }
+        _customTrailsGeoJson.value = """{"type":"FeatureCollection","features":[${fragments.joinToString(",")}]}"""
+    }
+
+    /** Removes the downloaded trail package that belongs to a deleted offline region. */
+    private fun deleteTrailPackage(context: Context, regionTitle: String) = trailExecutor.execute {
+        loadTrailPackages(context).filter { it.title == regionTitle }.forEach { it.dir.deleteRecursively() }
+        invalidateTrailPackages()
     }
 
     private fun downloadCustomBounds(
@@ -506,9 +614,6 @@ object OfflineRegionHelper {
     ) {
         val offlineManager = OfflineManager.getInstance(context)
         offlineManager.setOfflineMapboxTileCountLimit(80000L)
-
-        // Concurrently generate and cache offline contour lines (10 m / 50 m) for this region
-        ContourTileManager.downloadContoursForArea(context, centerLat, centerLon)
 
         val styleUrl = ensureLocalStyleServerUrl()
 

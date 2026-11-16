@@ -74,4 +74,22 @@ class StyleBuilderTest {
             assertTrue(preset.subtitle.isNotBlank())
         }
     }
+
+    @Test
+    fun createAmoledOutdoorStyle_containsCustomTrailOtherLayerAndPurpleColor() {
+        val styleJson = StyleBuilder.createAmoledOutdoorStyle(null)
+        assertTrue(styleJson.contains("custom_trail_other"))
+        assertTrue(styleJson.contains("custom_kct_trails_source"))
+        assertTrue(styleJson.contains("#B266FF"))
+    }
+
+    @Test
+    fun extractFeatureArray_returnsInnerFeaturesWithoutFullJsonParse() {
+        val sample = """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"colour":"red"}}]}"""
+        val extracted = OfflineRegionHelper.extractFeatureArray(sample)
+        assertEquals("""{"type":"Feature","properties":{"colour":"red"}}""", extracted)
+
+        val empty = """{"type":"FeatureCollection","features":[]}"""
+        assertEquals("", OfflineRegionHelper.extractFeatureArray(empty))
+    }
 }
