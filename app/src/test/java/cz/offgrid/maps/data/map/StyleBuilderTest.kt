@@ -17,15 +17,15 @@ class StyleBuilderTest {
 
     @Test
     fun createAmoledOutdoorStyle_withMbtilesFile_containsMbtilesSourceAndKctLayers() {
-        // Vytvoříme dočasný mock soubor
+        // Create a temporary mock MBTiles file
         val tempFile = File.createTempFile("test_map", ".mbtiles")
         try {
             val styleJson = StyleBuilder.createAmoledOutdoorStyle(tempFile)
 
-            // Ověříme, že styl odkazuje na lokální MBTiles soubor
+            // Verify that the style references the local MBTiles file
             assertTrue(styleJson.contains("mbtiles://${tempFile.absolutePath}"))
 
-            // Ověříme přítomnost vrstev pro české KČT značení a vrstevnice (10 m a 50 m)
+            // Verify presence of marked hiking trail layers (KČT) and contour layers (10 m and 50 m)
             assertTrue(styleJson.contains("trail_kct_red"))
             assertTrue(styleJson.contains("trail_kct_blue"))
             assertTrue(styleJson.contains("trail_kct_green"))
@@ -51,6 +51,7 @@ class StyleBuilderTest {
 
     @Test
     fun contourTileManager_webMercatorTileCoordinates_matchBundledJmkGrid() {
+        // Oslavany / Oslava Valley (49.1246, 16.3353) at zoom 12 lies in tile x=2233, y=1404
         val tx = ContourTileManager.lonToTileX(16.3353, 12)
         val ty = ContourTileManager.latToTileY(49.1246, 12)
         assertEquals(2233, tx)

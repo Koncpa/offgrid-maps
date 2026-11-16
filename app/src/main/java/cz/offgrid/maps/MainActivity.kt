@@ -11,8 +11,8 @@ import cz.offgrid.maps.presentation.theme.OffGridTheme
 import cz.offgrid.maps.presentation.ui.MapScreen
 
 /**
- * Hlavní aktivita aplikace OffGrid Maps pro Wear OS.
- * Zpracovává také přímé otevření .gpx souborů přijatých z telefonu (Mapy.cz, Quick Share, Bluetooth).
+ * Main entry point activity for OffGrid Maps on Wear OS.
+ * Also handles direct opening of .gpx files received from a phone (Mapy.com, Quick Share, Bluetooth).
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
                 val points = GpxExporter.parseGpxFile(importedFile)
                 if (points.isNotEmpty()) {
                     TrackingManager.setPlannedRoute(importedFile.nameWithoutExtension, points)
-                    TrackingManager.setSavedSummary("Načteno: ${importedFile.nameWithoutExtension}")
+                    TrackingManager.setSavedSummary("Loaded: ${importedFile.nameWithoutExtension}")
                 }
             }
         }

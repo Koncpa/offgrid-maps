@@ -17,20 +17,20 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.*
 
 /**
- * Dlaždicový generátor a offline úložiště vrstevnic (10 m vedlejší a 50 m hlavní vrstevnice)
- * fungující na stejném principu jako vektorové mapové dlaždice:
- * - Každá dlaždice `z=12` (`tile_12_{x}_{y}.features`) se ukládá samostatně do flash paměti hodinek
- *   (`filesDir/contour_tiles/`), takže stažené oblasti (Šumava, Praha, Krkonoše, JMK...) se nikdy nepřepisují.
- * - Při posunu mapy (`ensureViewportContours`) se okamžitě načtou dlaždice pro viditelnou oblast z offline cache
- *   (a při aktivním prohlížení se chybějící dlaždice automaticky dopočítají a uloží).
- * - Při stažení offline mapy (`downloadContoursForArea`) se předpočítá celá mřížka 3×3 dlaždic (~30×20 km).
+ * Tile-based contour generator and offline cache (`10 m` minor and `50 m` major index contours)
+ * operating on the same Web Mercator tile pyramid principle as vector map tiles:
+ * - Each `z=12` tile (`tile_12_{x}_{y}.features`) is stored independently in watch flash storage
+ *   (`filesDir/contour_tiles/`), so downloaded regions never overwrite one another.
+ * - On camera movement (`ensureViewportContours`), tiles for the visible viewport are loaded from cache
+ *   (and missing tiles are generated and cached when network access is permitted).
+ * - When downloading an offline map region (`downloadContoursForArea`), the entire 3x3 tile grid (~30x20 km) is pre-cached.
  */
 object ContourTileManager {
 
     private const val TILES_DIR_NAME = "contour_tiles"
     private const val TILE_ZOOM = 12
 
-    // Dlaždice z=12, které jsou již předbalené přímo v APK (assets/jmk_contours.geojson pro Oslavany / Ivančice / Zbýšov)
+    // z=12 tiles already pre-bundled in the APK (assets/jmk_contours.geojson for Oslavany / Ivančice / Zbýšov)
     internal val BUNDLED_JMK_TILES = setOf(
         "2233_1403", "2234_1403",
         "2233_1404", "2234_1404"
@@ -45,8 +45,8 @@ object ContourTileManager {
     val customContoursGeoJson: StateFlow<String?> = _customContoursGeoJson.asStateFlow()
 
     /**
-     * Načte vrstevnice pro aktuální výřez kamery z lokální dlaždicové cache (a při povolené síti
-     * chybějící dlaždice rovnou stáhne, vygeneruje a trvale uloží do offline cache).
+     * Loads contour lines for the current camera viewport from the local tile cache (and when network
+     * is enabled, fetches, generates, and permanently caches any missing tiles).
      */
     fun ensureViewportContours(
         context: Context,
@@ -76,14 +76,14 @@ object ContourTileManager {
     }
 
     /**
-     * Stáhne a trvale uloží do offline cache vrstevnice (mřížku 3×3 dlaždic z=12, ~30×20 km)
-     * pro nově stahovanou offline oblast kolem [centerLat], [centerLon].
+     * Downloads and permanently caches contour lines (3x3 grid of z=12 tiles, ~30x20 km)
+     * for a newly downloaded offline region around [centerLat], [centerLon].
      */
     fun downloadContoursForArea(context: Context, centerLat: Double, centerLon: Double) {
         scope.launch {
             val centerTx = lonToTileX(centerLon, TILE_ZOOM)
             val centerTy = latToTileY(centerLat, TILE_ZOOM)
-            lastViewportKey = "" // Vynutíme obnovení po stažení
+            lastViewportKey = "" // Force refresh after download
             updateActiveViewportTiles(
                 context = context,
                 minTx = centerTx - 1,
@@ -96,7 +96,7 @@ object ContourTileManager {
     }
 
     /**
-     * Při startu aplikace načte offline dlaždice v okolí výchozí polohy.
+     * Loads offline contour tiles around the default location at app startup.
      */
     fun loadCachedCustomContours(context: Context) {
         ensureViewportContours(
@@ -126,7 +126,7 @@ object ContourTileManager {
         for (tx in minTx..maxTx) {
             for (ty in minTy..maxTy) {
                 val tileKey = "${tx}_${ty}"
-                // Přeskočíme dlaždice, které už jsou trvale v assets/jmk_contours.geojson
+                // Skip tiles that are already bundled in assets/jmk_contours.geojson
                 if (BUNDLED_JMK_TILES.contains(tileKey)) continue
 
                 val tileFeatures = getOrFetchTileFeatures(tilesDir, TILE_ZOOM, tx, ty, allowNetworkFetch)

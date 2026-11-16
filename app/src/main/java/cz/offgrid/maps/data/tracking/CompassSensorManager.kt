@@ -11,19 +11,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.abs
 
 /**
- * Bateriově šetrný správce kompasu (směru pohledu / azimutu) pro hodinky.
+ * Battery-efficient compass (heading / azimuth) sensor manager for Wear OS.
  *
- * Jak šetří baterii:
- * 1. Běží výhradně v době, kdy je displej rozsvícený (start() v ON_RESUME, stop() v ON_PAUSE).
- *    Jakmile svěsíte ruku, senzor se okamžitě odpojí (0 mW spotřeba).
- * 2. Používá práh změny úhlu (min. 6 stupňů) a časový filtr (max 4x za sekundu),
- *    aby nezahlcoval UI a GPU zbytečným překreslováním při jemném chvění ruky.
+ * Battery optimization strategy:
+ * 1. Runs exclusively while the screen is interactive (`start()` in `ON_RESUME`, `stop()` in `ON_PAUSE`).
+ *    As soon as the wrist is lowered, the sensor listener is unregistered (0 mW power draw).
+ * 2. Applies an angular threshold (1.5 degrees) and a rate limiter (~12.5 Hz) to prevent unnecessary
+ *    UI and GPU repaints from micro-tremors.
  */
 class CompassSensorManager(context: Context) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    // Samsung Rotation Vector na Galaxy Watch Ultra běží na hardwarovém SensorHubu a dává okamžitou odezvu při otočení zápěstí.
-    // Protože ho v ON_PAUSE ihned odpojujeme, při zhasnutém displeji má 0 mW spotřebu.
+    // Rotation Vector runs on the low-power hardware SensorHub and provides responsive heading updates.
+    // Because we unregister in ON_PAUSE, it consumes 0 mW while the screen is off.
     private val rotationSensor: Sensor? =
         sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
             ?: sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
@@ -51,12 +51,12 @@ class CompassSensorManager(context: Context) : SensorEventListener {
         if (type != Sensor.TYPE_ROTATION_VECTOR && type != Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR) return
 
         val now = System.currentTimeMillis()
-        if (now - lastUpdateMillis < 80L) return // ~12.5 Hz pro plynulé otáčení šipky
+        if (now - lastUpdateMillis < 80L) return // ~12.5 Hz cap for smooth heading rotation
 
         SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
 
-        // Pokud jsou hodinky výrazně nakloněné k obličeji, přemapujeme souřadnicový systém,
-        // aby nedocházelo k zámku os (gimbal lock) a kompas ukazoval přesně směr pohledu
+        // When the watch is tilted steeply toward the user's face, remap the coordinate axes
+        // to avoid gimbal lock and keep the compass heading aligned with the line of sight.
         val inclinationZ = abs(rotationMatrix[8])
         val activeMatrix = if (inclinationZ < 0.5f) {
             SensorManager.remapCoordinateSystem(
@@ -75,7 +75,7 @@ class CompassSensorManager(context: Context) : SensorEventListener {
         val azimuthRad = orientationAngles[0]
         val azimuthDeg = ((Math.toDegrees(azimuthRad.toDouble()).toFloat() + 360f) % 360f)
 
-        // Citlivý práh 1.5 stupně pro plynulé otáčení šipečky na mapě
+        // 1.5-degree threshold for smooth arrow rotation on the map
         val diff = abs(azimuthDeg - _azimuthDegrees.value)
         val wrappedDiff = if (diff > 180f) 360f - diff else diff
         if (wrappedDiff >= 1.5f) {

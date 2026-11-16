@@ -7,13 +7,12 @@ import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalView
 
 /**
- * Modifier pro obsluhu otočné korunky (Crown) nebo lunety (Bezel) na Wear OS hodinkách.
+ * Modifier for handling the rotating crown or bezel on Wear OS watches.
  *
- * Jak to funguje:
- * 1. Zpracovává rotaci v pixelech (kladná hodnota = po směru hodinových ručiček, záporná = proti).
- * 2. Poskytuje jemnou haptickou odezvu (Haptic Feedback) pro každý krok otočení,
- *    takže uživatel cítí fyzické cvaknutí na zápěstí.
- * 3. Umožňuje plynulý zoom mapy bez toho, aby si uživatel zakrýval displej prsty.
+ * How it works:
+ * 1. Accumulates vertical rotary scroll pixels (positive = clockwise, negative = counter-clockwise).
+ * 2. Triggers tactile haptic feedback (`CLOCK_TICK`) on each zoom step.
+ * 3. Enables smooth map zooming without obscuring the display with fingers.
  */
 fun Modifier.rotaryZoom(
     onZoomIn: () -> Unit,
@@ -21,7 +20,7 @@ fun Modifier.rotaryZoom(
 ): Modifier = composed {
     val view = LocalView.current
     var accumulatedDelta = 0f
-    val threshold = 40f // Práh citlivosti otočení pro jeden zoom krok
+    val threshold = 40f // Rotary scroll sensitivity threshold per zoom step
 
     this.onRotaryScrollEvent { event ->
         accumulatedDelta += event.verticalScrollPixels

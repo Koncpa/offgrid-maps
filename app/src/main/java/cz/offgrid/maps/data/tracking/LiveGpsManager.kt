@@ -16,17 +16,16 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import cz.offgrid.maps.domain.model.TrackPoint
 
 /**
- * Hybridní správce živé GPS polohy se striktním prahem přesnosti 10 metrů (`STRICT_ACCURACY_METERS = 10.0f`).
+ * Hybrid live GPS manager with a 10-meter open-sky threshold (`STRICT_ACCURACY_METERS = 10.0f`)
+ * and instant hardware GNSS engagement for forest hikes.
  *
- * Jak funguje úspora baterie vs. maximální přesnost:
- * 1. Primárně žádá `FusedLocationProviderClient` s `PRIORITY_HIGH_ACCURACY` a `GRANULARITY_FINE`.
- *    Pokud je připojený telefon přes Bluetooth a má dobrý výhled na satelity (přesnost <= 10 m),
- *    hodinky odebírají přesnou GPS z telefonu přes úsporný Bluetooth a vlastní GPS čip v hodinkách spí (0 mW).
- * 2. Jakmile však z telefonu přijde bod s nepřesností > 10 m (telefon je stíněný v kapse/batohu nebo posílá
- *    jen Wi-Fi/BTS ze zástavby) NEBO do 5 sekund nedorazí žádný fix s přesností <= 10 m, okamžitě se
- *    zapne přímý hardwarový satelitní čip v hodinkách (`LocationManager.GPS_PROVIDER`).
- * 3. Pokud se telefon později znovu chytne s přesností <= 10 m (3× po sobě), vlastní GPS čip v hodinkách
- *    se opět uspí, aby šetřil baterii hodinek.
+ * How battery efficiency and accuracy work together:
+ * 1. Requests `FusedLocationProviderClient` with `PRIORITY_HIGH_ACCURACY` and `GRANULARITY_FINE`.
+ *    When a companion phone is connected over Bluetooth with clear sky view (accuracy <= 10 m),
+ *    the watch receives accurate GPS over low-power Bluetooth while its internal GNSS chip sleeps (0 mW).
+ * 2. During an active trek (`TrackingManager.isTracking.value`), when pressing the `GPS` button, or
+ *    whenever phone accuracy degrades (> 10 m in a pocket/backpack or under forest canopy), the watch's
+ *    built-in hardware satellite receiver (`LocationManager.GPS_PROVIDER`) is engaged immediately.
  */
 class LiveGpsManager(
     private val context: Context,
@@ -45,7 +44,7 @@ class LiveGpsManager(
     private var consecutiveAccurateFusedFixes = 0
     private var currentLocTokenSource: CancellationTokenSource? = null
 
-    // Pojistný časovač: pokud do 1.5 s od rozsvícení displeje nedorazí fix <= 10 m, zapneme GPS v hodinkách
+    // Fallback timer: if no <= 10 m fix arrives within 1.5 s of screen wake, enable watch hardware GPS
     private val fallbackToWatchGpsRunnable = Runnable {
         if (!isRunning) return@Runnable
         val nsSinceStrictFix = SystemClock.elapsedRealtimeNanos() - lastStrictFixElapsedRealtimeNs
@@ -77,9 +76,9 @@ class LiveGpsManager(
 
                 if (acc <= STRICT_ACCURACY_METERS) {
                     lastStrictFixElapsedRealtimeNs = nowNs
-                    // POZOR: FusedLocationProvider na Wear OS přeposílá i body z lokálního GPS_PROVIDERu hodinek!
-                    // Pokud běží aktivní trek nebo body pochází z čipu hodinek, NIKDY čip v hodinkách nevypínáme,
-                    // jinak by se v lese cyklicky vypínal a ztrácel satelitní zámek.
+                    // Note: FusedLocationProvider on Wear OS also echoes fixes from the watch's local GPS_PROVIDER.
+                    // Never disable the watch hardware GPS during an active trek or when fixes originate from the watch chip,
+                    // otherwise the watch would cycle its GNSS receiver on/off in the forest and lose satellite lock.
                     if (!isEchoFromWatchHwGps && !TrackingManager.isTracking.value) {
                         consecutiveAccurateFusedFixes++
                         if (isWatchHardwareGpsActive && consecutiveAccurateFusedFixes >= 6) {
@@ -91,7 +90,7 @@ class LiveGpsManager(
                     consecutiveAccurateFusedFixes = 0
                     enableWatchHardwareGps()
 
-                    // Pokud už čip v hodinkách nedávno dodal satelitní fix, horší fúzovaný bod zahodíme
+                    // Discard coarser fused estimates when the watch hardware GPS recently delivered a satellite fix
                     val hasRecentHwGps = lastHardwareGpsElapsedRealtimeNs > 0L && nsSinceHwGps < 10_000_000_000L
                     if (!hasRecentHwGps) {
                         processLocation(location, isDirectWatchSatellite = false)
@@ -109,8 +108,8 @@ class LiveGpsManager(
     }
 
     /**
-     * Spustí příjem GPS při rozsvícení displeje (`ON_RESUME`).
-     * Při aktivním treku okamžitě zapíná i přímý satelitní čip v hodinkách.
+     * Starts live GPS updates when the screen wakes (`ON_RESUME`).
+     * Immediately engages the watch's hardware satellite receiver if an active trek is recording.
      */
     @SuppressLint("MissingPermission")
     fun start() {
@@ -118,9 +117,9 @@ class LiveGpsManager(
         isRunning = true
         consecutiveAccurateFusedFixes = 0
 
-        // 1. Použijeme poslední známou polohu z Fused i z přímého GPS čipu:
-        //    - I když jsme v budově a poslední GPS fix je starší než 30 s, vždy z něj zkalibrujeme barometr,
-        //      aby barometr neukazoval nezkalibrovaných ~500 m podle standardního tlaku 1013.25 hPa!
+        // 1. Use last known location from both Fused and direct GPS_PROVIDER:
+        //    - Even indoors when the last GPS fix is older than 30 s, always calibrate the barometer from it
+        //      so the barometer never displays uncalibrated standard-atmosphere altitude!
         try {
             val lastHw = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
             if (lastHw != null) {
@@ -140,7 +139,7 @@ class LiveGpsManager(
                 lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
                 processLocation(lastLoc, isDirectWatchSatellite = false)
             } else if (TrackingManager.currentLocation.value == null && lastLoc.hasAccuracy() && lastLoc.accuracy <= 25.0f) {
-                // Pokud jsme po startu uvnitř budovy a ještě nemáme polohu, použijeme poslední známý fix
+                // Seed initial indoor position from the last known fix if no current location is set yet
                 val mslAlt = BarometricAltimeterManager.extractMslAltitudeMeters(lastLoc)
                 TrackingManager.addPoint(
                     TrackPoint(
@@ -155,7 +154,7 @@ class LiveGpsManager(
             }
         }
 
-        // 2. Požádáme FusedLocationProvider o rychlou satelitní polohu (1 s interval)
+        // 2. Request fast high-accuracy updates from FusedLocationProvider
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1500L)
             .setMinUpdateIntervalMillis(800L)
             .setMinUpdateDistanceMeters(0.5f)
@@ -170,7 +169,7 @@ class LiveGpsManager(
             Looper.getMainLooper()
         )
 
-        // 3. Při aktivním treku zapneme čip v hodinkách okamžitě (0 ms), jinak do 1.5 s
+        // 3. Engage watch hardware GPS immediately (0 ms) during an active trek, otherwise after 1.5 s
         mainHandler.removeCallbacks(fallbackToWatchGpsRunnable)
         if (TrackingManager.isTracking.value) {
             enableWatchHardwareGps()
@@ -180,7 +179,7 @@ class LiveGpsManager(
     }
 
     /**
-     * Vypne odběr při zhasnutí displeje (`ON_PAUSE` -> 0 mW).
+     * Stops live UI location updates when the screen turns off (`ON_PAUSE` -> 0 mW).
      */
     fun stop() {
         isRunning = false
@@ -192,17 +191,17 @@ class LiveGpsManager(
     }
 
     /**
-     * Vyžádá si okamžitý čerstvý satelitní fix (`maxUpdateAgeMillis = 0`) po stisku tlačítka GPS.
-     * V lese a na horách okamžitě zapne hardwarový GPS čip v hodinkách bez čekání na telefon v batohu.
+     * Requests an immediate fresh satellite fix (`maxUpdateAgeMillis = 0`) when the user taps the GPS button.
+     * Immediately activates the watch's hardware GNSS chip without waiting for a phone Bluetooth timeout.
      */
     @SuppressLint("MissingPermission")
     fun requestImmediateHighAccuracyFix() {
         if (!isRunning || !hasFineLocationPermission()) return
 
-        // 1. Okamžitě zapneme hardwarový satelitní čip v hodinkách (0 ms prodleva)
+        // 1. Immediately engage the watch's hardware satellite receiver (0 ms delay)
         enableWatchHardwareGps()
 
-        // 2. Okamžitě vyčteme poslední satelitní fix z GPS_PROVIDERu, pokud je čerstvý (< 15 s)
+        // 2. Immediately read the latest fix from GPS_PROVIDER if fresh (< 15 s)
         try {
             val lastHwGps = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
             if (lastHwGps != null && isLocationFreshAndAccurate(lastHwGps, maxAgeMs = 15_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
@@ -211,7 +210,7 @@ class LiveGpsManager(
         } catch (_: Exception) {
         }
 
-        // 3. Vyprázdníme případnou dávkovací frontu
+        // 3. Flush any batched locations
         fusedClient.flushLocations()
 
         currentLocTokenSource?.cancel()
@@ -229,7 +228,7 @@ class LiveGpsManager(
             .addOnSuccessListener { currentLoc ->
                 if (!isRunning) return@addOnSuccessListener
                 if (currentLoc != null) {
-                    val acc = if (currentLoc.hasAccuracy()) currentLoc.accuracy else 999.0f
+                    val acc = if (currentLoc.hasAccuracy()) locationAccuracy(currentLoc) else 999.0f
                     if (acc > STRICT_ACCURACY_METERS) {
                         enableWatchHardwareGps()
                     }
@@ -239,6 +238,8 @@ class LiveGpsManager(
                 }
             }
     }
+
+    private fun locationAccuracy(loc: Location): Float = if (loc.hasAccuracy()) loc.accuracy else 999.0f
 
     @SuppressLint("MissingPermission")
     private fun enableWatchHardwareGps() {
@@ -316,9 +317,9 @@ class LiveGpsManager(
     }
 
     companion object {
-        /** Striktní práh přesnosti (10 metrů) pro rozhodnutí, zda stačí GPS z telefonu, nebo se zapne čip v hodinkách. */
+        /** Strict open-sky accuracy threshold (10 m) for deciding between phone GPS and watch GNSS. */
         const val STRICT_ACCURACY_METERS = 10.0f
-        /** Přesnost plnohodnotného satelitního zámku v lese / hlubokém údolí (do 20 m). */
+        /** Valid satellite lock accuracy threshold under dense forest canopy or steep valleys (up to 20 m). */
         const val FOREST_SAT_ACCURACY_METERS = 20.0f
     }
 }

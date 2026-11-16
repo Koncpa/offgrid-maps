@@ -23,7 +23,7 @@ import kotlin.concurrent.thread
 import kotlin.math.hypot
 
 /**
- * Datový model pro uloženou offline mapovou oblast zobrazenou v přehledu.
+ * Data model for a saved offline map region displayed in the overview list.
  */
 data class SavedOfflineRegion(
     val id: Long,
@@ -35,8 +35,8 @@ data class SavedOfflineRegion(
 )
 
 /**
- * Předdefinovaná oblast / kraj v katalogu (`catalog.json` v soukromém GitHub repozitáři)
- * pro rychlé stažení jedním klepnutím.
+ * Predefined region in the multi-country catalog (`catalog.json` in the private GitHub repository)
+ * for one-tap offline download.
  */
 data class OfflinePresetRegion(
     val id: String,
@@ -181,8 +181,8 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Aktualizuje seznam všech uložených offline oblastí v paměti hodinek a automaticky
-     * odstraní starší duplicitní verze (např. dřívější verze Jihomoravského kraje z vývoje).
+     * Refreshes the list of all saved offline regions in watch storage and automatically
+     * removes older duplicate entries.
      */
     fun refreshSavedRegions(context: Context) {
         val offlineManager = OfflineManager.getInstance(context)
@@ -207,7 +207,7 @@ object OfflineRegionHelper {
                         resolveCzechRegionTitle(centerLat, centerLon)
                     }
 
-                    // Pokud už máme novější verzi téže oblasti (např. JMK v1, v2, v3), starší duplikát smažeme z DB
+                    // Delete older duplicate versions of the same region from the database
                     if (!seenTitles.add(title)) {
                         region.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
                             override fun onDelete() {}
@@ -228,7 +228,7 @@ object OfflineRegionHelper {
                     )
                 }
 
-                // Výchozí Jihomoravský kraj vždy nahoře, ostatní od nejnovějších
+                // Keep default South Moravia at the top, followed by newest regions
                 _savedRegions.value = uniqueMapped.sortedWith(
                     compareByDescending<SavedOfflineRegion> { it.isDefaultJmk }
                         .thenByDescending { it.id }
@@ -241,7 +241,7 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Smaže vybranou offline oblast z interní databáze hodinek.
+     * Deletes the selected offline region from the watch database.
      */
     fun deleteOfflineRegion(context: Context, regionId: Long) {
         val offlineManager = OfflineManager.getInstance(context)
@@ -370,8 +370,8 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Načte ze soukromého GitHub repozitáře (`BuildConfig.MAPS_GITHUB_REPO`) aktuální `catalog.json`
-     * se seznamem všech zemí a jejich krajů/oblastí (nebo použije lokální cache, pokud není internet).
+     * Loads the latest `catalog.json` from the private GitHub repository (`BuildConfig.MAPS_GITHUB_REPO`)
+     * listing all countries and regions (or falls back to the local cache when offline).
      */
     fun syncCatalogFromGithub(context: Context) {
         val cacheFile = File(context.filesDir, CACHED_CATALOG_FILE)
@@ -416,7 +416,7 @@ object OfflineRegionHelper {
             for (i in 0 until countries.length()) {
                 val countryObj = countries.getJSONObject(i)
                 val countryCode = countryObj.optString("countryCode", "CZ")
-                val countryName = countryObj.optString("countryName", "Česká republika – Kraje")
+                val countryName = countryObj.optString("countryName", "Czechia – Regions")
                 val regions = countryObj.optJSONArray("regions") ?: continue
                 for (j in 0 until regions.length()) {
                     val reg = regions.getJSONObject(j)
@@ -444,14 +444,14 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Stáhne vybranou oblast z katalogu ([preset]) jedním klepnutím včetně předpřipravených
-     * podkladů ze soukromého GitHub repozitáře (`Koncpa/offgrid-maps-data`) a 10m/50m vrstevnic.
+     * Downloads the selected catalog region ([preset]) with a single tap, including pre-built
+     * trail/contour packages from the private GitHub repository (`Koncpa/offgrid-maps-data`).
      */
     fun downloadPresetRegion(
         context: Context,
         preset: OfflinePresetRegion
     ) {
-        // 1. Stáhneme předpřipravené komprimované podklady regionu ze soukromého GitHub repozitáře
+        // 1. Download pre-built compressed regional packages from the private GitHub repository
         thread(name = "OffGridGithubPkg_${preset.id}", isDaemon = true) {
             try {
                 val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
@@ -485,7 +485,7 @@ object OfflineRegionHelper {
             }
         }
 
-        // 2. Stáhneme vektorovou pyramidu dlaždic a vrstevnice pro daný kraj/region
+        // 2. Download the vector tile pyramid and contour tiles for the region
         downloadCustomBounds(
             context = context,
             centerLat = preset.centerLat,
@@ -507,7 +507,7 @@ object OfflineRegionHelper {
         val offlineManager = OfflineManager.getInstance(context)
         offlineManager.setOfflineMapboxTileCountLimit(80000L)
 
-        // Souběžně vygenerujeme a uložíme offline vrstevnice (10 m / 50 m) pro tuto oblast
+        // Concurrently generate and cache offline contour lines (10 m / 50 m) for this region
         ContourTileManager.downloadContoursForArea(context, centerLat, centerLon)
 
         val styleUrl = ensureLocalStyleServerUrl()

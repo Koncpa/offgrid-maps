@@ -57,8 +57,8 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * Hlavní obrazovka mapy v designu Českého klubu turistů (KČT) a Ultra-Pure AMOLED,
- * plně kompatibilní se všemi hodinkami s Wear OS (automatický fallback senzorů).
+ * Primary map screen designed around Czech Tourist Club (KCT) trail blazes and Ultra-Pure AMOLED
+ * black palette, compatible with all Wear OS smartwatches (with automatic sensor fallback).
  */
 @Composable
 fun MapScreen(
@@ -79,7 +79,7 @@ fun MapScreen(
     var availableGpxFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     var isFollowingGps by remember { mutableStateOf(true) }
 
-    // Zablokujeme systémové gesto "Zpět" při tažení od kraje displeje (pokud je otevřen GPX výběr, zavře ho)
+    // Intercept system edge-swipe Back gesture (closes the GPX/Offline modal if open)
     BackHandler(enabled = true) {
         if (showGpxPicker) {
             showGpxPicker = false
@@ -88,7 +88,7 @@ fun MapScreen(
 
     var isScreenVisible by remember { mutableStateOf(true) }
 
-    // Senzory a živý satelitní GPS přijímač běží při rozsvíceném displeji (0 mW při svěšené ruce)
+    // Sensors and live satellite GPS receiver run while the screen is awake (0 mW when wrist is lowered)
     DisposableEffect(lifecycleOwner, compassManager, altimeterManager, liveGpsManager) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -134,14 +134,14 @@ fun MapScreen(
     var zoomLevel by remember { mutableFloatStateOf(13.0f) }
     var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
 
-    // Haptické upozornění na zápěstí při sejmutí z naplánované GPX trasy (> 60 m)
+    // Haptic alert on the wrist when deviating from the planned GPX route (> 60 m)
     LaunchedEffect(isOffRoute) {
         if (isOffRoute) {
             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         }
     }
 
-    // Automatické skrytí notifikace o uloženém GPX po 4.5 sekundách
+    // Auto-hide the saved GPX summary banner after 4.5 seconds
     LaunchedEffect(lastSavedSummary) {
         if (lastSavedSummary != null) {
             kotlinx.coroutines.delay(4500L)
@@ -149,16 +149,16 @@ fun MapScreen(
         }
     }
 
-    // Když si uživatel posouvá mapu prstem (isFollowingGps == false) a nenahrává trasu,
-    // povolíme živý náhled dlaždic (např. při hledání oblasti v Čechách ke stažení).
+    // When the user pans the map manually (isFollowingGps == false) and is not recording a trek,
+    // allow live tile preview (e.g. when browsing another region before downloading it).
     LaunchedEffect(isFollowingGps, isTracking) {
         OfflineRegionHelper.setBrowsingMode(!isFollowingGps && !isTracking)
     }
 
-    // Výchozí poloha: Jihomoravský kraj (Oslavany: 49.1246, 16.3353)
+    // Default location: South Moravian Region (Oslavany: 49.1246, 16.3353)
     var activeLocation by remember { mutableStateOf(LatLng(49.1246, 16.3353)) }
 
-    // Kamera sleduje GPS pouze tehdy, když je displej rozsvícený A uživatel neposunul mapu prstem (isFollowingGps)
+    // Camera follows GPS only while the screen is awake AND the user has not panned away (isFollowingGps)
     LaunchedEffect(latestGpsPoint, isScreenVisible) {
         if (isScreenVisible) {
             latestGpsPoint?.let { pt ->
@@ -236,7 +236,7 @@ fun MapScreen(
         }
     }
 
-    // Společný rozměr a tloušťka rámečku pro dokonalou symetrii všech 4 tlačítek
+    // Shared diameter and border thickness for symmetry across all 4 circular buttons
     val buttonSize = 38.dp
     val buttonBorder = 1.5.dp
 
@@ -255,7 +255,7 @@ fun MapScreen(
                 }
             )
     ) {
-        // Nativní vektorová mapa Jihomoravského kraje s kompasovou šipkou a GPX trasou
+        // Native vector map with compass heading arrow, offline overlays, and GPX tracks
         MapLibreMapView(
             zoomLevel = zoomLevel,
             targetLocation = activeLocation,
@@ -272,7 +272,7 @@ fun MapScreen(
             }
         )
 
-        // Horní informační pilulka se symbolem české turistické značky KČT (vždy kompaktní, nikdy neoříznutá)
+        // Top status pill with KCT trail blaze badge (always compact, never clipped by the round bezel)
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -300,7 +300,7 @@ fun MapScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            // Ikonická česká pásová značka KČT (Červená = aktivní záznam, Modrá = GPX navigace, Zelená = klidový stav)
+            // Iconic KCT trail blaze badge (Red = active recording, Blue = GPX navigation, Green = idle)
             KctTrailBlazeBadge(
                 stripeColor = when {
                     isTracking -> TrailRed
@@ -363,7 +363,7 @@ fun MapScreen(
             }
         }
 
-        // Potvrzení po zastavení záznamu a uložení GPX souboru
+        // Confirmation banner after stopping trek recording and saving the GPX file
         lastSavedSummary?.let { summary ->
             Box(
                 modifier = Modifier
@@ -382,7 +382,7 @@ fun MapScreen(
             }
         }
 
-        // Vlevo uprostřed: Oddálit (−) v barvě MODRÉ turistické značky KČT (symetrických 38.dp)
+        // Center-left: Zoom Out (−) styled in KCT BLUE trail color (symmetrical 38.dp)
         Button(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -408,7 +408,7 @@ fun MapScreen(
             )
         }
 
-        // Vpravo uprostřed: Přiblížit (+) v barvě ŽLUTÉ turistické značky KČT (symetrických 38.dp)
+        // Center-right: Zoom In (+) styled in KCT YELLOW trail color (symmetrical 38.dp)
         Button(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -434,8 +434,8 @@ fun MapScreen(
             )
         }
 
-        // Spodní lišta: Záznam trasy (ČERVENÁ KČT) a Poloha (ZELENÁ KČT)
-        // Kompaktní rozestup uprostřed zaručuje, že tlačítka nejsou nikdy oříznuta kulatou lunetou displeje
+        // Bottom bar: Trek recording (KCT RED) and GPS Lock/Center (KCT GREEN)
+        // Compact center spacing ensures buttons are never clipped by the round watch bezel
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -443,7 +443,7 @@ fun MapScreen(
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Tlačítko záznamu trasy (REC / STOP) v barvě ČERVENÉ turistické značky KČT
+            // Trek recording toggle button (REC / STOP) styled in KCT RED trail color
             Button(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -482,13 +482,13 @@ fun MapScreen(
                 )
             }
 
-            // Indikátor satelitního zaměření (Zelená = satelitní fix včetně lesa <= 20 m, Žlutá = hledá satelity)
+            // Satellite lock indicator (Green = satellite fix including forest canopy <= 20 m, Yellow = acquiring satellites)
             val hasStrictGpsLock = latestGpsPoint?.let {
                 it.accuracyMeters in 0.1f..LiveGpsManager.FOREST_SAT_ACCURACY_METERS
             } == true
             val gpsIndicatorColor = if (hasStrictGpsLock) TrailGreen else TrailYellow
 
-            // Tlačítko pro okamžité vycentrování, vynucení čerstvého satelitního fixu a uzamčení sledování
+            // Button for immediate re-centering, forcing a fresh satellite fix, and locking camera follow
             Button(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -527,7 +527,7 @@ fun MapScreen(
             }
         }
 
-        // AMOLED modální menu rozdělené na dvě přehledné záložky: 1) Trasy GPX, 2) Offline mapy
+        // AMOLED modal overlay split into two tabs: 1) GPX Routes, 2) Offline Maps
         if (showGpxPicker) {
             GpxRoutePickerOverlay(
                 files = availableGpxFiles,
@@ -549,7 +549,7 @@ fun MapScreen(
                             pts to closest
                         }
                         if (points.isNotEmpty() && closestPt != null) {
-                            // Vždy načteme a vykreslíme vybranou trasu (nová instance listu vynutí překreslení GeoJsonSource)
+                            // Always load and render the selected route (new list instance forces GeoJsonSource refresh)
                             TrackingManager.setPlannedRoute(null, emptyList())
                             TrackingManager.setPlannedRoute(file.nameWithoutExtension, points.toList())
                             isFollowingGps = false
@@ -1053,7 +1053,7 @@ private fun GpxRoutePickerOverlay(
 }
 
 /**
- * Vykreslí miniaturní českou pásovou značku KČT (Bílý pruh – Barevný pruh – Bílý pruh).
+ * Renders a miniature Czech KCT trail blaze badge (White stripe – Colored stripe – White stripe).
  */
 @Composable
 private fun KctTrailBlazeBadge(stripeColor: Color) {
@@ -1084,7 +1084,7 @@ private fun KctTrailBlazeBadge(stripeColor: Color) {
 }
 
 /**
- * Převede azimut ve stupních (0..360) na mezinárodní anglickou zkratku světové strany (N, NE, E, SE, S, SW, W, NW).
+ * Converts an azimuth in degrees (0..360) to an 8-wind cardinal direction abbreviation (N, NE, E, SE, S, SW, W, NW).
  */
 private fun formatCompassCardinal(azimuthDeg: Float): String {
     val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")

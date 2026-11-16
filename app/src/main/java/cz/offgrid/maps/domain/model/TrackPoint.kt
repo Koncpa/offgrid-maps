@@ -1,9 +1,9 @@
 package cz.offgrid.maps.domain.model
 
 /**
- * Neměnný datový model pro zaznamenaný bod trasy.
+ * Immutable data model representing a recorded or planned GPS track point.
  *
- * Šetrný k paměti: obsahuje pouze nezbytná telemetrická data pro navigaci a GPX export.
+ * Memory-efficient: holds only the essential telemetry required for navigation and GPX export.
  */
 data class TrackPoint(
     val latitude: Double,

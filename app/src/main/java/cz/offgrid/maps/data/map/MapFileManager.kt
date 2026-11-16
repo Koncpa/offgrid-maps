@@ -4,17 +4,17 @@ import android.content.Context
 import java.io.File
 
 /**
- * Správce lokálních offline mapových podkladů (MBTiles).
+ * Local offline MBTiles map file manager.
  *
- * Jak funguje MBTiles:
- * - MBTiles je ve skutečnosti SQLite databáze obsahující jednotlivé dlaždice (Vector Tiles / MVT).
- * - Místo milionů malých souborů na disku má celá mapa ČR pouze jeden jediný soubor (např. czechia.mbtiles).
- * - SQLite umožňuje indexované čtení podle (zoom, x, y) s minimální režií a bez zbytečné zátěže RAM.
+ * How MBTiles works:
+ * - MBTiles is an SQLite database containing individual vector tiles (MVT).
+ * - Instead of millions of small files on disk, an entire country or region is stored in a single file.
+ * - SQLite provides indexed lookups by (zoom, x, y) with minimal RAM and I/O overhead.
  */
 class MapFileManager(private val context: Context) {
 
     /**
-     * Adresář pro ukládání offline map v interním úložišti aplikace.
+     * Internal storage directory for offline MBTiles files.
      */
     val mapsDirectory: File
         get() = File(context.filesDir, "maps").apply {
@@ -22,7 +22,7 @@ class MapFileManager(private val context: Context) {
         }
 
     /**
-     * Vrátí seznam všech dostupných offline .mbtiles souborů.
+     * Returns all available offline .mbtiles files.
      */
     fun getAvailableMaps(): List<File> {
         return mapsDirectory.listFiles { file ->
@@ -31,14 +31,14 @@ class MapFileManager(private val context: Context) {
     }
 
     /**
-     * Vrátí výchozí mapový soubor, pokud existuje.
+     * Returns the default offline map file if present.
      */
     fun getDefaultMap(): File? {
         return getAvailableMaps().firstOrNull()
     }
 
     /**
-     * Vrátí celkovou velikost všech stažených map v megabytech.
+     * Returns the total size of all downloaded MBTiles files in megabytes.
      */
     fun getTotalMapsSizeMb(): Long {
         val totalBytes = getAvailableMaps().sumOf { it.length() }

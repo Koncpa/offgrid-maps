@@ -20,8 +20,8 @@ import cz.offgrid.maps.MainActivity
 import cz.offgrid.maps.domain.model.TrackPoint
 
 /**
- * Popřední služba (Foreground Service) pro záznam GPS trasy, barometrického převýšení,
- * průběžné zálohování a automatické nouzové uložení GPX při poklesu baterie na <= 5 %.
+ * Foreground service for continuous GPS track recording, barometric elevation gain,
+ * periodic crash recovery checkpointing, and automatic emergency GPX save at <= 5% battery.
  */
 class LocationTrackingService : Service() {
 
@@ -39,9 +39,9 @@ class LocationTrackingService : Service() {
     private var consecutiveAccurateFusedFixes = 0
 
     /**
-     * Pasivní posluchač systémového vysílání stavu baterie (0 mW spotřeba, žádné dotazování ve smyčce).
-     * Jakmile baterie klesne na <= 5 % (a hodinky nejsou na nabíječce), okamžitě uloží GPX trasu
-     * a vypne GPS, aby zbylých 5 % udrželo hodinky v chodu.
+     * Passive system battery broadcast listener (0 mW overhead, no polling loop).
+     * As soon as battery drops to <= 5% (and the watch is not charging), immediately saves the GPX track
+     * and shuts down GPS so the remaining 5% keeps the watch alive.
      */
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -77,9 +77,8 @@ class LocationTrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.locations.forEach { location ->
-                    // Během aktivního treku v přírodě necháváme hardwarový GPS čip hodinek trvale zapnutý,
-                    // aby v lese neztrácel satelitní zámek (FusedLocationProvider na Wear OS přeposílá
-                    // i body z čipu hodinek, takže vypínání po 3 bodech by způsobilo cyklické výpadky).
+                    // Keep the watch's hardware GNSS chip continuously active during an active trek
+                    // so it maintains carrier-phase satellite lock under forest canopy.
                     if (!isWatchHardwareGpsActive) {
                         enableWatchHardwareGps()
                     }
@@ -105,7 +104,7 @@ class LocationTrackingService : Service() {
         )
         TrackingManager.addPoint(point)
 
-        // Průběžná záloha na disk každých 10 zaznamenaných bodů (ochrana proti vybití/restartu)
+        // Save recovery checkpoint to disk every 10 recorded points
         val currentPoints = TrackingManager.trackPoints.value
         if (currentPoints.size - lastCheckpointPointsCount >= 10) {
             lastCheckpointPointsCount = currentPoints.size
@@ -175,10 +174,10 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // 1. Okamžitě zapneme přímý hardwarový GPS čip v hodinkách (0 ms), aby v lese nečekal na telefon v batohu
+        // 1. Immediately engage the watch's hardware GPS receiver (0 ms) so it never waits for a phone in a backpack
         enableWatchHardwareGps()
 
-        // 2. Okamžitě si vyžádáme čerstvý satelitní bod při startu (maxUpdateAgeMillis = 0)
+        // 2. Request an immediate fresh satellite fix at start (maxUpdateAgeMillis = 0)
         val currentReq = CurrentLocationRequest.Builder()
             .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
             .setGranularity(Granularity.GRANULARITY_FINE)
@@ -198,17 +197,16 @@ class LocationTrackingService : Service() {
     }
 
     /**
-     * Přepíná mezi rychlým 1.5s intervalem (když se uživatel dívá na displej)
-     * a 4s intervalem (když je ruka svěšená), aniž by vypínal satelitní zámek v hodinkách.
+     * Switches between fast 1.5 s updates (when the screen is interactive) and 4 s updates
+     * (when the wrist is lowered) while keeping the watch's satellite lock warm.
      */
     @SuppressLint("MissingPermission")
     private fun registerLocationRequest(interactive: Boolean) {
         fusedLocationClient.removeLocationUpdates(locationCallback)
-        // Hardwarový GPS čip nevypínáme, pouze jej ujistíme, že běží
         enableWatchHardwareGps()
 
         val locationRequest = if (interactive) {
-            // Displej svítí: Rychlý živý režim bez zpoždění pro okamžitou odezvu tlačítka GPS a šipky
+            // Screen on: fast live mode without delay for instant GPS button and cursor response
             LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1500L)
                 .setMinUpdateIntervalMillis(1000L)
                 .setMinUpdateDistanceMeters(1.0f)
@@ -217,7 +215,7 @@ class LocationTrackingService : Service() {
                 .setWaitForAccurateLocation(false)
                 .build()
         } else {
-            // Displej zhasnutý: Kontinuální záznam bez 30s prodlevy, aby po zvednutí ruky byla poloha hned aktuální
+            // Screen off: continuous recording without long batching delay so lifting the wrist shows current position
             LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 4000L)
                 .setMinUpdateIntervalMillis(2500L)
                 .setMinUpdateDistanceMeters(2.0f)
@@ -340,8 +338,8 @@ class LocationTrackingService : Service() {
     }
 
     /**
-     * Aktualizuje systémovou notifikaci maximálně jednou za 60 sekund nebo po každých 100 m,
-     * aby nebudila proces `system_server` přes Binder IPC při každém GPS bodu.
+     * Updates the system notification at most once every 60 seconds or every 100 m
+     * to avoid waking `system_server` over Binder IPC on every single GPS fix.
      */
     private fun updateNotificationThrottled() {
         val now = System.currentTimeMillis()

@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.*
 
 /**
- * Centrální správce stavu nahrávání trasy, barometrického převýšení a GPX navigace.
+ * Central state manager for track recording, barometric elevation gain, and GPX route navigation.
  */
 object TrackingManager {
 
@@ -37,7 +37,7 @@ object TrackingManager {
     private val _lastSavedSummary = MutableStateFlow<String?>(null)
     val lastSavedSummary: StateFlow<String?> = _lastSavedSummary.asStateFlow()
 
-    // Načtená GPX trasa pro navigaci po mapě
+    // Active planned GPX route for on-map navigation
     private val _plannedRoutePoints = MutableStateFlow<List<TrackPoint>>(emptyList())
     val plannedRoutePoints: StateFlow<List<TrackPoint>> = _plannedRoutePoints.asStateFlow()
 
@@ -76,8 +76,8 @@ object TrackingManager {
     }
 
     /**
-     * Aktualizuje nadmořskou výšku (z barometru nebo GPS fallbacku) a s hysterezí
-     * započítává nastoupané výškové metry během aktivního záznamu.
+     * Updates current elevation (from barometer or GPS fallback) and accumulates
+     * elevation gain with hysteresis during active recording.
      */
     fun updateAltitude(altitudeMeters: Double, isBarometric: Boolean) {
         _currentAltitudeMeters.value = altitudeMeters
@@ -93,20 +93,20 @@ object TrackingManager {
             return
         }
 
-        // Hysterezní práh: 3 m pro přesný barometr, 7 m pro GPS fallback (odfiltruje šum)
+        // Hysteresis threshold: 3 m for accurate barometer, 7 m for GPS fallback (filters sensor noise)
         val threshold = if (isBarometric) 3.0 else 7.0
         val diff = altitudeMeters - ref
         if (diff >= threshold) {
             _totalAscentMeters.value += diff
             referenceAltitudeForAscent = altitudeMeters
         } else if (diff <= -threshold) {
-            // Při klesání posuneme referenční hladinu dolů, abychom měřili další výstup
+            // Shift reference altitude down on descent to measure subsequent climbs accurately
             referenceAltitudeForAscent = altitudeMeters
         }
     }
 
     /**
-     * Nastaví nebo vyčistí naplánovanou GPX trasu pro navigaci na mapě.
+     * Sets or clears the active planned GPX route for map navigation.
      */
     fun setPlannedRoute(name: String?, points: List<TrackPoint>) {
         _plannedRouteName.value = name
@@ -115,9 +115,9 @@ object TrackingManager {
     }
 
     /**
-     * Přidá nový bod trasy, přičte vzdálenost a zkontroluje odchylku od naplánované GPX trasy.
-     * Chrání přesnou polohu před skoky na BTS/Wi-Fi, ale v lese a hlubokých údolích plynule
-     * přijímá reálné satelitní body (do 22 m), aby při aktivním treku nezamrzala šipka ani tlačítko GPS.
+     * Adds a new location fix, accumulates distance, and checks off-route deviation.
+     * Protects accurate fixes from coarse cell-tower/Wi-Fi jumps while smoothly accepting
+     * real satellite fixes under forest canopy (up to 22 m) so active treks never freeze.
      */
     fun addPoint(point: TrackPoint) {
         val incomingAcc = point.accuracyMeters
@@ -127,12 +127,12 @@ object TrackingManager {
             val existingAcc = existingLoc.accuracyMeters
             val ageDeltaMs = point.timestampMillis - existingLoc.timestampMillis
 
-            // 1. Krátkodobá ochrana (do 8 s) proti okamžitému přepsání čerstvého <=10m fixu horším odhadem (>10m)
+            // 1. Short-term guard (8 s) against overwriting a fresh <=10m fix with a less accurate estimate (>10m)
             if (incomingAcc > 10.0f && existingAcc <= 10.0f && ageDeltaMs in 0..8_000L) {
                 return
             }
 
-            // 2. Dlouhodobá ochrana (do 3 min) proti hrubým nesatelitním skokům z BTS vysílačů (> 25 m)
+            // 2. Long-term guard (3 min) against coarse non-satellite cell-tower jumps (> 25 m)
             if (incomingAcc > 25.0f && existingAcc <= 22.0f && ageDeltaMs in 0..180_000L) {
                 return
             }
@@ -144,13 +144,12 @@ object TrackingManager {
             point
         }
 
-        // Šipku aktuální polohy na mapě aktualizujeme pro každý validní satelitní fix (včetně lesa do 25 m),
-        // a to i během aktivního nahrávání treku, aby tlačítko GPS reagovalo okamžitě.
+        // Update live map cursor for every valid satellite fix (including forest canopy up to 25 m)
         if (incomingAcc <= 25.0f || _currentLocation.value == null) {
             _currentLocation.value = enrichedPoint
         }
 
-        // Kontrola odchylky od naplánované GPX trasy (> 60 metrů od nejbližšího úseku trasy = mimo trasu)
+        // Check deviation from the planned GPX route (> 60 meters from nearest route segment = off-route)
         val route = _plannedRoutePoints.value
         if (route.isNotEmpty() && incomingAcc <= 25.0f) {
             val minDistanceToRoute = calculateMinDistanceToRouteMeters(
@@ -165,7 +164,7 @@ object TrackingManager {
 
         if (!_isTracking.value) return
 
-        // Do ukládaného GPX záznamu trasy pouštíme satelitní body do 22 m (pokryje i hustý les a skalní údolí)
+        // Accept satellite fixes up to 22 m into the recorded GPX track (covers dense forest and deep valleys)
         if (incomingAcc > 22.0f) {
             return
         }
@@ -176,7 +175,7 @@ object TrackingManager {
                 previous.latitude, previous.longitude,
                 enrichedPoint.latitude, enrichedPoint.longitude
             )
-            // Odfiltrujeme GPS šum na místě (< 1.5 metru)
+            // Filter stationary GPS jitter (< 1.5 meters)
             if (delta < 1.5) return
             _totalDistanceMeters.value += delta
         }
@@ -185,7 +184,7 @@ object TrackingManager {
     }
 
     /**
-     * Vyčistí záznam pro novou trasu.
+     * Resets all tracking state for a new hike.
      */
     fun clearTrack() {
         _isTracking.value = false
@@ -203,8 +202,8 @@ object TrackingManager {
     }
 
     /**
-     * Spočítá kolmou vzdálenost bodu [lat], [lon] od lomené čáry [route] (Point-to-Segment Cross-Track Distance).
-     * Zabraňuje falešným poplachům "Mimo trasu" na dlouhých rovných lesních úsecích mezi dvěma body GPX.
+     * Computes the perpendicular distance from point [lat], [lon] to polyline [route] (Point-to-Segment Cross-Track Distance).
+     * Prevents false "Off route" alerts on long straight forest segments between two GPX vertices.
      */
     fun calculateMinDistanceToRouteMeters(
         lat: Double,
@@ -226,7 +225,7 @@ object TrackingManager {
     }
 
     /**
-     * Vzdálenost bodu P(lat, lon) od úsečky AB v lokální rovinné projekci (v metrech).
+     * Distance from point P(lat, lon) to line segment AB in local planar projection (in meters).
      */
     fun calculateDistanceToSegmentMeters(
         pLat: Double, pLon: Double,
@@ -248,7 +247,7 @@ object TrackingManager {
         if (lenSq < 1e-6) {
             return hypot(ax, ay)
         }
-        // Projekce počátku P(0,0) na úsečku AB: t = -(A · (B - A)) / |B - A|^2
+        // Projection of origin P(0,0) onto segment AB: t = -(A · (B - A)) / |B - A|^2
         val t = (-(ax * dx + ay * dy) / lenSq).coerceIn(0.0, 1.0)
         val projX = ax + t * dx
         val projY = ay + t * dy
@@ -256,7 +255,7 @@ object TrackingManager {
     }
 
     /**
-     * Haversinův vzorec pro výpočet vzdálenosti na zemském elipsoidu (v metrech).
+     * Haversine formula for great-circle distance on the Earth's ellipsoid (in meters).
      */
     fun calculateDistanceMeters(
         lat1: Double, lon1: Double,

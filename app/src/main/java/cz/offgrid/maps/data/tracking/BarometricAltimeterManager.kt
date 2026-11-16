@@ -12,14 +12,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Univerzální barometrický a satelitní výškoměr pro všechny hodinky s Wear OS s korekcí geoidu EGM2008.
+ * Universal barometric and satellite altimeter for Wear OS watches with EGM2008 geoid correction.
  *
- * Proč běžné GPS aplikace v ČR ukazují o ~45 metrů více:
- * - `Location.getAltitude()` v Androidu vrací výšku nad matematickým elipsoidem WGS84 ($h_{WGS84}$).
- * - V České republice leží skutečná hladina moře (geoid EGM2008 / výškový systém Bpv) o 43 až 47 m
- *   výše než elipsoid WGS84 (např. na jižní Moravě o +44.5 m, v Praze o +46.5 m).
- * - Tato třída převádí elipsoidickou výšku na skutečnou ortometrickou nadmořskou výšku ($H_{MSL}$),
- *   která na metr sedí s českými turistickými mapami a rozcestníky KČT, a kalibruje jí barometr.
+ * Why standard GPS apps in Central Europe read ~45 meters too high:
+ * - `Location.getAltitude()` in Android returns height above the mathematical WGS84 reference ellipsoid ($h_{WGS84}$).
+ * - In Central Europe (Czechia, Slovakia, Austria), true mean sea level (the EGM2008 geoid) lies 43 to 47 m
+ *   above the WGS84 ellipsoid (e.g. +44.56 m in South Moravia, +46.5 m in Prague).
+ * - This class converts ellipsoidal height into true orthometric elevation above mean sea level ($H_{MSL}$),
+ *   matching topographic contour lines and trailhead signs to the meter, and uses it to calibrate the barometer.
  */
 class BarometricAltimeterManager(context: Context) : SensorEventListener {
 
@@ -27,13 +27,13 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
     private val pressureSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** Indikuje, zda tento model hodinek disponuje hardwarovým barometrem. */
+    /** Indicates whether this watch model features a hardware barometer sensor. */
     val hasHardwareBarometer: Boolean = pressureSensor != null
 
     private val _altitudeMeters = MutableStateFlow<Double?>(null)
     val altitudeMeters: StateFlow<Double?> = _altitudeMeters.asStateFlow()
 
-    // Kalibrační posun barometru podle ortometrické nadmořské výšky (pro kompenzaci změn počasí/tlaku)
+    // Barometer calibration offset relative to orthometric MSL altitude (compensates for weather pressure shifts)
     private var baroCalibrationOffsetMeters: Double = 0.0
     private var isCalibratedWithGps = false
     private var bestCalibrationVertAcc: Float = Float.MAX_VALUE
@@ -64,9 +64,9 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
     }
 
     /**
-     * Volá se při příchodu nového GPS bodu (již převedeného na skutečnou nadmořskou výšku MSL).
-     * - Na hodinkách bez barometru přímo aktualizuje nadmořskou výšku.
-     * - Na hodinkách s barometrem ihned nebo plynule zkalibruje barometrickou výšku.
+     * Called when a new GPS location arrives (already converted to true MSL elevation).
+     * - On watches without a barometer, directly updates smoothed altitude.
+     * - On watches with a barometer, immediately or smoothly calibrates barometric elevation.
      */
     fun onGpsAltitudeReceived(
         mslAltitudeMeters: Double?,
@@ -75,7 +75,7 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
     ) {
         if (mslAltitudeMeters == null) return
 
-        // Ignorujeme výškově nespolehlivé 2D fixy (když je vertikální chyba > 25 m)
+        // Ignore vertically unreliable 2D fixes (when vertical accuracy error > 25 m)
         if (verticalAccuracyMeters != null && verticalAccuracyMeters > 25.0f && _altitudeMeters.value != null) {
             return
         }
@@ -95,8 +95,8 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
 
         val rawBaro = smoothedBaroAltitude
         if (rawBaro == null) {
-            // Barometr ještě neposlal první vzorek tlaku -> uložíme si kalibrační MSL výšku do fronty
-            // a rovnou ji zobrazíme v UI, aby uživatel neviděl nezkalibrovanou výšku podle 1013.25 hPa!
+            // Barometer has not emitted its first pressure sample yet -> queue the MSL calibration altitude
+            // and display it immediately so the user never sees an uncalibrated 1013.25 hPa reading!
             if (isGoodHorizontalFix) {
                 pendingCalibrationMslAltitude = mslAltitudeMeters
                 bestCalibrationVertAcc = effectiveVertAcc
@@ -129,7 +129,7 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         if (event?.sensor?.type != Sensor.TYPE_PRESSURE) return
 
         val now = System.currentTimeMillis()
-        if (now - lastUpdateMillis < 1000L) return // Stačí 1 vzorek za sekundu (extrémní úspora CPU)
+        if (now - lastUpdateMillis < 1000L) return // 1 sample per second is plenty (minimal CPU wakeups)
 
         val pressureHpa = event.values[0]
         if (pressureHpa <= 0f) return
@@ -143,7 +143,7 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         val nextRaw = if (prev == null) rawAltitude else (prev * 0.75 + rawAltitude * 0.25)
         smoothedBaroAltitude = nextRaw
 
-        // Pokud přišla GPS výška ještě před prvním tikem barometru, okamžitě barometr zkalibrujeme
+        // If a GPS altitude arrived before the first barometer tick, calibrate immediately
         val pendingMsl = pendingCalibrationMslAltitude
         if (pendingMsl != null) {
             baroCalibrationOffsetMeters = pendingMsl - nextRaw
@@ -152,8 +152,7 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
             saveCalibrationToPrefs(baroCalibrationOffsetMeters, pendingMsl)
         }
 
-        // Pokud ještě vůbec nemáme kalibraci z GPS (ani z minula), počkáme na GPS/lastLocation,
-        // abychom při tlakové níži neukazovali falešných 500 m podle standardních 1013.25 hPa!
+        // Wait until calibrated before publishing raw barometric pressure altitude
         if (!isCalibratedWithGps) {
             return
         }
@@ -179,10 +178,10 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         private const val KEY_LAST_MSL_ALT = "last_calibrated_msl_alt_m"
 
         /**
-         * Vrátí skutečnou ortometrickou nadmořskou výšku (MSL / Bpv) z objektu [Location]:
-         * 1. Na Androidu 14+ (API 34+) použije `mslAltitudeMeters`, pokud je k dispozici.
-         * 2. Jinak převede elipsoidickou výšku `location.altitude` (WGS84) na nadmořskou výšku (MSL)
-         *    odečtením undulace geoidu EGM2008.
+         * Extracts true orthometric elevation above mean sea level (MSL) from a [Location]:
+         * 1. On Android 14+ (API 34+), uses `mslAltitudeMeters` if available.
+         * 2. Otherwise converts `location.altitude` (WGS84 ellipsoid) to MSL by subtracting
+         *    the EGM2008 geoid undulation.
          */
         fun extractMslAltitudeMeters(location: Location): Double? {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && location.hasMslAltitude()) {
@@ -193,11 +192,8 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         }
 
         /**
-         * Převádí výšku nad referenčním elipsoidem WGS84 ($h_{WGS84}$) na skutečnou nadmořskou
-         * výšku nad hladinou moře ($H_{MSL}$ / Bpv) odečtením výšky geoidu EGM2008 $N(\varphi, \lambda)$.
-         *
-         * V ČR a střední Evropě (47°–52° s. š., 11°–20° v. d.) leží geoid EGM2008 o 42.5 až 48.0 m
-         * nad elipsoidem WGS84 (např. Zbýšov/Oslavany: +44.56 m, Praha: +46.52 m, Sněžka: +45.69 m).
+         * Converts height above the WGS84 reference ellipsoid ($h_{WGS84}$) to true orthometric
+         * elevation above mean sea level ($H_{MSL}$) by subtracting the EGM2008 geoid height $N(\varphi, \lambda)$.
          */
         fun wgs84ToMslAltitude(wgs84AltitudeMeters: Double, latitude: Double, longitude: Double): Double {
             val geoidUndulationMeters = estimateEgm2008GeoidUndulationMeters(latitude, longitude)
@@ -205,8 +201,8 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         }
 
         /**
-         * Spočítá undulaci geoidu EGM2008 $N(\varphi, \lambda)$ v metrech pro střední Evropu.
-         * Přesnost vůči plné mřížce ČÚZK / EGM2008 v celé ČR je +-0.3 m.
+         * Computes the EGM2008 geoid undulation $N(\varphi, \lambda)$ in meters for Central Europe.
+         * Accuracy relative to the full EGM2008 grid across Czechia is +-0.3 m.
          */
         fun estimateEgm2008GeoidUndulationMeters(latitude: Double, longitude: Double): Double {
             if (latitude !in 45.0..55.0 || longitude !in 8.0..24.0) {

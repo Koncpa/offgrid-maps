@@ -17,13 +17,13 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Exportér, importér a čtečka standardního formátu GPX 1.1 (kompatibilní s Mapy.cz, Garmin, Strava, Komoot).
+ * Exporter, importer, and parser for standard GPX 1.1 files (compatible with Mapy.com, Garmin, Strava, Komoot).
  */
 object GpxExporter {
 
     private const val RECOVERY_FILE_NAME = ".active_recovery.gpx"
 
-    // Podpora pro <trkpt> (zaznamenaná stopa) i <rtept> (naplánovaná trasa z Mapy.cz) včetně víceřádkového zápisu
+    // Supports both <trkpt> (recorded track) and <rtept> (planned route from Mapy.com) including multiline tags
     private val pointTagRegex = Regex(
         """<(?:trkpt|rtept)\b([^>]*?)(?:/>|>(.*?)</(?:trkpt|rtept)>)""",
         setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
@@ -33,10 +33,10 @@ object GpxExporter {
     private val eleTagRegex = Regex("""<ele>\s*([0-9.+-]+)\s*</ele>""", RegexOption.IGNORE_CASE)
 
     /**
-     * Uloží seznam zaznamenaných bodů do souboru .gpx v interním úložišti hodinek (/files/tracks/)
-     * a zároveň automaticky vyexportuje kopii do veřejné složky `Download/OffGridMaps/`.
+     * Saves recorded track points to a .gpx file in internal storage (`/files/tracks/`)
+     * and automatically exports a backup copy to the public `Download/OffGridMaps/` directory.
      */
-    fun saveTrackToGpx(context: Context, points: List<TrackPoint>, prefix: String = "tura"): File? {
+    fun saveTrackToGpx(context: Context, points: List<TrackPoint>, prefix: String = "hike"): File? {
         if (points.isEmpty()) return null
 
         val tracksDir = getTracksDir(context)
@@ -44,27 +44,27 @@ object GpxExporter {
         val fileName = "${prefix}_$fileTimestamp.gpx"
         val gpxFile = File(tracksDir, fileName)
 
-        val xmlContent = buildGpxXml("Túra $fileTimestamp", points)
+        val xmlContent = buildGpxXml("Hike $fileTimestamp", points)
         gpxFile.writeText(xmlContent)
         clearRecoveryCheckpoint(context)
 
-        // Automaticky uložíme kopii také do veřejné složky Download/OffGridMaps/ pro snadné stažení do telefonu/PC
+        // Export a copy to public Download/OffGridMaps/ for easy transfer to phone/PC
         exportToPublicDownloads(context, fileName, xmlContent)
 
         return gpxFile
     }
 
     /**
-     * Průběžně ukládá rozpracovanou trasu na disk pro případ náhlého vybití nebo restartu hodinek.
+     * Periodically checkpoints the active track to disk in case of sudden battery depletion or reboot.
      */
     fun saveRecoveryCheckpoint(context: Context, points: List<TrackPoint>) {
         if (points.isEmpty()) return
         val recoveryFile = File(getTracksDir(context), RECOVERY_FILE_NAME)
-        recoveryFile.writeText(buildGpxXml("Obnovená túra", points))
+        recoveryFile.writeText(buildGpxXml("Recovered hike", points))
     }
 
     /**
-     * Odstraní dočasný soubor obnovy po řádném uložení trasy.
+     * Removes the temporary recovery checkpoint file after a clean track save.
      */
     fun clearRecoveryCheckpoint(context: Context) {
         val recoveryFile = File(getTracksDir(context), RECOVERY_FILE_NAME)
@@ -74,8 +74,8 @@ object GpxExporter {
     }
 
     /**
-     * Při startu aplikace zkontroluje, zda na disku nezůstala neukončená trasa (např. po vybití baterie),
-     * a automaticky ji převede na plnohodnotný .gpx záznam.
+     * Checks at app startup whether an unfinished track checkpoint exists on disk (e.g. after battery depletion)
+     * and automatically promotes it to a permanent .gpx file.
      */
     fun recoverUnfinishedTrackIfAny(context: Context): File? {
         if (TrackingManager.isTracking.value) return null
@@ -90,7 +90,7 @@ object GpxExporter {
         }
 
         val fileTimestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(recoveryFile.lastModified()))
-        val fileName = "obnoveno_$fileTimestamp.gpx"
+        val fileName = "recovered_$fileTimestamp.gpx"
         val recoveredFile = File(tracksDir, fileName)
         val xmlContent = recoveryFile.readText()
         recoveryFile.renameTo(recoveredFile)
@@ -99,7 +99,7 @@ object GpxExporter {
     }
 
     /**
-     * Importuje .gpx soubor z Uri (např. ze systémového výběru souborů nebo po přijetí přes Bluetooth / Quick Share).
+     * Imports a .gpx file from a Uri (e.g. system file picker or Bluetooth / Quick Share).
      */
     fun importGpxFromUri(context: Context, uri: Uri): File? {
         return try {
@@ -125,8 +125,8 @@ object GpxExporter {
     }
 
     /**
-     * Vyexportuje .gpx soubor do veřejné složky `Download/OffGridMaps/` a otevře systémové sdílení
-     * (Quick Share / Bluetooth / odeslání do telefonu).
+     * Exports a .gpx file to `Download/OffGridMaps/` and opens the system share sheet
+     * (Quick Share / Bluetooth / phone transfer).
      */
     fun shareAndExportGpxFile(context: Context, file: File): Boolean {
         if (!file.exists()) return false
@@ -144,7 +144,7 @@ object GpxExporter {
                 putExtra(Intent.EXTRA_SUBJECT, file.name)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val chooser = Intent.createChooser(shareIntent, "Odeslat GPX").apply {
+            val chooser = Intent.createChooser(shareIntent, "Share GPX").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
@@ -155,7 +155,7 @@ object GpxExporter {
     }
 
     /**
-     * Zapíše kopii .gpx souboru do veřejné složky `Download/OffGridMaps/` (funguje bez oprávnění na Androidu 10+).
+     * Writes a copy of the .gpx file to the public `Download/OffGridMaps/` folder (permissionless on Android 10+).
      */
     private fun exportToPublicDownloads(context: Context, fileName: String, xmlContent: String): Boolean {
         return try {
@@ -216,7 +216,7 @@ object GpxExporter {
     }
 
     /**
-     * Vrátí seznam všech uložených .gpx tras (automaticky synchronizuje i .gpx soubory nahrané do složky Download nebo external files).
+     * Returns all saved .gpx routes (automatically syncing any .gpx files placed in Download or external files).
      */
     fun listSavedGpxFiles(context: Context): List<File> {
         val dir = getTracksDir(context)
@@ -228,8 +228,8 @@ object GpxExporter {
     }
 
     /**
-     * Zkontroluje veřejnou složku Download a externí složku aplikace (`/sdcard/Android/data/cz.offgrid.maps/files/tracks`)
-     * a automaticky naimportuje nově vložené .gpx trasy (např. z Mapy.cz), pokud nebyly uživatelem smazány.
+     * Scans the public Download folder and external app storage (`/sdcard/Android/data/cz.offgrid.maps/files/tracks`)
+     * and automatically imports newly added .gpx routes unless previously deleted by the user.
      */
     private fun syncExternalGpxDirectories(context: Context, internalTracksDir: File) {
         val deletedNames = getDeletedTrackNames(internalTracksDir)
@@ -263,7 +263,7 @@ object GpxExporter {
     }
 
     /**
-     * Načte body trasy ze souboru GPX 1.1 (podporuje `<trkpt>` i `<rtept>` z Mapy.cz).
+     * Parses route points from a GPX 1.1 file (supports both `<trkpt>` and `<rtept>` from Mapy.com).
      */
     fun parseGpxFile(file: File): List<TrackPoint> {
         if (!file.exists()) return emptyList()
@@ -275,7 +275,7 @@ object GpxExporter {
     }
 
     /**
-     * Načte body trasy z textového obsahu GPX 1.1 (nezávisle na pořadí atributů lat/lon a řádkování).
+     * Parses route points from GPX 1.1 XML content (independent of lat/lon attribute order or line breaks).
      */
     fun parseGpxContent(xmlContent: String): List<TrackPoint> {
         val points = mutableListOf<TrackPoint>()
@@ -301,14 +301,14 @@ object GpxExporter {
     }
 
     /**
-     * Smaže uložený .gpx soubor z interního úložiště hodinek a zaznamená jeho smazání,
-     * aby se znovu automaticky nenačetl ze záložní složky Download/OffGridMaps.
+     * Deletes a saved .gpx file from internal storage and records its deletion in `.deleted_tracks`
+     * so it is not re-imported from `Download/OffGridMaps` during folder sync.
      */
     fun deleteGpxFile(file: File): Boolean {
         file.parentFile?.let { dir ->
             recordDeletedTrackName(dir, file.name)
         }
-        // Pokusíme se rovnou smazat i případnou kopii ve veřejné složce Download/OffGridMaps
+        // Also remove any backup copy in public Download/OffGridMaps
         try {
             @Suppress("DEPRECATION")
             val dlDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
@@ -362,7 +362,7 @@ object GpxExporter {
         if (initMarker.exists()) return
         initMarker.writeText("1")
 
-        // Odstraníme staré testovací/ukázkové trasy z předchozích verzí
+        // Remove obsolete sample tracks from earlier development builds
         listOf(
             "oslavany_kct_okruh.gpx",
             "Oslavany_zamecky_okruh.gpx",
@@ -374,7 +374,7 @@ object GpxExporter {
             recordDeletedTrackName(tracksDir, oldName)
         }
 
-        // Nahrajeme reálnou trasu Údolí řeky Oslavy (3 131 bodů) z assets
+        // Seed the real Oslava River Valley route (3,131 points) from assets
         val assetName = "Udoli_Oslava.gpx"
         val target = File(tracksDir, assetName)
         if (!target.exists()) {

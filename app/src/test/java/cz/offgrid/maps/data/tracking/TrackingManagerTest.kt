@@ -24,13 +24,13 @@ class TrackingManagerTest {
 
     @Test
     fun calculateDistanceMeters_knownLocations_calculatesAccurately() {
-        // Staroměstské náměstí (50.0875, 14.4214) -> Karlův most (50.0865, 14.4114)
-        // Vzdušná vzdálenost je cca 719 metrů
+        // Old Town Square (50.0875, 14.4214) -> Charles Bridge (50.0865, 14.4114)
+        // Straight-line distance is ~719 meters
         val distance = TrackingManager.calculateDistanceMeters(
             50.0875, 14.4214,
             50.0865, 14.4114
         )
-        assertEquals(719.0, distance, 15.0) // Odchylka do 15 metrů
+        assertEquals(719.0, distance, 15.0)
     }
 
     @Test
@@ -79,11 +79,11 @@ class TrackingManagerTest {
     fun updateAltitude_accumulatesAscentWithHysteresis() {
         TrackingManager.setTrackingActive(true)
         TrackingManager.updateAltitude(250.0, isBarometric = true)
-        // Šum o 1.5 m pod prahem 3 m se nezapočítá
+        // Sensor noise of 1.5 m below the 3 m threshold is ignored
         TrackingManager.updateAltitude(251.5, isBarometric = true)
         assertEquals(0.0, TrackingManager.totalAscentMeters.value, 0.01)
 
-        // Výstup o 6 m nad referenčních 250 m se započítá
+        // Climb of 6 m above reference 250 m is accumulated
         TrackingManager.updateAltitude(256.0, isBarometric = true)
         assertEquals(6.0, TrackingManager.totalAscentMeters.value, 0.01)
     }
@@ -94,13 +94,13 @@ class TrackingManagerTest {
             TrackPoint(49.1246, 16.3353),
             TrackPoint(49.1268, 16.3321)
         )
-        TrackingManager.setPlannedRoute("Oslavany okruh", route)
+        TrackingManager.setPlannedRoute("Oslavany loop", route)
 
-        // Bod přímo na trase
+        // Point directly on the route
         TrackingManager.addPoint(TrackPoint(49.1246, 16.3353))
         assertFalse(TrackingManager.isOffRoute.value)
 
-        // Bod vzdálený cca 300 m od trasy
+        // Point ~300 m away from the route
         TrackingManager.addPoint(TrackPoint(49.1200, 16.3400))
         assertTrue(TrackingManager.isOffRoute.value)
     }
@@ -108,7 +108,7 @@ class TrackingManagerTest {
     @Test
     fun addPoint_ignoresInaccurateFixOver10mWhenStrictSatelliteFixExists() {
         val now = 1_700_000_000_000L
-        // Přesný satelitní fix na Zbýšovské haldě (přesnost 4.5 m <= 10 m)
+        // Accurate satellite fix (4.5 m <= 10 m)
         val haldaGpsPoint = TrackPoint(
             latitude = 49.1565,
             longitude = 16.3510,
@@ -118,7 +118,7 @@ class TrackingManagerTest {
         TrackingManager.addPoint(haldaGpsPoint)
         assertEquals(49.1565, TrackingManager.currentLocation.value!!.latitude, 0.0001)
 
-        // O 5 sekund později přijde méně přesný odhad (např. 12.5 m > 10 m ze stíněné kapsy nebo Wi-Fi/BTS v Sičce)
+        // 5 seconds later, a less accurate estimate arrives (12.5 m > 10 m from a shielded pocket)
         val imprecisePocketOrNetworkPoint = TrackPoint(
             latitude = 49.1607,
             longitude = 16.3444,
@@ -127,7 +127,7 @@ class TrackingManagerTest {
         )
         TrackingManager.addPoint(imprecisePocketOrNetworkPoint)
 
-        // Šipka musí zůstat na Zbýšovské haldě, jakákoliv nepřesnost > 10 m je odfiltrována
+        // Short-term guard keeps the accurate satellite fix
         assertEquals(49.1565, TrackingManager.currentLocation.value!!.latitude, 0.0001)
         assertEquals(16.3510, TrackingManager.currentLocation.value!!.longitude, 0.0001)
     }
@@ -156,15 +156,14 @@ class TrackingManagerTest {
 
     @Test
     fun addPoint_midpointOnLongStraightSegment_usesCrossTrackDistanceAndStaysOnRoute() {
-        // Dva body GPX trasy vzdálené od sebe ~445 metrů severo-jižně (49.1200 -> 49.1240)
-        // Kdybychom počítali jen vzdálenost k vrcholům (point-to-vertex), uprostřed úseku (49.1220)
-        // bychom byli ~222 m od obou bodů a falešně by vyskočil alarm "Mimo GPX trasu (>60 m)".
-        // Díky kolmé vzdálenosti k úsečce (Cross-Track / Point-to-Segment) je odchylka 0 m.
+        // Two GPX route vertices ~445 meters apart north-to-south (49.1200 -> 49.1240).
+        // Point-to-vertex distance at the midpoint (49.1220) would be ~222 m and falsely trigger "Off route (>60 m)".
+        // With perpendicular Point-to-Segment (Cross-Track) projection, deviation is 0 m.
         val route = listOf(
             TrackPoint(49.1200, 16.3350),
             TrackPoint(49.1240, 16.3350)
         )
-        TrackingManager.setPlannedRoute("Dlouhá rovinka", route)
+        TrackingManager.setPlannedRoute("Straight forest segment", route)
 
         val midpoint = TrackPoint(49.1220, 16.3350, accuracyMeters = 4.0f)
         val crossTrackDist = TrackingManager.calculateMinDistanceToRouteMeters(
@@ -188,17 +187,17 @@ class TrackingManagerTest {
         assertEquals("Udoli_Oslava", TrackingManager.plannedRouteName.value)
         assertEquals(2, TrackingManager.plannedRoutePoints.value.size)
 
-        // Sejdeme z trasy (> 60 m)
+        // Step off-route (> 60 m)
         TrackingManager.addPoint(TrackPoint(49.1350, 16.3500, accuracyMeters = 4.0f))
         assertTrue(TrackingManager.isOffRoute.value)
 
-        // Zrušíme trasu ("Zrušit trasu") -> vymaže se aktivní trasa i off-route alarm
+        // Clear active route -> resets planned route and off-route alert
         TrackingManager.setPlannedRoute(null, emptyList())
         assertNull(TrackingManager.plannedRouteName.value)
         assertTrue(TrackingManager.plannedRoutePoints.value.isEmpty())
         assertFalse(TrackingManager.isOffRoute.value)
 
-        // Znovu načteme stejnou trasu -> okamžitě obsahuje všechny body
+        // Reload the same route -> immediately restores all points
         TrackingManager.setPlannedRoute("Udoli_Oslava", route.toList())
         assertEquals("Udoli_Oslava", TrackingManager.plannedRouteName.value)
         assertEquals(2, TrackingManager.plannedRoutePoints.value.size)
@@ -208,7 +207,7 @@ class TrackingManagerTest {
     fun deleteGpxFile_deletesFileAndRecordsInDeletedRegistry() {
         val tempDir = kotlin.io.path.createTempDirectory("gpx_test").toFile()
         try {
-            val gpxFile = java.io.File(tempDir, "Test_Trasa.gpx")
+            val gpxFile = java.io.File(tempDir, "Test_Route.gpx")
             gpxFile.writeText("<gpx></gpx>")
             assertTrue(gpxFile.exists())
 
@@ -216,10 +215,10 @@ class TrackingManagerTest {
             assertTrue(deleted)
             assertFalse(gpxFile.exists())
 
-            // Ověříme, že se název zapsal do .deleted_tracks, aby se při synchronizaci znovu neobjevil
+            // Verify that the file name is recorded in .deleted_tracks so external folder sync never restores it
             val registry = java.io.File(tempDir, ".deleted_tracks")
             assertTrue(registry.exists())
-            assertTrue(registry.readLines().contains("Test_Trasa.gpx"))
+            assertTrue(registry.readLines().contains("Test_Route.gpx"))
         } finally {
             tempDir.deleteRecursively()
         }
@@ -230,7 +229,7 @@ class TrackingManagerTest {
         val now = 1_700_000_000_000L
         TrackingManager.setTrackingActive(true)
 
-        // 1. Otevřená paseka (přesnost 5.0 m)
+        // 1. Open clearing (accuracy 5.0 m)
         val clearingPoint = TrackPoint(
             latitude = 49.1246,
             longitude = 16.3353,
@@ -240,7 +239,7 @@ class TrackingManagerTest {
         TrackingManager.addPoint(clearingPoint)
         assertEquals(1, TrackingManager.trackPoints.value.size)
 
-        // 2. O 12 sekund později vejdeme do hustého lesa v údolí Oslavy (přesnost satelitů 14.5 m)
+        // 2. 12 seconds later, enter dense forest canyon (satellite accuracy 14.5 m)
         val forestPoint = TrackPoint(
             latitude = 49.1252,
             longitude = 16.3345,
@@ -249,11 +248,11 @@ class TrackingManagerTest {
         )
         TrackingManager.addPoint(forestPoint)
 
-        // Šipka polohy i zaznamenávaná GPX trasa se musí v lese plynule posunout (žádné 3minutové zamrznutí)
+        // Live map position and recorded GPX track advance smoothly (no 3-minute freeze)
         assertEquals(49.1252, TrackingManager.currentLocation.value!!.latitude, 0.0001)
         assertEquals(2, TrackingManager.trackPoints.value.size)
 
-        // 3. Hrubý odhad z BTS vysílače (přesnost 85 m) je však nadále spolehlivě zahozen
+        // 3. Coarse cell-tower estimate (accuracy 85 m) is still rejected
         val btsJump = TrackPoint(
             latitude = 49.1500,
             longitude = 16.3600,
@@ -268,8 +267,8 @@ class TrackingManagerTest {
     @Test
     fun wgs84ToMslAltitude_subtractsCzechGeoidUndulationAccurately() {
         // Zbýšov / Oslavany (49.160659, 16.344159):
-        // Android GPS vrací elipsoidickou výšku WGS84 = 412.2 m.
-        // Skutečná nadmořská výška terénu (MSL / Bpv) je ~368 m n. m. (undulace geoidu EGM2008 je +44.56 m).
+        // Android GPS returns WGS84 ellipsoidal height = 412.2 m.
+        // True MSL terrain elevation is ~368 m (EGM2008 geoid undulation is +44.56 m).
         val mslZbysov = BarometricAltimeterManager.wgs84ToMslAltitude(
             wgs84AltitudeMeters = 412.2,
             latitude = 49.160659,
@@ -277,7 +276,7 @@ class TrackingManagerTest {
         )
         assertEquals(367.64, mslZbysov, 0.5)
 
-        // Praha (50.08, 14.43): undulace geoidu EGM2008 je ~46.5 m
+        // Prague (50.08, 14.43): EGM2008 geoid undulation is ~46.5 m
         val geoidPrague = BarometricAltimeterManager.estimateEgm2008GeoidUndulationMeters(50.08, 14.43)
         assertEquals(46.5, geoidPrague, 0.4)
     }

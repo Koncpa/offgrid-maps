@@ -52,7 +52,7 @@ private const val CUSTOM_CONTOURS_SOURCE_ID = "custom_contours_source"
 private const val CUSTOM_KCT_TRAILS_SOURCE_ID = "custom_kct_trails_source"
 
 /**
- * Energeticky vysoce optimalizovaný Compose wrapper pro MapLibre MapView na Wear OS.
+ * Power-optimized Compose wrapper for MapLibre MapView on Wear OS.
  */
 @SuppressLint("ClickableViewAccessibility")
 @Composable
@@ -82,7 +82,7 @@ fun MapLibreMapView(
     val mapView = remember {
         MapView(context).apply {
             onCreate(null)
-            // Klíčová úspora GPU: Omezíme maximální FPS na 15 snímků za sekundu
+            // Key GPU power optimization: cap maximum frame rate at 15 FPS
             setMaximumFps(15)
 
             setOnTouchListener { view, event ->
@@ -138,14 +138,14 @@ fun MapLibreMapView(
                 isScaleVelocityAnimationEnabled = false
             }
 
-            // Pokud uživatel pohne mapou prstem, odemkneme automatické centrování na GPS
+            // Unlock automatic GPS camera follow when the user pans the map manually
             map.addOnCameraMoveStartedListener { reason ->
                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                     onUserPanGesture()
                 }
             }
 
-            // Stejný přístup jako u mapových dlaždic: Po zastavení posunu/zoomu načteme vrstevnice pro aktuální výřez
+            // Load contour tiles for the active camera viewport once camera movement settles
             map.addOnCameraIdleListener {
                 val camPos = map.cameraPosition
                 val target = camPos.target ?: return@addOnCameraIdleListener
@@ -166,9 +166,9 @@ fun MapLibreMapView(
             val styleJson = StyleBuilder.createAmoledOutdoorStyle(mbtilesFile)
             map.setStyle(Style.Builder().fromJson(styleJson)) { style ->
 
-                // 0. Zdroj a vrstva pro načtenou GPX trasu k navigaci
-                // Čistě černý podklad (#000000 = 0 mW) + přerušovaná jantarově oranžová (#E66800 = 0 % modrého OLED subpixelu,
-                // o >52 % nižší spotřeba než bílá barva a přitom nezasahuje do červené, žluté, zelené ani modré značky KČT)
+                // 0. Source and layers for the active planned GPX route
+                // Pure black casing (#000000 = 0 mW) + dashed zero-blue amber-orange (#E66800, B = 0,
+                // >52% lower OLED power draw than white while remaining distinct from Red/Yellow/Green/Blue trails)
                 val plannedSource = GeoJsonSource(PLANNED_ROUTE_SOURCE_ID)
                 style.addSource(plannedSource)
                 style.addLayer(
@@ -189,7 +189,7 @@ fun MapLibreMapView(
                     )
                 )
 
-                // 1. Zdroj a vrstva pro zaznamenanou GPX trasu (v úsporné tlumené jantarové barvě)
+                // 1. Source and layer for the actively recorded GPX track
                 val trackSource = GeoJsonSource(TRACK_LINE_SOURCE_ID)
                 style.addSource(trackSource)
                 style.addLayer(
@@ -201,7 +201,7 @@ fun MapLibreMapView(
                     )
                 )
 
-                // 2. Ikona a SymbolLayer pro malou GPS tečku se šipečkou ve stylu Mapy.cz
+                // 2. Icon and SymbolLayer for the location dot and heading chevron
                 style.addImage(USER_LOCATION_ICON_ID, createMapyCzStyleLocationBitmap())
 
                 val locationPoint = Point.fromLngLat(targetLocation.longitude, targetLocation.latitude)
@@ -229,7 +229,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace offline vrstevnic stažených pro oblasti mimo JMK
+    // Update offline contour lines downloaded for regions outside South Moravia
     LaunchedEffect(customContoursGeoJson, isStyleLoaded) {
         val geoJson = customContoursGeoJson
         if (isStyleLoaded && !geoJson.isNullOrEmpty()) {
@@ -242,7 +242,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace turistických tras KČT stažených z GitHub repozitáře (Koncpa/offgrid-maps-data)
+    // Update marked hiking trails downloaded from the GitHub repository (Koncpa/offgrid-maps-data)
     LaunchedEffect(customTrailsGeoJson, isStyleLoaded) {
         val trailsJson = customTrailsGeoJson
         if (isStyleLoaded && !trailsJson.isNullOrEmpty()) {
@@ -255,7 +255,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace pozice GPS tečky (pouze při rozsvíceném displeji -> 0 % GPU práce na pozadí)
+    // Update GPS location dot position (only when screen is interactive -> 0% background GPU work)
     LaunchedEffect(targetLocation, isStyleLoaded, isScreenVisible) {
         if (isStyleLoaded && isScreenVisible) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(USER_LOCATION_SOURCE_ID)?.let { source ->
@@ -265,7 +265,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace natočení malé šipečky podle kompasu (přímo na GPU přes vlastnost vrstvy)
+    // Update heading chevron rotation on GPU via layer property
     LaunchedEffect(azimuthDegrees, isStyleLoaded, isScreenVisible) {
         if (isStyleLoaded && isScreenVisible) {
             mapInstance?.let { map ->
@@ -277,7 +277,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace vykreslené stopy trasy (překreslí se až při rozsvícení displeje)
+    // Update recorded track polyline (repaints only when screen is visible)
     LaunchedEffect(trackPoints, isStyleLoaded, isScreenVisible) {
         if (isStyleLoaded && isScreenVisible) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(TRACK_LINE_SOURCE_ID)?.let { source ->
@@ -295,8 +295,8 @@ fun MapLibreMapView(
         }
     }
 
-    // Aktualizace načtené GPX trasy pro navigaci
-    // Pozn.: C++ worker MapLibre tesselluje 3 000+ bodů asynchronně (~40-120 ms), proto vynutíme překreslení i po dokončení tessellace
+    // Update planned GPX route polyline
+    // Note: MapLibre's C++ worker tessellates 3,000+ points asynchronously (~40-120 ms), so we trigger post-tessellation repaints
     LaunchedEffect(plannedRoutePoints, isStyleLoaded, isScreenVisible) {
         if (isStyleLoaded && isScreenVisible) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(PLANNED_ROUTE_SOURCE_ID)?.let { source ->
@@ -316,7 +316,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Reakce na změnu zoomu
+    // Respond to zoom level changes
     LaunchedEffect(zoomLevel) {
         mapInstance?.let { map ->
             if (kotlin.math.abs(map.cameraPosition.zoom.toFloat() - zoomLevel) > 0.05f) {
@@ -332,10 +332,10 @@ fun MapLibreMapView(
 }
 
 /**
- * Vytvoří k OLED displeji maximálně šetrnou značku polohy se směrovou šipečkou (styl Mapy.cz).
+ * Creates an OLED-efficient location dot and directional heading chevron bitmap.
  *
- * Kruh polohy leží přesně v geometrickém středu bitmapy (42, 42), takže při otáčení
- * zůstává tečka pevně na GPS souřadnici a šipečka obíhá po jejím obvodu.
+ * The location circle is centered at the geometric midpoint of the bitmap (42, 42) so the dot
+ * remains anchored on the exact GPS coordinate while the heading chevron orbits around its rim.
  */
 private fun createMapyCzStyleLocationBitmap(): Bitmap {
     val size = 84
@@ -343,29 +343,29 @@ private fun createMapyCzStyleLocationBitmap(): Bitmap {
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
-    // Černý kontrastní lem pro oddělení od barevných tras pod značkou (0 mW OLED)
+    // Black high-contrast halo to separate the marker from underlying colored trails (0 mW OLED)
     val darkStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#000000")
         style = Paint.Style.FILL
     }
 
-    // Šetrná teplá jantarová barva (R=224, G=122, B=0 -> nulová modrá složka)
+    // Zero-blue warm amber fill (R=224, G=122, B=0)
     val ecoAmberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#E07A00")
         style = Paint.Style.FILL
     }
 
-    // Tmavý střed tečky (šetří vnitřní pixely kruhu)
+    // Dark center core to save inner circle subpixels
     val innerCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#121212")
         style = Paint.Style.FILL
     }
 
-    // 1. Výrazná směrová šipečka (zobáček) obíhající nad kroužkem polohy (styl Mapy.cz)
+    // 1. Directional heading chevron orbiting above the location ring
     val outerArrowPath = Path().apply {
-        moveTo(center, 3f)           // Špička nahoře
-        lineTo(center + 14.0f, 26f)  // Pravý roh šipečky
-        lineTo(center - 14.0f, 26f)  // Levý roh šipečky
+        moveTo(center, 3f)           // Top tip
+        lineTo(center + 14.0f, 26f)  // Right wing
+        lineTo(center - 14.0f, 26f)  // Left wing
         close()
     }
     canvas.drawPath(outerArrowPath, darkStrokePaint)
@@ -378,7 +378,7 @@ private fun createMapyCzStyleLocationBitmap(): Bitmap {
     }
     canvas.drawPath(innerArrowPath, ecoAmberPaint)
 
-    // 2. Kruhový bod polohy přesně ve středu otáčení (center, center)
+    // 2. Circular location dot anchored at the rotation pivot (center, center)
     canvas.drawCircle(center, center, 14.0f, darkStrokePaint)
     canvas.drawCircle(center, center, 11.0f, ecoAmberPaint)
     canvas.drawCircle(center, center, 4.8f, innerCorePaint)

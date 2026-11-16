@@ -3,18 +3,17 @@ package cz.offgrid.maps.data.map
 import java.io.File
 
 /**
- * Generátor MapLibre GL Style JSON v architektuře Ultra-Pure AMOLED & KČT.
+ * MapLibre GL Style JSON generator using the Ultra-Pure AMOLED & KČT cartographic architecture.
  *
- * Jak je strukturován barevný layout pro maximální úsporu baterie a čitelnost:
- * 1. Čisté černé pozadí (#000000) bez plošného podbarvování lesů:
- *    Plošné vyplňování lesů zelenou barvou rozsvěcelo tisíce OLED subpixelů po celé obrazovce.
- *    Nyní zůstává 94 % plochy displeje čistě černých (#000000 = 0 mW spotřeba) a svítí
- *    pouze samotné linie cest, vodních toků a popisky!
- * 2. Chytré filtrování podle přiblížení (proti „barevné směsici“ při oddálení):
- *    - Pod Zoom 11: Vidíte jen čistou kostru hlavních měst a hlavních silnic.
- *    - Od Zoom 11: Jemně vystoupí hlavní červené dálkové trasy KČT.
- *    - Od Zoom 12: Postupně se rozsvítí modré, zelené a žluté turistické trasy.
- *    - Od Zoom 13: Vykreslí se tečkované lesní pěšiny a obrysy budov.
+ * How the color layout is structured for maximum battery life and outdoor legibility:
+ * 1. Pure black background (#000000) without solid forest polygon fills:
+ *    Filling forest polygons with solid green would illuminate thousands of OLED subpixels across the screen.
+ *    Instead, 94% of the display remains pure black (#000000 = 0 mW power draw), illuminating only
+ *    road lines, waterways, contour lines, and labels.
+ * 2. Topographic zoom-level hierarchy:
+ *    - Zoom 9+: Marked hiking trails (Red, Blue, Green, Yellow) and primary roads.
+ *    - Zoom 12+: Unpaved forest tracks (`class = track`, long dashes) + 10 m and 50 m contour lines.
+ *    - Zoom 13+: Narrow footpaths (`class = path/footway`, short dashes) and contour elevation labels.
  */
 object StyleBuilder {
 
