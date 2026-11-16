@@ -594,11 +594,6 @@ fun MapScreen(
                         showGpxPicker = false
                     }
                 },
-                onDownloadCurrentArea = {
-                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                    val center = maplibreMapInstance?.cameraPosition?.target ?: activeLocation
-                    OfflineRegionHelper.downloadAreaAround(context, center.latitude, center.longitude)
-                },
                 onDownloadPresetRegion = { preset ->
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     isFollowingGps = false
@@ -699,7 +694,6 @@ private fun GpxRoutePickerOverlay(
     onDeleteFile: (File) -> Unit,
     onRemoveActiveRoute: () -> Unit,
     onImportGpx: () -> Unit,
-    onDownloadCurrentArea: () -> Unit,
     onDownloadPresetRegion: (OfflinePresetRegion) -> Unit,
     onSelectOfflineRegion: (SavedOfflineRegion) -> Unit,
     onDeleteOfflineRegion: (SavedOfflineRegion) -> Unit,
@@ -1015,30 +1009,6 @@ private fun GpxRoutePickerOverlay(
                             }
                         }
                     }
-                }
-
-                // 3) Stáhnout libovolný aktuálně prohlížený výřez mapy (např. zahraničí / vlastní místo)
-                Box(
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DarkSurface)
-                        .border(
-                            width = 1.4.dp,
-                            color = TrailYellow,
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                        .clickable(enabled = !isDownloading) { onDownloadCurrentArea() }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "⬇ Stáhnout aktuální výřez",
-                        color = TrailYellow,
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
                 }
             }
 
