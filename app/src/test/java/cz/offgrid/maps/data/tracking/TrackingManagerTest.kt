@@ -264,4 +264,21 @@ class TrackingManagerTest {
         assertEquals(49.1252, TrackingManager.currentLocation.value!!.latitude, 0.0001)
         assertEquals(2, TrackingManager.trackPoints.value.size)
     }
+
+    @Test
+    fun wgs84ToMslAltitude_subtractsCzechGeoidUndulationAccurately() {
+        // Zbýšov / Oslavany (49.160659, 16.344159):
+        // Android GPS vrací elipsoidickou výšku WGS84 = 412.2 m.
+        // Skutečná nadmořská výška terénu (MSL / Bpv) je ~368 m n. m. (undulace geoidu EGM2008 je +44.56 m).
+        val mslZbysov = BarometricAltimeterManager.wgs84ToMslAltitude(
+            wgs84AltitudeMeters = 412.2,
+            latitude = 49.160659,
+            longitude = 16.344159
+        )
+        assertEquals(367.64, mslZbysov, 0.5)
+
+        // Praha (50.08, 14.43): undulace geoidu EGM2008 je ~46.5 m
+        val geoidPrague = BarometricAltimeterManager.estimateEgm2008GeoidUndulationMeters(50.08, 14.43)
+        assertEquals(46.5, geoidPrague, 0.4)
+    }
 }

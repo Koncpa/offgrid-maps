@@ -90,14 +90,15 @@ class LocationTrackingService : Service() {
     }
 
     private fun handleIncomingLocation(location: Location) {
-        val gpsAlt = if (location.hasAltitude()) location.altitude else null
+        val mslAlt = BarometricAltimeterManager.extractMslAltitudeMeters(location)
         val gpsAcc = if (location.hasAccuracy()) location.accuracy else null
-        altimeterManager.onGpsAltitudeReceived(gpsAlt, gpsAcc)
+        val vertAcc = if (location.hasVerticalAccuracy()) location.verticalAccuracyMeters else null
+        altimeterManager.onGpsAltitudeReceived(mslAlt, gpsAcc, vertAcc)
 
         val point = TrackPoint(
             latitude = location.latitude,
             longitude = location.longitude,
-            altitudeMeters = gpsAlt,
+            altitudeMeters = mslAlt,
             timestampMillis = location.time,
             accuracyMeters = location.accuracy,
             speedMps = if (location.hasSpeed()) location.speed else null
