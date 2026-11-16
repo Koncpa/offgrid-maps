@@ -49,6 +49,7 @@ private const val PLANNED_ROUTE_CASING_LAYER_ID = "planned_gpx_route_casing_laye
 private const val PLANNED_ROUTE_LAYER_ID = "planned_gpx_route_layer"
 
 private const val CUSTOM_CONTOURS_SOURCE_ID = "custom_contours_source"
+private const val CUSTOM_KCT_TRAILS_SOURCE_ID = "custom_kct_trails_source"
 
 /**
  * Energeticky vysoce optimalizovaný Compose wrapper pro MapLibre MapView na Wear OS.
@@ -76,6 +77,7 @@ fun MapLibreMapView(
     var isStyleLoaded by remember { mutableStateOf(false) }
     var isScreenVisible by remember { mutableStateOf(true) }
     val customContoursGeoJson by ContourTileManager.customContoursGeoJson.collectAsState()
+    val customTrailsGeoJson by OfflineRegionHelper.customTrailsGeoJson.collectAsState()
 
     val mapView = remember {
         MapView(context).apply {
@@ -233,6 +235,19 @@ fun MapLibreMapView(
         if (isStyleLoaded && !geoJson.isNullOrEmpty()) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_CONTOURS_SOURCE_ID)?.let { source ->
                 source.setGeoJson(geoJson)
+                mapInstance?.triggerRepaint()
+                delay(80L)
+                mapInstance?.triggerRepaint()
+            }
+        }
+    }
+
+    // Aktualizace turistických tras KČT stažených z GitHub repozitáře (Koncpa/offgrid-maps-data)
+    LaunchedEffect(customTrailsGeoJson, isStyleLoaded) {
+        val trailsJson = customTrailsGeoJson
+        if (isStyleLoaded && !trailsJson.isNullOrEmpty()) {
+            mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_KCT_TRAILS_SOURCE_ID)?.let { source ->
+                source.setGeoJson(trailsJson)
                 mapInstance?.triggerRepaint()
                 delay(80L)
                 mapInstance?.triggerRepaint()

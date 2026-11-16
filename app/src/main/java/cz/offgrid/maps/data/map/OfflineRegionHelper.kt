@@ -94,6 +94,9 @@ object OfflineRegionHelper {
     private val _catalogRegions = MutableStateFlow<List<OfflinePresetRegion>>(presetRegions)
     val catalogRegions: StateFlow<List<OfflinePresetRegion>> = _catalogRegions.asStateFlow()
 
+    private val _customTrailsGeoJson = MutableStateFlow<String?>(null)
+    val customTrailsGeoJson: StateFlow<String?> = _customTrailsGeoJson.asStateFlow()
+
     private var isInitialized = false
     private var isDownloading = false
     private var isUserBrowsingMap = false
@@ -472,6 +475,9 @@ object OfflineRegionHelper {
                             outFile.outputStream().use { fos ->
                                 gis.copyTo(fos)
                             }
+                        }
+                        if (outName == "kct_trails.geojson" && outFile.length() > 10L) {
+                            _customTrailsGeoJson.value = outFile.readText()
                         }
                     }
                 }

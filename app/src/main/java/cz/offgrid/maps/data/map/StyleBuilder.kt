@@ -50,6 +50,10 @@ object StyleBuilder {
               "type": "geojson",
               "data": "asset://jmk_kct_trails.geojson"
             },
+            "custom_kct_trails_source": {
+              "type": "geojson",
+              "data": {"type": "FeatureCollection", "features": []}
+            },
             "jmk_contours_source": {
               "type": "geojson",
               "data": "asset://jmk_contours.geojson"
@@ -308,6 +312,58 @@ object StyleBuilder {
               "id": "trail_kct_red",
               "type": "line",
               "source": "kct_trails_source",
+              "minzoom": 10,
+              "filter": ["==", ["get", "colour"], "red"],
+              "layout": { "line-cap": "round", "line-join": "round" },
+              "paint": {
+                "line-color": "#EA0000",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.75, 11, 0.90, 12, 0.95],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 12, 2.3, 14, 3.4, 16, 4.6]
+              }
+            },
+            {
+              "id": "custom_trail_kct_yellow",
+              "type": "line",
+              "source": "custom_kct_trails_source",
+              "minzoom": 11,
+              "filter": ["==", ["get", "colour"], "yellow"],
+              "layout": { "line-cap": "round", "line-join": "round" },
+              "paint": {
+                "line-color": "#E6B800",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0.75, 12, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.4, 12, 2.0, 14, 3.0, 16, 4.2]
+              }
+            },
+            {
+              "id": "custom_trail_kct_green",
+              "type": "line",
+              "source": "custom_kct_trails_source",
+              "minzoom": 11,
+              "filter": ["==", ["get", "colour"], "green"],
+              "layout": { "line-cap": "round", "line-join": "round" },
+              "paint": {
+                "line-color": "#00C814",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0.75, 12, 0.92],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.4, 12, 2.0, 14, 3.0, 16, 4.2]
+              }
+            },
+            {
+              "id": "custom_trail_kct_blue",
+              "type": "line",
+              "source": "custom_kct_trails_source",
+              "minzoom": 10,
+              "filter": ["==", ["get", "colour"], "blue"],
+              "layout": { "line-cap": "round", "line-join": "round" },
+              "paint": {
+                "line-color": "#0077E6",
+                "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.7, 11, 0.88, 12, 0.94],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.3, 12, 2.1, 14, 3.1, 16, 4.3]
+              }
+            },
+            {
+              "id": "custom_trail_kct_red",
+              "type": "line",
+              "source": "custom_kct_trails_source",
               "minzoom": 10,
               "filter": ["==", ["get", "colour"], "red"],
               "layout": { "line-cap": "round", "line-join": "round" },
