@@ -58,4 +58,20 @@ class StyleBuilderTest {
         assertEquals(1404, ty)
         assertTrue(ContourTileManager.BUNDLED_JMK_TILES.contains("${tx}_${ty}"))
     }
+
+    @Test
+    fun presetRegions_containsMajorCzechMountainRangesWithValidCoordinates() {
+        val presets = OfflineRegionHelper.presetRegions
+        assertTrue(presets.size >= 12)
+        val titles = presets.map { it.title }.toSet()
+        assertTrue(titles.contains("Krkonoše"))
+        assertTrue(titles.contains("Šumava"))
+        assertTrue(titles.contains("Beskydy"))
+        assertTrue(titles.contains("Jeseníky"))
+        presets.forEach { preset ->
+            assertTrue(preset.centerLat in 48.5..51.1)
+            assertTrue(preset.centerLon in 12.0..18.9)
+            assertTrue(preset.subtitle.isNotBlank())
+        }
+    }
 }

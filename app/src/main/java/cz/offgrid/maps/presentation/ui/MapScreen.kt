@@ -34,6 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.wear.compose.material.*
 import cz.offgrid.maps.data.map.MapFileManager
+import cz.offgrid.maps.data.map.OfflinePresetRegion
 import cz.offgrid.maps.data.map.OfflineRegionHelper
 import cz.offgrid.maps.data.map.SavedOfflineRegion
 import cz.offgrid.maps.data.tracking.BarometricAltimeterManager
@@ -126,6 +127,7 @@ fun MapScreen(
     val isOffRoute by TrackingManager.isOffRoute.collectAsState()
     val lastSavedSummary by TrackingManager.lastSavedSummary.collectAsState()
     val offlineStatus by OfflineRegionHelper.statusText.collectAsState()
+    val activeDownloadTitle by OfflineRegionHelper.activeDownloadTitle.collectAsState()
     val savedOfflineRegions by OfflineRegionHelper.savedRegions.collectAsState()
     val azimuthDegrees by compassManager.azimuthDegrees.collectAsState()
 
@@ -593,9 +595,19 @@ fun MapScreen(
                     }
                 },
                 onDownloadCurrentArea = {
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     val center = maplibreMapInstance?.cameraPosition?.target ?: activeLocation
                     OfflineRegionHelper.downloadAreaAround(context, center.latitude, center.longitude)
                 },
+                onDownloadPresetRegion = { preset ->
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    isFollowingGps = false
+                    val presetCenter = LatLng(preset.centerLat, preset.centerLon)
+                    maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(presetCenter, 12.5))
+                    zoomLevel = 12.5f
+                    OfflineRegionHelper.downloadPresetRegion(context, preset)
+                },
+                activeDownloadTitle = activeDownloadTitle,
                 onSelectOfflineRegion = { region ->
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     isFollowingGps = false
@@ -681,12 +693,14 @@ private fun GpxRoutePickerOverlay(
     activeRouteName: String?,
     savedRegions: List<SavedOfflineRegion>,
     offlineStatus: String,
+    activeDownloadTitle: String?,
     onSelectFile: (File) -> Unit,
     onShareFile: (File) -> Unit,
     onDeleteFile: (File) -> Unit,
     onRemoveActiveRoute: () -> Unit,
     onImportGpx: () -> Unit,
     onDownloadCurrentArea: () -> Unit,
+    onDownloadPresetRegion: (OfflinePresetRegion) -> Unit,
     onSelectOfflineRegion: (SavedOfflineRegion) -> Unit,
     onDeleteOfflineRegion: (SavedOfflineRegion) -> Unit,
     onDismiss: () -> Unit
@@ -788,7 +802,7 @@ private fun GpxRoutePickerOverlay(
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                 } else {
-                    files.take(4).forEach { file ->
+                    files.forEach { file ->
                         val isSelected = activeRouteName == file.nameWithoutExtension
                         Row(
                             modifier = Modifier
@@ -854,30 +868,43 @@ private fun GpxRoutePickerOverlay(
             } else {
                 // --- ZÁLOŽKA 2: OFFLINE MAPY ---
                 val isDownloading = offlineStatus.startsWith("DL")
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DarkSurface)
-                        .border(
-                            width = 1.5.dp,
-                            color = if (isDownloading) TrailYellow else TrailBlue,
-                            shape = RoundedCornerShape(14.dp)
+
+                if (isDownloading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(DarkSurface)
+                            .border(1.6.dp, TrailYellow, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val dlLabel = if (!activeDownloadTitle.isNullOrBlank()) {
+                            "⏳ $activeDownloadTitle ($offlineStatus)"
+                        } else {
+                            "⏳ Stahuji mapu ($offlineStatus)"
+                        }
+                        Text(
+                            text = dlLabel,
+                            color = TrailYellow,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        .clickable(enabled = !isDownloading) { onDownloadCurrentArea() }
-                        .padding(horizontal = 12.dp, vertical = 8.5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (isDownloading) "Stahuji: $offlineStatus" else "⬇ Stáhnout tuto oblast",
-                        color = if (isDownloading) TrailYellow else TrailBlue,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    }
                 }
 
-                // Seznam uložených offline oblastí (klepnutím vycentruje mapu na danou oblast)
-                savedRegions.take(4).forEach { region ->
+                // 1) Stažené offline oblasti v hodinkách (klepnutí vycentruje mapu)
+                Text(
+                    text = "ULOŽENÉ V HODINKÁCH",
+                    color = TrailGreen,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+
+                savedRegions.forEach { region ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -885,7 +912,7 @@ private fun GpxRoutePickerOverlay(
                             .background(DarkSurface)
                             .border(
                                 width = 1.3.dp,
-                                color = if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.8f) else TrailBlue.copy(alpha = 0.8f),
+                                color = if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.85f) else TrailGreen.copy(alpha = 0.85f),
                                 shape = RoundedCornerShape(14.dp)
                             )
                             .clickable { onSelectOfflineRegion(region) }
@@ -894,7 +921,7 @@ private fun GpxRoutePickerOverlay(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = if (region.isDefaultJmk) "★ ${region.displayName}" else "📍 ${region.displayName}",
+                            text = if (region.isDefaultJmk) "★ ${region.displayName}" else "✓ ${region.displayName}",
                             color = OutdoorTextPrimary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -922,6 +949,96 @@ private fun GpxRoutePickerOverlay(
                             }
                         }
                     }
+                }
+
+                // 2) Katalog českých pohoří a oblastí ke stažení jedním klepnutím
+                val savedTitles = remember(savedRegions) {
+                    savedRegions.map { it.displayName }.toSet()
+                }
+                val availablePresets = remember(savedTitles) {
+                    OfflineRegionHelper.presetRegions.filter { it.title !in savedTitles }
+                }
+
+                if (availablePresets.isNotEmpty()) {
+                    Text(
+                        text = "KATALOG OBLASTÍ ČR (1 KLIK)",
+                        color = TrailBlue,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+
+                    availablePresets.forEach { preset ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(1.2.dp, TrailBlue.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+                                .clickable(enabled = !isDownloading) { onDownloadPresetRegion(preset) }
+                                .padding(horizontal = 10.dp, vertical = 6.5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = preset.title,
+                                    color = OutdoorTextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = preset.subtitle,
+                                    color = OutdoorTextSecondary,
+                                    fontSize = 8.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(AmoledBlack)
+                                    .border(1.2.dp, TrailBlue, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "⬇",
+                                    color = TrailBlue,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 3) Stáhnout libovolný aktuálně prohlížený výřez mapy (např. zahraničí / vlastní místo)
+                Box(
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(DarkSurface)
+                        .border(
+                            width = 1.4.dp,
+                            color = TrailYellow,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .clickable(enabled = !isDownloading) { onDownloadCurrentArea() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "⬇ Stáhnout aktuální výřez",
+                        color = TrailYellow,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 

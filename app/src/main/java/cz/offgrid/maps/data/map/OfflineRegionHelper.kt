@@ -29,8 +29,21 @@ data class SavedOfflineRegion(
 )
 
 /**
+ * Předdefinovaná turistická oblast / pohoří v katalogu pro rychlé stažení jedním klepnutím.
+ */
+data class OfflinePresetRegion(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val centerLat: Double,
+    val centerLon: Double,
+    val latSpanDeg: Double = 0.26,
+    val lonSpanDeg: Double = 0.36
+)
+
+/**
  * Správce offline mapových regionů (MapLibre OfflineManager) s lokálním HTTP loopbackem,
- * seznamem stažených oblastí a automatickým pojmenováním českých pohoří a krajů.
+ * seznamem stažených oblastí a katalogem českých pohoří a krajů.
  */
 object OfflineRegionHelper {
 
@@ -39,11 +52,33 @@ object OfflineRegionHelper {
     private val _statusText = MutableStateFlow("JMK")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
 
+    private val _activeDownloadTitle = MutableStateFlow<String?>(null)
+    val activeDownloadTitle: StateFlow<String?> = _activeDownloadTitle.asStateFlow()
+
     private val _isOfflineReady = MutableStateFlow(false)
     val isOfflineReady: StateFlow<Boolean> = _isOfflineReady.asStateFlow()
 
     private val _savedRegions = MutableStateFlow<List<SavedOfflineRegion>>(emptyList())
     val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
+
+    /**
+     * Katalog hlavních turistických oblastí a pohoří ČR pro stažení jedním klepnutím bez nutnosti
+     * ručního posouvání mapy na malém displeji hodinek.
+     */
+    val presetRegions: List<OfflinePresetRegion> = listOf(
+        OfflinePresetRegion("krkonose", "Krkonoše", "Sněžka, Špindlerův Mlýn", 50.73, 15.65),
+        OfflinePresetRegion("sumava", "Šumava", "Kvilda, Lipno, Poledník", 49.02, 13.55, 0.30, 0.42),
+        OfflinePresetRegion("beskydy", "Beskydy", "Lysá hora, Pustevny, Radhošť", 49.48, 18.42),
+        OfflinePresetRegion("jeseniky", "Jeseníky", "Praděd, Šerák, Karlova Studánka", 50.08, 17.22),
+        OfflinePresetRegion("vysocina", "Vysočina & Žďárské vrchy", "Devět skal, Žďár, Telč", 49.62, 16.02),
+        OfflinePresetRegion("cesky_raj", "Český ráj & Jizerské hory", "Turnov, Bedřichov, Smrk", 50.68, 15.22),
+        OfflinePresetRegion("ceske_svycarsko", "České Švýcarsko", "Hřensko, Pravčická brána, Děčín", 50.86, 14.38),
+        OfflinePresetRegion("orlicke_hory", "Orlické hory & Broumovsko", "Velká Deštná, Adršpach", 50.32, 16.35),
+        OfflinePresetRegion("praha_okoli", "Praha & Český kras", "Karlštejn, Berounka, Posázaví", 50.00, 14.32),
+        OfflinePresetRegion("brdy", "Brdy & Křivoklátsko", "Tok, Padrťské rybníky, Beroun", 49.72, 13.88),
+        OfflinePresetRegion("krusne_hory", "Krušné hory", "Klínovec, Boží Dar, Cínovec", 50.42, 13.02),
+        OfflinePresetRegion("podyji", "Podyjí & Znojemsko", "NP Podyjí, Vranov, Hardegg", 48.85, 15.90)
+    )
 
     private var isInitialized = false
     private var isDownloading = false
@@ -317,6 +352,23 @@ object OfflineRegionHelper {
     }
 
     /**
+     * Stáhne vybranou oblast z katalogu ČR ([preset]) jedním klepnutím včetně 10m/50m vrstevnic.
+     */
+    fun downloadPresetRegion(
+        context: Context,
+        preset: OfflinePresetRegion
+    ) {
+        downloadCustomBounds(
+            context = context,
+            centerLat = preset.centerLat,
+            centerLon = preset.centerLon,
+            halfLatSpan = preset.latSpanDeg / 2.0,
+            halfLonSpan = preset.lonSpanDeg / 2.0,
+            explicitTitle = preset.title
+        )
+    }
+
+    /**
      * Stáhne do offline paměti hodinek ~30×30 km oblast kolem aktuálního středu mapy (až do detailu Zoom 14)
      * a zároveň vygeneruje pro danou oblast offline vrstevnice po 10 m / 50 m.
      */
@@ -324,6 +376,25 @@ object OfflineRegionHelper {
         context: Context,
         centerLat: Double,
         centerLon: Double
+    ) {
+        val humanTitle = resolveCzechRegionTitle(centerLat, centerLon)
+        downloadCustomBounds(
+            context = context,
+            centerLat = centerLat,
+            centerLon = centerLon,
+            halfLatSpan = 0.13,
+            halfLonSpan = 0.18,
+            explicitTitle = humanTitle
+        )
+    }
+
+    private fun downloadCustomBounds(
+        context: Context,
+        centerLat: Double,
+        centerLon: Double,
+        halfLatSpan: Double,
+        halfLonSpan: Double,
+        explicitTitle: String
     ) {
         val offlineManager = OfflineManager.getInstance(context)
         offlineManager.setOfflineMapboxTileCountLimit(80000L)
@@ -334,10 +405,10 @@ object OfflineRegionHelper {
         val styleUrl = ensureLocalStyleServerUrl()
 
         val bounds = LatLngBounds.from(
-            (centerLat + 0.13).coerceAtMost(51.1),
-            (centerLon + 0.18).coerceAtMost(18.9),
-            (centerLat - 0.13).coerceAtLeast(48.5),
-            (centerLon - 0.18).coerceAtLeast(12.0)
+            (centerLat + halfLatSpan).coerceIn(-85.0, 85.0),
+            (centerLon + halfLonSpan).coerceIn(-179.9, 179.9),
+            (centerLat - halfLatSpan).coerceIn(-85.0, 85.0),
+            (centerLon - halfLonSpan).coerceIn(-179.9, 179.9)
         )
 
         val definition = OfflineTilePyramidRegionDefinition(
@@ -348,11 +419,11 @@ object OfflineRegionHelper {
             1.0f
         )
 
-        val humanTitle = resolveCzechRegionTitle(centerLat, centerLon)
-        val regionMeta = "Custom_${"%.2f".format(Locale.US, centerLat)}_${"%.2f".format(Locale.US, centerLon)}|$humanTitle"
+        val regionMeta = "Custom_${"%.2f".format(Locale.US, centerLat)}_${"%.2f".format(Locale.US, centerLon)}|$explicitTitle"
         val metadata = regionMeta.toByteArray(StandardCharsets.UTF_8)
 
         isDownloading = true
+        _activeDownloadTitle.value = explicitTitle
         _statusText.value = "DL 0%"
         MapLibre.setConnected(true)
 
@@ -374,6 +445,7 @@ object OfflineRegionHelper {
 
     private fun finishDownloadAndUpdateConnectivity(context: Context) {
         isDownloading = false
+        _activeDownloadTitle.value = null
         _isOfflineReady.value = true
         _statusText.value = "OFFLINE"
         refreshSavedRegions(context)
