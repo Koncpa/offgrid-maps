@@ -62,22 +62,23 @@ object OfflineRegionHelper {
     val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
 
     /**
-     * Katalog hlavních turistických oblastí a pohoří ČR pro stažení jedním klepnutím bez nutnosti
-     * ručního posouvání mapy na malém displeji hodinek.
+     * Katalog krajů České republiky podle struktury Mapy.com pro rychlé stažení jedním klepnutím
+     * bez nutnosti ručního posouvání mapy na malém displeji hodinek.
      */
     val presetRegions: List<OfflinePresetRegion> = listOf(
-        OfflinePresetRegion("krkonose", "Krkonoše", "Sněžka, Špindlerův Mlýn", 50.73, 15.65),
-        OfflinePresetRegion("sumava", "Šumava", "Kvilda, Lipno, Poledník", 49.02, 13.55, 0.30, 0.42),
-        OfflinePresetRegion("beskydy", "Beskydy", "Lysá hora, Pustevny, Radhošť", 49.48, 18.42),
-        OfflinePresetRegion("jeseniky", "Jeseníky", "Praděd, Šerák, Karlova Studánka", 50.08, 17.22),
-        OfflinePresetRegion("vysocina", "Vysočina & Žďárské vrchy", "Devět skal, Žďár, Telč", 49.62, 16.02),
-        OfflinePresetRegion("cesky_raj", "Český ráj & Jizerské hory", "Turnov, Bedřichov, Smrk", 50.68, 15.22),
-        OfflinePresetRegion("ceske_svycarsko", "České Švýcarsko", "Hřensko, Pravčická brána, Děčín", 50.86, 14.38),
-        OfflinePresetRegion("orlicke_hory", "Orlické hory & Broumovsko", "Velká Deštná, Adršpach", 50.32, 16.35),
-        OfflinePresetRegion("praha_okoli", "Praha & Český kras", "Karlštejn, Berounka, Posázaví", 50.00, 14.32),
-        OfflinePresetRegion("brdy", "Brdy & Křivoklátsko", "Tok, Padrťské rybníky, Beroun", 49.72, 13.88),
-        OfflinePresetRegion("krusne_hory", "Krušné hory", "Klínovec, Boží Dar, Cínovec", 50.42, 13.02),
-        OfflinePresetRegion("podyji", "Podyjí & Znojemsko", "NP Podyjí, Vranov, Hardegg", 48.85, 15.90)
+        OfflinePresetRegion("kraj_vysocina", "Kraj Vysočina", "Jihlava, Třebíč, Žďár n. S., Havl. Brod", 49.45, 15.68, 0.55, 0.75),
+        OfflinePresetRegion("jihocesky_kraj", "Jihočeský kraj", "Č. Budějovice, Tábor, Č. Krumlov, Písek", 49.05, 14.48, 0.65, 0.90),
+        OfflinePresetRegion("zlinsky_kraj", "Zlínský kraj", "Zlín, Vsetín, Uh. Hradiště, Kroměříž", 49.22, 17.72, 0.50, 0.70),
+        OfflinePresetRegion("olomoucky_kraj", "Olomoucký kraj", "Olomouc, Přerov, Prostějov, Šumperk", 49.72, 17.18, 0.65, 0.75),
+        OfflinePresetRegion("moravskoslezsky_kraj", "Moravskoslezský kraj", "Ostrava, Opava, Frýdek-Místek, Bruntál", 49.78, 18.12, 0.60, 0.85),
+        OfflinePresetRegion("pardubicky_kraj", "Pardubický kraj", "Pardubice, Chrudim, Svitavy, Ústí n. O.", 49.92, 16.15, 0.50, 0.80),
+        OfflinePresetRegion("kralovehradecky_kraj", "Královéhradecký kraj", "Hradec Králové, Trutnov, Náchod, Jičín", 50.38, 15.82, 0.55, 0.75),
+        OfflinePresetRegion("stredocesky_kraj", "Středočeský kraj", "Beroun, Kladno, M. Boleslav, Příbram", 49.98, 14.55, 0.65, 0.95),
+        OfflinePresetRegion("praha", "Praha a okolí", "Hlavní město Praha, Český kras, Posázaví", 50.08, 14.43, 0.30, 0.42),
+        OfflinePresetRegion("plzensky_kraj", "Plzeňský kraj", "Plzeň, Klatovy, Domažlice, Tachov", 49.58, 13.28, 0.65, 0.80),
+        OfflinePresetRegion("liberecky_kraj", "Liberecký kraj", "Liberec, Jablonec n. N., Česká Lípa, Semily", 50.72, 15.05, 0.45, 0.65),
+        OfflinePresetRegion("ustecky_kraj", "Ústecký kraj", "Ústí n. L., Děčín, Most, Teplice, Chomutov", 50.55, 13.85, 0.55, 0.85),
+        OfflinePresetRegion("karlovarsky_kraj", "Karlovarský kraj", "Karlovy Vary, Cheb, Sokolov, Mar. Lázně", 50.18, 12.75, 0.45, 0.65)
     )
 
     private var isInitialized = false

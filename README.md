@@ -5,8 +5,8 @@ Outdoorová offline mapová aplikace pro hodinky se systémem **Wear OS** zamě�
 Detailní popis architektury a plán dalšího rozvoje (backlog) najdeš v souboru **[PRODUCT_ROADMAP.md](./PRODUCT_ROADMAP.md)**.
 
 ## Klíčové vlastnosti
-- **100% Offline navigace & Katalog oblastí ČR (1-klik stažení):**
-  - Předinstalovaný Jihomoravský kraj + vestavěný katalog 12 hlavních pohoří a turistických oblastí ČR (*Krkonoše, Šumava, Beskydy, Jeseníky, Vysočina, Český ráj, České Švýcarsko, Orlické hory, Praha a okolí, Brdy, Krušné hory, Podyjí*) pro okamžité stažení jedním klepnutím včetně vlastního výřezu mapy.
+- **100% Offline navigace & Katalog krajů ČR po vzoru Mapy.com (1-klik stažení):**
+  - Předinstalovaný Jihomoravský kraj + vestavěný katalog všech 14 krajů ČR (*Kraj Vysočina, Jihočeský, Zlínský, Olomoucký, Moravskoslezský, Pardubický, Královéhradecký, Středočeský, Praha, Plzeňský, Liberecký, Ústecký, Karlovarský*) pro okamžité stažení jedním klepnutím včetně vlastního výřezu mapy.
 - **Offline vrstevnice (10 m / 50 m) a české značení KČT:**
   - Web Mercator dlaždicová cache vrstevnic a kompletní vrstvy turistických tras KČT (červená, modrá, zelená, žlutá), lesních cest a pěšin podle kartografických konvencí.
 - **Blesková GPS v lese & Ortometrický výškoměr (EGM2008):**

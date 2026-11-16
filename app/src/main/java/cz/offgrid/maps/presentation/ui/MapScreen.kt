@@ -961,7 +961,7 @@ private fun GpxRoutePickerOverlay(
 
                 if (availablePresets.isNotEmpty()) {
                     Text(
-                        text = "KATALOG OBLASTÍ ČR (1 KLIK)",
+                        text = "ČESKÁ REPUBLIKA – KRAJE",
                         color = TrailBlue,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,

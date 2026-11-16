@@ -9,8 +9,8 @@ Hlavním cílem produktu je nabídnout v českých horách a lesích **100% spol
 ## 1. Co je již vyvinuto a nasazeno v produkčním jádru
 
 ### A) Kartografie & Offline Mapy
-- **Vektorové offline mapy + Katalog oblastí ČR (1-klik stažení):**
-  - Předinstalovaný **Jihomoravský kraj** (`z8–z14`) + jedním klepnutím stažitelný katalog 12 hlavních turistických oblastí a pohoří ČR (*Krkonoše, Šumava, Beskydy, Jeseníky, Vysočina & Žďárské vrchy, Český ráj & Jizerské hory, České Švýcarsko, Orlické hory & Broumovsko, Praha & Český kras, Brdy & Křivoklátsko, Krušné hory, Podyjí & Znojemsko*) i možnost stažení libovolného vlastního výřezu mapy.
+- **Vektorové offline mapy podle krajů ČR po vzoru Mapy.com (1-klik stažení):**
+  - Předinstalovaný **Jihomoravský kraj** (`z8–z14`) + jedním klepnutím stažitelný katalog všech ostatních **13 krajů České republiky** (*Kraj Vysočina, Jihočeský kraj, Zlínský kraj, Olomoucký kraj, Moravskoslezský kraj, Pardubický kraj, Královéhradecký kraj, Středočeský kraj, Praha a okolí, Plzeňský kraj, Liberecký kraj, Ústecký kraj, Karlovarský kraj*) i možnost stažení libovolného vlastního výřezu mapy.
 - **Offline vrstevnice po 10 m a 50 m (`ContourTileManager`):**
   - Web Mercator dlaždicový generátor a trvalá flash cache (`filesDir/contour_tiles/tile_12_{x}_{y}.features`) odvozená z digitálního modelu terénu pomocí algoritmu *Marching Squares*.
 - **České turistické značení KČT a mapová hierarchie podle zoomu (`StyleBuilder`):**

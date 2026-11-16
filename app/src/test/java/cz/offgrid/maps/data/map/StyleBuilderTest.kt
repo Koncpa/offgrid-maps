@@ -60,14 +60,14 @@ class StyleBuilderTest {
     }
 
     @Test
-    fun presetRegions_containsMajorCzechMountainRangesWithValidCoordinates() {
+    fun presetRegions_containsCzechAdministrativeRegionsLikeMapyCom() {
         val presets = OfflineRegionHelper.presetRegions
-        assertTrue(presets.size >= 12)
+        assertEquals(13, presets.size) // 13 dalších krajů ČR (+ předinstalovaný Jihomoravský kraj = všech 14 krajů ČR)
         val titles = presets.map { it.title }.toSet()
-        assertTrue(titles.contains("Krkonoše"))
-        assertTrue(titles.contains("Šumava"))
-        assertTrue(titles.contains("Beskydy"))
-        assertTrue(titles.contains("Jeseníky"))
+        assertTrue(titles.contains("Kraj Vysočina"))
+        assertTrue(titles.contains("Jihočeský kraj"))
+        assertTrue(titles.contains("Moravskoslezský kraj"))
+        assertTrue(titles.contains("Královéhradecký kraj"))
         presets.forEach { preset ->
             assertTrue(preset.centerLat in 48.5..51.1)
             assertTrue(preset.centerLon in 12.0..18.9)
