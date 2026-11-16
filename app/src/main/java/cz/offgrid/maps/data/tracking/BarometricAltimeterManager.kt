@@ -25,6 +25,7 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val pressureSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     /** Indikuje, zda tento model hodinek disponuje hardwarovým barometrem. */
     val hasHardwareBarometer: Boolean = pressureSensor != null
@@ -39,6 +40,18 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
     private var pendingCalibrationMslAltitude: Double? = null
     private var smoothedBaroAltitude: Double? = null
     private var lastUpdateMillis = 0L
+
+    init {
+        if (prefs.contains(KEY_BARO_OFFSET)) {
+            baroCalibrationOffsetMeters = prefs.getFloat(KEY_BARO_OFFSET, 0f).toDouble()
+            isCalibratedWithGps = true
+        }
+        if (prefs.contains(KEY_LAST_MSL_ALT)) {
+            val savedAlt = prefs.getFloat(KEY_LAST_MSL_ALT, 368f).toDouble()
+            _altitudeMeters.value = savedAlt
+            TrackingManager.updateAltitude(savedAlt, isBarometric = hasHardwareBarometer)
+        }
+    }
 
     fun start() {
         pressureSensor?.let {
@@ -72,11 +85,12 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
             val next = if (prev == null) mslAltitudeMeters else (prev * 0.7 + mslAltitudeMeters * 0.3)
             _altitudeMeters.value = next
             TrackingManager.updateAltitude(next, isBarometric = false)
+            saveCalibrationToPrefs(0.0, next)
             return
         }
 
-        val isGoodHorizontalFix = gpsAccuracyMeters == null || gpsAccuracyMeters <= 20.0f
-        val isGoodVerticalFix = verticalAccuracyMeters == null || verticalAccuracyMeters <= 18.0f
+        val isGoodHorizontalFix = gpsAccuracyMeters == null || gpsAccuracyMeters <= 25.0f
+        val isGoodVerticalFix = verticalAccuracyMeters == null || verticalAccuracyMeters <= 20.0f
         val effectiveVertAcc = verticalAccuracyMeters ?: (gpsAccuracyMeters ?: 15.0f)
 
         val rawBaro = smoothedBaroAltitude
@@ -94,19 +108,20 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
 
         if (!isCalibratedWithGps || (isGoodHorizontalFix && isGoodVerticalFix)) {
             val targetOffset = mslAltitudeMeters - rawBaro
-            val isMuchBetterVerticalFix = effectiveVertAcc < bestCalibrationVertAcc * 0.6f
+            val isMuchBetterVerticalFix = effectiveVertAcc < bestCalibrationVertAcc * 0.7f
             baroCalibrationOffsetMeters = if (!isCalibratedWithGps || isMuchBetterVerticalFix) {
                 isCalibratedWithGps = true
                 bestCalibrationVertAcc = minOf(bestCalibrationVertAcc, effectiveVertAcc)
                 targetOffset
             } else {
                 bestCalibrationVertAcc = minOf(bestCalibrationVertAcc, effectiveVertAcc)
-                val alpha = if (effectiveVertAcc <= 5.0f) 0.25 else 0.12
+                val alpha = if (effectiveVertAcc <= 5.0f) 0.35 else 0.15
                 baroCalibrationOffsetMeters * (1.0 - alpha) + targetOffset * alpha
             }
             val calibratedAltitude = rawBaro + baroCalibrationOffsetMeters
             _altitudeMeters.value = calibratedAltitude
             TrackingManager.updateAltitude(calibratedAltitude, isBarometric = true)
+            saveCalibrationToPrefs(baroCalibrationOffsetMeters, calibratedAltitude)
         }
     }
 
@@ -130,23 +145,39 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
 
         // Pokud přišla GPS výška ještě před prvním tikem barometru, okamžitě barometr zkalibrujeme
         val pendingMsl = pendingCalibrationMslAltitude
-        if (!isCalibratedWithGps && pendingMsl != null) {
+        if (pendingMsl != null) {
             baroCalibrationOffsetMeters = pendingMsl - nextRaw
             isCalibratedWithGps = true
             pendingCalibrationMslAltitude = null
+            saveCalibrationToPrefs(baroCalibrationOffsetMeters, pendingMsl)
         }
 
-        // Dokud nemáme zkalibrováno podle GPS, neukazujeme surovou výšku podle 1013.25 hPa,
-        // pokud už máme pending/kalibrovanou hodnotu (zabraňuje skoku o 100 m při tlakové výši/níži).
+        // Pokud ještě vůbec nemáme kalibraci z GPS (ani z minula), počkáme na GPS/lastLocation,
+        // abychom při tlakové níži neukazovali falešných 500 m podle standardních 1013.25 hPa!
+        if (!isCalibratedWithGps) {
+            return
+        }
+
         val calibratedAltitude = nextRaw + baroCalibrationOffsetMeters
         lastUpdateMillis = now
         _altitudeMeters.value = calibratedAltitude
         TrackingManager.updateAltitude(calibratedAltitude, isBarometric = true)
     }
 
+    private fun saveCalibrationToPrefs(offsetMeters: Double, mslAltMeters: Double) {
+        prefs.edit()
+            .putFloat(KEY_BARO_OFFSET, offsetMeters.toFloat())
+            .putFloat(KEY_LAST_MSL_ALT, mslAltMeters.toFloat())
+            .apply()
+    }
+
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     companion object {
+        private const val PREFS_NAME = "offgrid_altimeter_prefs"
+        private const val KEY_BARO_OFFSET = "baro_calibration_offset_m"
+        private const val KEY_LAST_MSL_ALT = "last_calibrated_msl_alt_m"
+
         /**
          * Vrátí skutečnou ortometrickou nadmořskou výšku (MSL / Bpv) z objektu [Location]:
          * 1. Na Androidu 14+ (API 34+) použije `mslAltitudeMeters`, pokud je k dispozici.

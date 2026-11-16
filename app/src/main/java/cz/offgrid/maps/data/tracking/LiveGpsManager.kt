@@ -118,21 +118,40 @@ class LiveGpsManager(
         isRunning = true
         consecutiveAccurateFusedFixes = 0
 
-        // 1. Použijeme poslední známou polohu z Fused i z přímého GPS čipu, pokud je čerstvá (< 30 s)
+        // 1. Použijeme poslední známou polohu z Fused i z přímého GPS čipu:
+        //    - I když jsme v budově a poslední GPS fix je starší než 30 s, vždy z něj zkalibrujeme barometr,
+        //      aby barometr neukazoval nezkalibrovaných ~500 m podle standardního tlaku 1013.25 hPa!
         try {
             val lastHw = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            if (lastHw != null && isLocationFreshAndAccurate(lastHw, maxAgeMs = 30_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
-                lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
-                processLocation(lastHw, isDirectWatchSatellite = true)
+            if (lastHw != null) {
+                calibrateAltimeterFromLocation(lastHw)
+                if (isLocationFreshAndAccurate(lastHw, maxAgeMs = 30_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
+                    lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
+                    processLocation(lastHw, isDirectWatchSatellite = true)
+                }
             }
         } catch (_: Exception) {
         }
 
         fusedClient.lastLocation.addOnSuccessListener { lastLoc ->
-            if (!isRunning) return@addOnSuccessListener
-            if (lastLoc != null && isLocationFreshAndAccurate(lastLoc, maxAgeMs = 30_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
+            if (!isRunning || lastLoc == null) return@addOnSuccessListener
+            calibrateAltimeterFromLocation(lastLoc)
+            if (isLocationFreshAndAccurate(lastLoc, maxAgeMs = 30_000L, maxAccMeters = FOREST_SAT_ACCURACY_METERS)) {
                 lastStrictFixElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
                 processLocation(lastLoc, isDirectWatchSatellite = false)
+            } else if (TrackingManager.currentLocation.value == null && lastLoc.hasAccuracy() && lastLoc.accuracy <= 25.0f) {
+                // Pokud jsme po startu uvnitř budovy a ještě nemáme polohu, použijeme poslední známý fix
+                val mslAlt = BarometricAltimeterManager.extractMslAltitudeMeters(lastLoc)
+                TrackingManager.addPoint(
+                    TrackPoint(
+                        latitude = lastLoc.latitude,
+                        longitude = lastLoc.longitude,
+                        altitudeMeters = mslAlt,
+                        timestampMillis = lastLoc.time,
+                        accuracyMeters = lastLoc.accuracy,
+                        speedMps = null
+                    )
+                )
             }
         }
 
@@ -260,6 +279,13 @@ class LiveGpsManager(
         }
         val acc = if (location.hasAccuracy()) location.accuracy else 999.0f
         return ageMs in 0..maxAgeMs && acc <= maxAccMeters
+    }
+
+    private fun calibrateAltimeterFromLocation(location: Location) {
+        val mslAlt = BarometricAltimeterManager.extractMslAltitudeMeters(location) ?: return
+        val gpsAcc = if (location.hasAccuracy()) location.accuracy else null
+        val vertAcc = if (location.hasVerticalAccuracy()) location.verticalAccuracyMeters else null
+        altimeterManager.onGpsAltitudeReceived(mslAlt, gpsAcc, vertAcc)
     }
 
     private fun processLocation(location: Location, isDirectWatchSatellite: Boolean) {

@@ -308,9 +308,9 @@ fun MapScreen(
             )
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Kompaktní text: Při stahování mapy procenta (DL XX%), jinak nadmořská výška
+            // Kompaktní text: Při stahování mapy procenta (DL XX%), jinak nadmořská výška (▲ m n.m.)
             val displayAltitude = currentAltitudeMeters ?: latestGpsPoint?.altitudeMeters
-            val altitudeText = displayAltitude?.let { "${it.roundToInt()} m" }
+            val altitudeText = displayAltitude?.let { "▲ ${it.roundToInt()} m n.m." }
             val pillLabel = if (offlineStatus.startsWith("DL")) {
                 offlineStatus
             } else {
@@ -640,12 +640,27 @@ private fun MapScaleBar(
             .background(AmoledBlack.copy(alpha = 0.82f), RoundedCornerShape(6.dp))
             .padding(horizontal = 5.dp, vertical = 1.5.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .width(barWidthDp)
-                .height(2.dp)
-                .background(OutdoorTextSecondary)
-        )
+        // Grafické pravítko měřítka mapy se svislými patkami |---|
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .width(1.5.dp)
+                    .height(5.dp)
+                    .background(OutdoorTextSecondary)
+            )
+            Box(
+                modifier = Modifier
+                    .width(barWidthDp)
+                    .height(1.8.dp)
+                    .background(OutdoorTextSecondary)
+            )
+            Box(
+                modifier = Modifier
+                    .width(1.5.dp)
+                    .height(5.dp)
+                    .background(OutdoorTextSecondary)
+            )
+        }
         Text(
             text = label,
             color = OutdoorTextSecondary,
