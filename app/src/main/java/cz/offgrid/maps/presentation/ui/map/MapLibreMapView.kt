@@ -50,6 +50,7 @@ private const val PLANNED_ROUTE_LAYER_ID = "planned_gpx_route_layer"
 
 private const val CUSTOM_CONTOURS_SOURCE_ID = "custom_contours_source"
 private const val CUSTOM_KCT_TRAILS_SOURCE_ID = "custom_kct_trails_source"
+private const val CUSTOM_OUTDOOR_POIS_SOURCE_ID = "custom_outdoor_pois_source"
 
 /**
  * Power-optimized Compose wrapper for MapLibre MapView on Wear OS.
@@ -78,6 +79,7 @@ fun MapLibreMapView(
     var isScreenVisible by remember { mutableStateOf(true) }
     val customContoursGeoJson by ContourTileManager.customContoursGeoJson.collectAsState()
     val customTrailsGeoJson by OfflineRegionHelper.customTrailsGeoJson.collectAsState()
+    val customPoisGeoJson by OfflineRegionHelper.customPoisGeoJson.collectAsState()
 
     val mapView = remember {
         MapView(context).apply {
@@ -249,6 +251,19 @@ fun MapLibreMapView(
         if (isStyleLoaded && !trailsJson.isNullOrEmpty()) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_KCT_TRAILS_SOURCE_ID)?.let { source ->
                 source.setGeoJson(trailsJson)
+                mapInstance?.triggerRepaint()
+                delay(80L)
+                mapInstance?.triggerRepaint()
+            }
+        }
+    }
+
+    // Update outdoor POIs (springs, shelters, huts, saddles, landmarks, rescue)
+    LaunchedEffect(customPoisGeoJson, isStyleLoaded) {
+        val poisJson = customPoisGeoJson
+        if (isStyleLoaded && !poisJson.isNullOrEmpty()) {
+            mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_OUTDOOR_POIS_SOURCE_ID)?.let { source ->
+                source.setGeoJson(poisJson)
                 mapInstance?.triggerRepaint()
                 delay(80L)
                 mapInstance?.triggerRepaint()

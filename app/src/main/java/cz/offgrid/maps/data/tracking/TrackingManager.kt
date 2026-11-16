@@ -272,4 +272,53 @@ object TrackingManager {
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return earthRadiusMeters * c
     }
+
+    /**
+     * Computes forward azimuth (0..360°) from (lat1, lon1) to (lat2, lon2).
+     */
+    fun calculateBearingDegrees(
+        lat1: Double, lon1: Double,
+        lat2: Double, lon2: Double
+    ): Float {
+        val phi1 = Math.toRadians(lat1)
+        val phi2 = Math.toRadians(lat2)
+        val dLambda = Math.toRadians(lon2 - lon1)
+        val y = sin(dLambda) * cos(phi2)
+        val x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(dLambda)
+        val theta = Math.toDegrees(atan2(y, x))
+        return ((theta + 360.0) % 360.0).toFloat()
+    }
+
+    /**
+     * Computes remaining distance (km) and remaining positive ascent (m) along the active planned GPX route
+     * from the vertex closest to [currentLat], [currentLon] to the finish.
+     */
+    fun calculateRemainingRouteStats(currentLat: Double, currentLon: Double): Pair<Double, Int>? {
+        val route = _plannedRoutePoints.value
+        if (route.size < 2) return null
+
+        var closestIdx = 0
+        var minDist = Double.MAX_VALUE
+        for (i in route.indices) {
+            val d = calculateDistanceMeters(currentLat, currentLon, route[i].latitude, route[i].longitude)
+            if (d < minDist) {
+                minDist = d
+                closestIdx = i
+            }
+        }
+
+        var remMeters = 0.0
+        var remAscent = 0.0
+        for (i in closestIdx until route.size - 1) {
+            val a = route[i]
+            val b = route[i + 1]
+            remMeters += calculateDistanceMeters(a.latitude, a.longitude, b.latitude, b.longitude)
+            val altA = a.altitudeMeters
+            val altB = b.altitudeMeters
+            if (altA != null && altB != null && altB > altA) {
+                remAscent += (altB - altA)
+            }
+        }
+        return (remMeters / 1000.0) to remAscent.roundToInt()
+    }
 }

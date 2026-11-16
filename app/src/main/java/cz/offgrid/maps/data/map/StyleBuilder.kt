@@ -60,6 +60,10 @@ object StyleBuilder {
             "custom_contours_source": {
               "type": "geojson",
               "data": {"type": "FeatureCollection", "features": []}
+            },
+            "custom_outdoor_pois_source": {
+              "type": "geojson",
+              "data": {"type": "FeatureCollection", "features": []}
             }
           },
           "layers": [
@@ -383,6 +387,104 @@ object StyleBuilder {
                 "line-color": "#EA0000",
                 "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.75, 11, 0.90, 12, 0.95],
                 "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.5, 12, 2.3, 14, 3.4, 16, 4.6]
+              }
+            },
+            {
+              "id": "custom_aerialway",
+              "type": "line",
+              "source": "custom_kct_trails_source",
+              "minzoom": 11,
+              "filter": ["==", ["get", "colour"], "aerialway"],
+              "layout": { "line-cap": "butt", "line-join": "round" },
+              "paint": {
+                "line-color": "#4DA6FF",
+                "line-dasharray": [3.0, 2.0],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 11, 1.3, 14, 2.2]
+              }
+            },
+            {
+              "id": "custom_trail_ferrata",
+              "type": "line",
+              "source": "custom_kct_trails_source",
+              "minzoom": 12,
+              "filter": ["==", ["get", "colour"], "ferrata"],
+              "layout": { "line-cap": "butt", "line-join": "round" },
+              "paint": {
+                "line-color": "#FF5500",
+                "line-dasharray": [1.2, 1.2],
+                "line-width": ["interpolate", ["linear"], ["zoom"], 12, 2.2, 14, 3.4, 16, 4.4]
+              }
+            },
+            {
+              "id": "vector_outdoor_pois",
+              "type": "symbol",
+              "source": "offline_source",
+              "source-layer": "poi",
+              "minzoom": 13,
+              "filter": ["in", ["get", "subclass"], ["literal", [
+                "drinking_water", "shelter", "alpine_hut", "wilderness_hut", "camp_site",
+                "viewpoint", "castle", "ruins", "cave_entrance", "picnic_site"
+              ]]],
+              "layout": {
+                "text-field": ["coalesce", ["get", "name:cs"], ["get", "name"], ["get", "subclass"]],
+                "text-font": ["Noto Sans Regular"],
+                "text-size": 9,
+                "text-anchor": "center",
+                "text-optional": true
+              },
+              "paint": {
+                "text-color": ["match", ["get", "subclass"],
+                  "drinking_water", "#00C8FF",
+                  ["shelter", "alpine_hut", "wilderness_hut", "camp_site"], "#E6B800",
+                  "#D8D8D0"
+                ],
+                "text-halo-color": "#000000",
+                "text-halo-width": 1.8
+              }
+            },
+            {
+              "id": "outdoor_poi_dots",
+              "type": "circle",
+              "source": "custom_outdoor_pois_source",
+              "minzoom": 12,
+              "paint": {
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2.6, 14, 4.2, 16, 5.4],
+                "circle-color": ["match", ["get", "cat"],
+                  "water", "#00C8FF",
+                  "shelter", "#E6B800",
+                  "saddle", "#C8B88A",
+                  "rescue", "#FF4444",
+                  "landmark", "#E0E0D8",
+                  "#9AA4AE"
+                ],
+                "circle-stroke-color": "#000000",
+                "circle-stroke-width": 1.3
+              }
+            },
+            {
+              "id": "outdoor_poi_labels",
+              "type": "symbol",
+              "source": "custom_outdoor_pois_source",
+              "minzoom": 13,
+              "layout": {
+                "text-field": ["get", "label"],
+                "text-font": ["Noto Sans Regular"],
+                "text-size": 9.5,
+                "text-offset": [0, 1.05],
+                "text-anchor": "top",
+                "text-optional": true
+              },
+              "paint": {
+                "text-color": ["match", ["get", "cat"],
+                  "water", "#00C8FF",
+                  "shelter", "#E6B800",
+                  "saddle", "#C8B88A",
+                  "rescue", "#FF4444",
+                  "landmark", "#E0E0D8",
+                  "#9AA4AE"
+                ],
+                "text-halo-color": "#000000",
+                "text-halo-width": 1.8
               }
             },
             {

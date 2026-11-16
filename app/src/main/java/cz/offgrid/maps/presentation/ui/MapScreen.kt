@@ -36,6 +36,7 @@ import androidx.wear.compose.material.*
 import cz.offgrid.maps.data.map.MapFileManager
 import cz.offgrid.maps.data.map.OfflinePresetRegion
 import cz.offgrid.maps.data.map.OfflineRegionHelper
+import cz.offgrid.maps.data.map.OutdoorPoi
 import cz.offgrid.maps.data.map.SavedOfflineRegion
 import cz.offgrid.maps.data.tracking.BarometricAltimeterManager
 import cz.offgrid.maps.data.tracking.CompassSensorManager
@@ -52,6 +53,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import java.io.File
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -611,6 +613,14 @@ fun MapScreen(
                     zoomLevel = 12.5f
                     showGpxPicker = false
                 },
+                onSelectPoi = { poi ->
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    isFollowingGps = false
+                    val poiLatLng = LatLng(poi.lat, poi.lon)
+                    maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(poiLatLng, 15.0))
+                    zoomLevel = 15.0f
+                    showGpxPicker = false
+                },
                 onDeleteOfflineRegion = { region ->
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     OfflineRegionHelper.deleteOfflineRegion(context, region.id)
@@ -676,9 +686,10 @@ private fun MapScaleBar(
 }
 
 /**
- * Pure black AMOLED overlay menu with two tabs:
- * 1) Routes (GPX import, route list, export/share, delete, clear active route)
- * 2) Offline (Nearby GPS shortcut, saved regions, and 3-level Continent -> Country -> Region catalog)
+ * Pure black AMOLED overlay menu with three tabs:
+ * 1) Routes (remaining route distance/ascent, GPX import, route list, share, delete)
+ * 2) POIs (Survival Radar: nearest springs/water, shelters/huts, saddles & landmarks)
+ * 3) Offline (Nearby GPS shortcut, saved regions, and 3-level Continent -> Country -> Region catalog)
  */
 @Composable
 private fun GpxRoutePickerOverlay(
@@ -697,10 +708,11 @@ private fun GpxRoutePickerOverlay(
     onImportGpx: () -> Unit,
     onDownloadPresetRegion: (OfflinePresetRegion) -> Unit,
     onSelectOfflineRegion: (SavedOfflineRegion) -> Unit,
+    onSelectPoi: (OutdoorPoi) -> Unit,
     onDeleteOfflineRegion: (SavedOfflineRegion) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // 0 = Routes, 1 = Offline Maps
+    // 0 = Routes, 1 = Offline Maps, 2 = Survival POIs
     var selectedTab by remember { mutableIntStateOf(0) }
     var selectedContinent by remember { mutableStateOf<String?>(null) }
     var selectedCountry by remember { mutableStateOf<String?>(null) }
@@ -718,6 +730,7 @@ private fun GpxRoutePickerOverlay(
     }
 
     val catalogRegions by OfflineRegionHelper.catalogRegions.collectAsState()
+    val activePois by OfflineRegionHelper.activePois.collectAsState()
     val savedByTitle = remember(savedRegions) {
         savedRegions.associateBy { it.displayName }
     }
@@ -739,6 +752,35 @@ private fun GpxRoutePickerOverlay(
         continentOrder.mapNotNull { cont -> grouped[cont]?.let { cont to it } }
     }
 
+    val remainingRouteStats = remember(activeRouteName, currentLat, currentLon) {
+        if (activeRouteName != null) {
+            TrackingManager.calculateRemainingRouteStats(currentLat, currentLon)
+        } else {
+            null
+        }
+    }
+
+    val enrichedPois = remember(activePois, currentLat, currentLon) {
+        activePois.map { poi ->
+            val distM = TrackingManager.calculateDistanceMeters(
+                currentLat, currentLon, poi.lat, poi.lon
+            )
+            val bearing = TrackingManager.calculateBearingDegrees(
+                currentLat, currentLon, poi.lat, poi.lon
+            )
+            Triple(poi, distM, formatCompassCardinal(bearing))
+        }.sortedBy { it.second }
+    }
+    val nearestWater = remember(enrichedPois) {
+        enrichedPois.filter { it.first.category == "water" }.take(4)
+    }
+    val nearestShelters = remember(enrichedPois) {
+        enrichedPois.filter { it.first.category == "shelter" }.take(4)
+    }
+    val nearestLandmarks = remember(enrichedPois) {
+        enrichedPois.filter { it.first.category in setOf("saddle", "landmark", "rescue") }.take(4)
+    }
+
     val isDownloading = offlineStatus.startsWith("DL")
 
     Box(
@@ -754,10 +796,10 @@ private fun GpxRoutePickerOverlay(
             contentPadding = PaddingValues(vertical = 8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top tab switcher: [Routes] | [Offline]
+            // Top tab switcher: [Routes] | [POIs] | [Offline]
             item(key = "tab_switcher") {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val isGpxTab = selectedTab == 0
@@ -771,13 +813,35 @@ private fun GpxRoutePickerOverlay(
                                 shape = RoundedCornerShape(14.dp)
                             )
                             .clickable { selectedTab = 0 }
-                            .padding(horizontal = 13.dp, vertical = 7.dp),
+                            .padding(horizontal = 9.dp, vertical = 6.5.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "Routes (${files.size})",
                             color = if (isGpxTab) TrailGreen else OutdoorTextSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    val isPoiTab = selectedTab == 2
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isPoiTab) DarkSurface else AmoledBlack)
+                            .border(
+                                width = if (isPoiTab) 1.8.dp else 1.2.dp,
+                                color = if (isPoiTab) TrailYellow else DarkSurfaceVariant,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { selectedTab = 2 }
+                            .padding(horizontal = 9.dp, vertical = 6.5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "POIs",
+                            color = if (isPoiTab) TrailYellow else OutdoorTextSecondary,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -793,13 +857,13 @@ private fun GpxRoutePickerOverlay(
                                 shape = RoundedCornerShape(14.dp)
                             )
                             .clickable { selectedTab = 1 }
-                            .padding(horizontal = 13.dp, vertical = 7.dp),
+                            .padding(horizontal = 9.dp, vertical = 6.5.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "Offline (${savedRegions.size})",
                             color = if (isOfflineTab) TrailBlue else OutdoorTextSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -808,6 +872,30 @@ private fun GpxRoutePickerOverlay(
 
             if (selectedTab == 0) {
                 // --- TAB 1: GPX ROUTES ---
+                if (activeRouteName != null && remainingRouteStats != null) {
+                    item(key = "active_route_stats") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(1.4.dp, TrailYellow, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.5.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val kmStr = "%.1f".format(Locale.US, remainingRouteStats.first)
+                            Text(
+                                text = "▲ +${remainingRouteStats.second} m · $kmStr km left",
+                                color = TrailYellow,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
                 item(key = "import_gpx_btn") {
                     Box(
                         modifier = Modifier
@@ -898,6 +986,81 @@ private fun GpxRoutePickerOverlay(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+                        }
+                    }
+                }
+            } else if (selectedTab == 2) {
+                // --- TAB 3: SURVIVAL RADAR (Nearest Water, Shelters, Saddles & Landmarks) ---
+                if (enrichedPois.isEmpty()) {
+                    item(key = "no_pois") {
+                        Text(
+                            text = "No offline POIs in this area yet",
+                            color = OutdoorTextSecondary,
+                            fontSize = 10.5.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                } else {
+                    if (nearestWater.isNotEmpty()) {
+                        item(key = "poi_water_header") {
+                            Text(
+                                text = "NEAREST WATER & SPRINGS",
+                                color = Color(0xFF00C8FF),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        items(nearestWater, key = { "w_${it.first.label}_${it.first.lat}" }) { (poi, distM, dir) ->
+                            SurvivalPoiRow(
+                                title = poi.label,
+                                distanceMeters = distM,
+                                cardinal = dir,
+                                accentColor = Color(0xFF00C8FF),
+                                onClick = { onSelectPoi(poi) }
+                            )
+                        }
+                    }
+
+                    if (nearestShelters.isNotEmpty()) {
+                        item(key = "poi_shelter_header") {
+                            Text(
+                                text = "NEAREST SHELTERS & HUTS",
+                                color = TrailYellow,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        items(nearestShelters, key = { "s_${it.first.label}_${it.first.lat}" }) { (poi, distM, dir) ->
+                            SurvivalPoiRow(
+                                title = poi.label,
+                                distanceMeters = distM,
+                                cardinal = dir,
+                                accentColor = TrailYellow,
+                                onClick = { onSelectPoi(poi) }
+                            )
+                        }
+                    }
+
+                    if (nearestLandmarks.isNotEmpty()) {
+                        item(key = "poi_landmark_header") {
+                            Text(
+                                text = "PASSES, CASTLES & RESCUE",
+                                color = TrailGreen,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        items(nearestLandmarks, key = { "l_${it.first.label}_${it.first.lat}" }) { (poi, distM, dir) ->
+                            SurvivalPoiRow(
+                                title = poi.label,
+                                distanceMeters = distM,
+                                cardinal = dir,
+                                accentColor = TrailGreen,
+                                onClick = { onSelectPoi(poi) }
+                            )
                         }
                     }
                 }
@@ -1315,6 +1478,67 @@ private fun OfflinePresetRow(
         ) {
             Text(
                 text = if (isSaved) "✓" else "⬇",
+                color = accentColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun SurvivalPoiRow(
+    title: String,
+    distanceMeters: Double,
+    cardinal: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    val distStr = if (distanceMeters < 1000.0) {
+        "${distanceMeters.roundToInt()} m"
+    } else {
+        "${"%.1f".format(Locale.US, distanceMeters / 1000.0)} km"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(DarkSurface)
+            .border(1.2.dp, accentColor.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 6.5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = OutdoorTextPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "$distStr · $cardinal",
+                color = accentColor,
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(AmoledBlack)
+                .border(1.2.dp, accentColor, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "◎",
                 color = accentColor,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold

@@ -1,0 +1,22 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"cat":"water","label":"Studánka Samaritánka"},"geometry":{"type":"Point","coordinates":[16.3682,49.1185]}},
+{"type":"Feature","properties":{"cat":"water","label":"Studánka Vrabčák"},"geometry":{"type":"Point","coordinates":[16.3145,49.1398]}},
+{"type":"Feature","properties":{"cat":"water","label":"Pramen Pod babou"},"geometry":{"type":"Point","coordinates":[16.3512,49.1045]}},
+{"type":"Feature","properties":{"cat":"water","label":"Studánka U Buku"},"geometry":{"type":"Point","coordinates":[16.6845,49.3112]}},
+{"type":"Feature","properties":{"cat":"water","label":"Josefovský pramen"},"geometry":{"type":"Point","coordinates":[16.6915,49.3088]}},
+{"type":"Feature","properties":{"cat":"water","label":"Studánka Pod Děvínem"},"geometry":{"type":"Point","coordinates":[16.6472,48.8685]}},
+{"type":"Feature","properties":{"cat":"shelter","label":"Útulna Údolí Oslavy"},"geometry":{"type":"Point","coordinates":[16.2155,49.1482]}},
+{"type":"Feature","properties":{"cat":"shelter","label":"Přístřešek Nad Zakřany"},"geometry":{"type":"Point","coordinates":[16.3485,49.1640]}},
+{"type":"Feature","properties":{"cat":"shelter","label":"Přístřešek Čučická hora"},"geometry":{"type":"Point","coordinates":[16.2798,49.1365]}},
+{"type":"Feature","properties":{"cat":"shelter","label":"Přístřešek Senoradský mlýn"},"geometry":{"type":"Point","coordinates":[16.2412,49.1342]}},
+{"type":"Feature","properties":{"cat":"shelter","label":"Chata Macocha"},"geometry":{"type":"Point","coordinates":[16.7295,49.3731]}},
+{"type":"Feature","properties":{"cat":"landmark","label":"Rozhledna Vladimíra Menšíka"},"geometry":{"type":"Point","coordinates":[16.3822,49.0846]}},
+{"type":"Feature","properties":{"cat":"landmark","label":"Zřícenina Templštejn"},"geometry":{"type":"Point","coordinates":[16.2486,49.0928]}},
+{"type":"Feature","properties":{"cat":"landmark","label":"Zřícenina Levnov (Ketkovický hrad)"},"geometry":{"type":"Point","coordinates":[16.2389,49.1462]}},
+{"type":"Feature","properties":{"cat":"landmark","label":"Zřícenina Kraví Hora"},"geometry":{"type":"Point","coordinates":[16.1912,49.1525]}},
+{"type":"Feature","properties":{"cat":"landmark","label":"Propast Macocha (138 m)"},"geometry":{"type":"Point","coordinates":[16.7298,49.3733]}},
+{"type":"Feature","properties":{"cat":"landmark","label":"Děvičky (Dívčí hrady)"},"geometry":{"type":"Point","coordinates":[16.6625,48.8758]}},
+{"type":"Feature","properties":{"cat":"landmark","label":"Jeskyně Pekárna"},"geometry":{"type":"Point","coordinates":[16.7485,49.2422]}},
+{"type":"Feature","properties":{"cat":"saddle","label":"Soutěska pod Děvínem (375 m)"},"geometry":{"type":"Point","coordinates":[16.6438,48.8662]}},
+{"type":"Feature","properties":{"cat":"rescue","label":"ZS Moravský kras (Skalní mlýn)"},"geometry":{"type":"Point","coordinates":[16.7092,49.3645]}}
+]}

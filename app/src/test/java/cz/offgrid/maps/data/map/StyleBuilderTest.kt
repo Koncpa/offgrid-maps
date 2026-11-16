@@ -103,4 +103,28 @@ class StyleBuilderTest {
         assertEquals("Australia & NZ", OfflineRegionHelper.resolveContinent("AU"))
         assertEquals("Australia & NZ", OfflineRegionHelper.resolveContinent("NZ"))
     }
+
+    @Test
+    fun createAmoledOutdoorStyle_containsOutdoorPoiFerrataAndAerialwayLayers() {
+        val styleJson = StyleBuilder.createAmoledOutdoorStyle(null)
+        assertTrue(styleJson.contains("custom_outdoor_pois_source"))
+        assertTrue(styleJson.contains("outdoor_poi_dots"))
+        assertTrue(styleJson.contains("outdoor_poi_labels"))
+        assertTrue(styleJson.contains("custom_trail_ferrata"))
+        assertTrue(styleJson.contains("custom_aerialway"))
+    }
+
+    @Test
+    fun parseOutdoorPois_parsesWaterShelterAndLandmarkFeaturesCorrectly() {
+        val sample = """{"type":"FeatureCollection","features":[
+            {"type":"Feature","properties":{"cat":"water","label":"Studánka U Buku"},"geometry":{"type":"Point","coordinates":[16.6845,49.3112]}},
+            {"type":"Feature","properties":{"cat":"shelter","label":"Útulna Oslava"},"geometry":{"type":"Point","coordinates":[16.2155,49.1482]}}
+        ]}"""
+        val pois = OfflineRegionHelper.parseOutdoorPois(sample)
+        assertEquals(2, pois.size)
+        assertEquals("water", pois[0].category)
+        assertEquals("Studánka U Buku", pois[0].label)
+        assertEquals(49.3112, pois[0].lat, 0.0001)
+        assertEquals(16.6845, pois[0].lon, 0.0001)
+    }
 }

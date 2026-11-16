@@ -55,6 +55,16 @@ data class OfflinePresetRegion(
 )
 
 /**
+ * Offline outdoor Point of Interest (spring/water source, shelter/hut, mountain saddle, landmark, or rescue point).
+ */
+data class OutdoorPoi(
+    val category: String,
+    val label: String,
+    val lat: Double,
+    val lon: Double
+)
+
+/**
  * Offline map region manager connected to the private GitHub repository (`Koncpa/offgrid-maps-data`),
  * dynamically loading `catalog.json` (Czechia, Slovakia, Austria, etc.) and pre-built map packages.
  */
@@ -63,8 +73,10 @@ object OfflineRegionHelper {
     private const val REGION_NAME_JMK = "Jihomoravsky_kraj_z14_v3"
     private const val CACHED_CATALOG_FILE = "cached_github_catalog.json"
     private const val ASSET_DEFAULT_CATALOG_FILE = "default_catalog.json"
+    private const val ASSET_JMK_POIS_FILE = "jmk_outdoor_pois.geojson"
     private const val PACKAGES_DIR = "github_regions"
     private const val TRAILS_FRAGMENT_FILE = "trails.features"
+    private const val POIS_FRAGMENT_FILE = "pois.features"
 
     private val trailExecutor = Executors.newSingleThreadExecutor()
 
@@ -115,6 +127,12 @@ object OfflineRegionHelper {
 
     private val _customTrailsGeoJson = MutableStateFlow<String?>(null)
     val customTrailsGeoJson: StateFlow<String?> = _customTrailsGeoJson.asStateFlow()
+
+    private val _customPoisGeoJson = MutableStateFlow<String?>(null)
+    val customPoisGeoJson: StateFlow<String?> = _customPoisGeoJson.asStateFlow()
+
+    private val _activePois = MutableStateFlow<List<OutdoorPoi>>(emptyList())
+    val activePois: StateFlow<List<OutdoorPoi>> = _activePois.asStateFlow()
 
     private var isInitialized = false
     private var isDownloading = false
@@ -288,6 +306,7 @@ object OfflineRegionHelper {
 
     fun ensureSouthMoraviaOffline(context: Context, @Suppress("UNUSED_PARAMETER") styleJson: String) {
         ContourTileManager.loadCachedCustomContours(context)
+        updateTrailsForViewport(context, 49.1246, 16.3353)
         if (isInitialized) {
             refreshSavedRegions(context)
             return
@@ -502,6 +521,10 @@ object OfflineRegionHelper {
                 val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
                 File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
             }
+            downloadPackageFile(preset, "outdoor_pois.geojson.gz") { input ->
+                val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
+                File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+            }
             val contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
                 ContourTileManager.importTilePackage(context, input)
             }
@@ -586,10 +609,22 @@ object OfflineRegionHelper {
     private var trailPackages: List<TrailPackage>? = null
     @Volatile
     private var activeTrailKey: String? = null
+    @Volatile
+    private var bundledJmkPoisFragment: String? = null
 
     private fun invalidateTrailPackages() {
         trailPackages = null
         activeTrailKey = null
+    }
+
+    private fun loadBundledJmkPoisFragment(context: Context): String {
+        bundledJmkPoisFragment?.let { return it }
+        return try {
+            val raw = context.assets.open(ASSET_JMK_POIS_FILE).bufferedReader().use { it.readText() }
+            extractFeatureArray(raw).also { bundledJmkPoisFragment = it }
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun loadTrailPackages(context: Context): List<TrailPackage> {
@@ -609,7 +644,7 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Shows the marked trails of every downloaded region that covers the given map position.
+     * Shows the marked trails and outdoor POIs of every downloaded region that covers the given map position.
      * Only nearby regions are kept in memory, so having many regions on the watch does not
      * increase RAM use. Called on camera idle; does nothing when the region set is unchanged.
      */
@@ -619,14 +654,46 @@ object OfflineRegionHelper {
             lat <= p.bounds[0] + margin && lat >= p.bounds[2] - margin &&
                 lon <= p.bounds[1] + margin && lon >= p.bounds[3] - margin
         }
-        val key = visible.joinToString(",") { it.dir.name }
+        val inJmk = lat in 48.70..49.50 && lon in 15.90..17.00
+        val key = visible.joinToString(",") { it.dir.name } + "|jmk=$inJmk"
         if (key == activeTrailKey) return@execute
         activeTrailKey = key
 
-        val fragments = visible.mapNotNull { p ->
+        val trailFragments = visible.mapNotNull { p ->
             File(p.dir, TRAILS_FRAGMENT_FILE).takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
         }
-        _customTrailsGeoJson.value = """{"type":"FeatureCollection","features":[${fragments.joinToString(",")}]}"""
+        _customTrailsGeoJson.value = """{"type":"FeatureCollection","features":[${trailFragments.joinToString(",")}]}"""
+
+        val poiFragments = mutableListOf<String>()
+        if (inJmk) {
+            val jmkFrag = loadBundledJmkPoisFragment(context)
+            if (jmkFrag.isNotBlank()) poiFragments.add(jmkFrag)
+        }
+        visible.forEach { p ->
+            val frag = File(p.dir, POIS_FRAGMENT_FILE).takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
+            if (frag != null) poiFragments.add(frag)
+        }
+        val combinedPoisGeoJson = """{"type":"FeatureCollection","features":[${poiFragments.joinToString(",")}]}"""
+        _customPoisGeoJson.value = combinedPoisGeoJson
+        _activePois.value = parseOutdoorPois(combinedPoisGeoJson)
+    }
+
+    private val POI_FEATURE_REGEX = Regex(
+        """\"cat\"\s*:\s*\"([^\"]+)\"\s*,\s*\"label\"\s*:\s*\"([^\"]+)\"[^}]*\}\s*,\s*\"geometry\"\s*:\s*\{\s*\"type\"\s*:\s*\"Point\"\s*,\s*\"coordinates\"\s*:\s*\[\s*([-0-9.]+)\s*,\s*([-0-9.]+)\s*\]"""
+    )
+
+    internal fun parseOutdoorPois(featureCollectionJson: String): List<OutdoorPoi> {
+        val list = mutableListOf<OutdoorPoi>()
+        for (match in POI_FEATURE_REGEX.findAll(featureCollectionJson)) {
+            val cat = match.groupValues[1]
+            val label = match.groupValues[2]
+            val lon = match.groupValues[3].toDoubleOrNull() ?: continue
+            val lat = match.groupValues[4].toDoubleOrNull() ?: continue
+            if (label.isNotBlank()) {
+                list.add(OutdoorPoi(category = cat, label = label, lat = lat, lon = lon))
+            }
+        }
+        return list
     }
 
     /** Removes the downloaded trail package that belongs to a deleted offline region. */
