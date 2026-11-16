@@ -42,8 +42,8 @@ class StyleBuilderTest {
 
     @Test
     fun resolveCzechRegionTitle_identifiesCzechRegionsAndMountainsCorrectly() {
-        assertEquals("Jihomoravský kraj", OfflineRegionHelper.resolveCzechRegionTitle(49.1246, 16.3353))
-        assertEquals("Praha a okolí", OfflineRegionHelper.resolveCzechRegionTitle(50.0755, 14.4378))
+        assertEquals("South Moravia", OfflineRegionHelper.resolveCzechRegionTitle(49.1246, 16.3353))
+        assertEquals("Prague & Surroundings", OfflineRegionHelper.resolveCzechRegionTitle(50.0755, 14.4378))
         assertEquals("Krkonoše", OfflineRegionHelper.resolveCzechRegionTitle(50.7360, 15.7397))
         assertEquals("Šumava", OfflineRegionHelper.resolveCzechRegionTitle(49.0200, 13.5500))
         assertEquals("Beskydy", OfflineRegionHelper.resolveCzechRegionTitle(49.5460, 18.4470))
@@ -51,7 +51,6 @@ class StyleBuilderTest {
 
     @Test
     fun contourTileManager_webMercatorTileCoordinates_matchBundledJmkGrid() {
-        // Oslavany / Údolí Oslavy (49.1246, 16.3353) při zoomu 12 leží v dlaždici x=2233, y=1404
         val tx = ContourTileManager.lonToTileX(16.3353, 12)
         val ty = ContourTileManager.latToTileY(49.1246, 12)
         assertEquals(2233, tx)
@@ -62,12 +61,12 @@ class StyleBuilderTest {
     @Test
     fun presetRegions_containsCzechAdministrativeRegionsLikeMapyCom() {
         val presets = OfflineRegionHelper.presetRegions
-        assertEquals(13, presets.size) // 13 dalších krajů ČR (+ předinstalovaný Jihomoravský kraj = všech 14 krajů ČR)
+        assertEquals(13, presets.size)
         val titles = presets.map { it.title }.toSet()
-        assertTrue(titles.contains("Kraj Vysočina"))
-        assertTrue(titles.contains("Jihočeský kraj"))
-        assertTrue(titles.contains("Moravskoslezský kraj"))
-        assertTrue(titles.contains("Královéhradecký kraj"))
+        assertTrue(titles.contains("Vysočina Region"))
+        assertTrue(titles.contains("South Bohemia"))
+        assertTrue(titles.contains("Moravian-Silesian"))
+        assertTrue(titles.contains("Hradec Králové Region"))
         presets.forEach { preset ->
             assertTrue(preset.centerLat in 48.5..51.1)
             assertTrue(preset.centerLon in 12.0..18.9)

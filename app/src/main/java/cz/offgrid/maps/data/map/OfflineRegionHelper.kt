@@ -47,14 +47,13 @@ data class OfflinePresetRegion(
     val latSpanDeg: Double = 0.50,
     val lonSpanDeg: Double = 0.75,
     val countryCode: String = "CZ",
-    val countryName: String = "Česká republika – Kraje",
+    val countryName: String = "Czechia – Regions",
     val packagePath: String = "maps/cz/$id"
 )
 
 /**
- * Správce offline mapových regionů napojený na soukromý GitHub repozitář (`Koncpa/offgrid-maps-data`),
- * odkud dynamicky načítá `catalog.json` (ČR, Slovensko, Rakousko a další země) a předpřipravené
- * komprimované mapové podklady.
+ * Offline map region manager connected to the private GitHub repository (`Koncpa/offgrid-maps-data`),
+ * dynamically loading `catalog.json` (Czechia, Slovakia, Austria, etc.) and pre-built map packages.
  */
 object OfflineRegionHelper {
 
@@ -74,22 +73,22 @@ object OfflineRegionHelper {
     val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
 
     /**
-     * Výchozí vestavěný katalog krajů ČR (k dispozici i zcela offline před prvním načtením z GitHubu).
+     * Built-in default catalog of Czech regions (available even offline before first GitHub sync).
      */
     val presetRegions: List<OfflinePresetRegion> = listOf(
-        OfflinePresetRegion("kraj_vysocina", "Kraj Vysočina", "Jihlava, Třebíč, Žďár n. S., Havl. Brod", 49.45, 15.68, 0.55, 0.75),
-        OfflinePresetRegion("jihocesky_kraj", "Jihočeský kraj", "Č. Budějovice, Tábor, Č. Krumlov, Písek", 49.05, 14.48, 0.65, 0.90),
-        OfflinePresetRegion("zlinsky_kraj", "Zlínský kraj", "Zlín, Vsetín, Uh. Hradiště, Kroměříž", 49.22, 17.72, 0.50, 0.70),
-        OfflinePresetRegion("olomoucky_kraj", "Olomoucký kraj", "Olomouc, Přerov, Prostějov, Šumperk", 49.72, 17.18, 0.65, 0.75),
-        OfflinePresetRegion("moravskoslezsky_kraj", "Moravskoslezský kraj", "Ostrava, Opava, Frýdek-Místek, Bruntál", 49.78, 18.12, 0.60, 0.85),
-        OfflinePresetRegion("pardubicky_kraj", "Pardubický kraj", "Pardubice, Chrudim, Svitavy, Ústí n. O.", 49.92, 16.15, 0.50, 0.80),
-        OfflinePresetRegion("kralovehradecky_kraj", "Královéhradecký kraj", "Hradec Králové, Trutnov, Náchod, Jičín", 50.38, 15.82, 0.55, 0.75),
-        OfflinePresetRegion("stredocesky_kraj", "Středočeský kraj", "Beroun, Kladno, M. Boleslav, Příbram", 49.98, 14.55, 0.65, 0.95),
-        OfflinePresetRegion("praha", "Praha a okolí", "Hlavní město Praha, Český kras, Posázaví", 50.08, 14.43, 0.30, 0.42),
-        OfflinePresetRegion("plzensky_kraj", "Plzeňský kraj", "Plzeň, Klatovy, Domažlice, Tachov", 49.58, 13.28, 0.65, 0.80),
-        OfflinePresetRegion("liberecky_kraj", "Liberecký kraj", "Liberec, Jablonec n. N., Česká Lípa, Semily", 50.72, 15.05, 0.45, 0.65),
-        OfflinePresetRegion("ustecky_kraj", "Ústecký kraj", "Ústí n. L., Děčín, Most, Teplice, Chomutov", 50.55, 13.85, 0.55, 0.85),
-        OfflinePresetRegion("karlovarsky_kraj", "Karlovarský kraj", "Karlovy Vary, Cheb, Sokolov, Mar. Lázně", 50.18, 12.75, 0.45, 0.65)
+        OfflinePresetRegion("kraj_vysocina", "Vysočina Region", "Jihlava, Třebíč, Žďár n. S., Havl. Brod", 49.45, 15.68, 0.55, 0.75),
+        OfflinePresetRegion("jihocesky_kraj", "South Bohemia", "Č. Budějovice, Tábor, Č. Krumlov, Písek", 49.05, 14.48, 0.65, 0.90),
+        OfflinePresetRegion("zlinsky_kraj", "Zlín Region", "Zlín, Vsetín, Uh. Hradiště, Kroměříž", 49.22, 17.72, 0.50, 0.70),
+        OfflinePresetRegion("olomoucky_kraj", "Olomouc Region", "Olomouc, Přerov, Prostějov, Šumperk", 49.72, 17.18, 0.65, 0.75),
+        OfflinePresetRegion("moravskoslezsky_kraj", "Moravian-Silesian", "Ostrava, Opava, Frýdek-Místek, Bruntál", 49.78, 18.12, 0.60, 0.85),
+        OfflinePresetRegion("pardubicky_kraj", "Pardubice Region", "Pardubice, Chrudim, Svitavy, Ústí n. O.", 49.92, 16.15, 0.50, 0.80),
+        OfflinePresetRegion("kralovehradecky_kraj", "Hradec Králové Region", "Hradec Králové, Trutnov, Náchod, Jičín", 50.38, 15.82, 0.55, 0.75),
+        OfflinePresetRegion("stredocesky_kraj", "Central Bohemia", "Beroun, Kladno, M. Boleslav, Příbram", 49.98, 14.55, 0.65, 0.95),
+        OfflinePresetRegion("praha", "Prague & Surroundings", "Prague, Karlštejn, Bohemian Karst", 50.08, 14.43, 0.30, 0.42),
+        OfflinePresetRegion("plzensky_kraj", "Plzeň Region", "Plzeň, Klatovy, Domažlice, Tachov", 49.58, 13.28, 0.65, 0.80),
+        OfflinePresetRegion("liberecky_kraj", "Liberec Region", "Liberec, Jablonec n. N., Česká Lípa, Semily", 50.72, 15.05, 0.45, 0.65),
+        OfflinePresetRegion("ustecky_kraj", "Ústí nad Labem Region", "Ústí n. L., Děčín, Most, Teplice, Chomutov", 50.55, 13.85, 0.55, 0.85),
+        OfflinePresetRegion("karlovarsky_kraj", "Karlovy Vary Region", "Karlovy Vary, Cheb, Sokolov, Mar. Lázně", 50.18, 12.75, 0.45, 0.65)
     )
 
     private val _catalogRegions = MutableStateFlow<List<OfflinePresetRegion>>(presetRegions)
@@ -197,9 +196,10 @@ object OfflineRegionHelper {
                     val centerLon = bounds?.center?.longitude ?: 16.3353
                     val isJmk = rawMeta.startsWith("Jihomoravsky_kraj")
                     val title = if (isJmk) {
-                        "Jihomoravský kraj"
+                        "South Moravia"
                     } else if (rawMeta.contains("|")) {
-                        rawMeta.substringAfter("|")
+                        val rawTitle = rawMeta.substringAfter("|")
+                        if (rawTitle == "Jihomoravský kraj") "South Moravia" else rawTitle
                     } else {
                         resolveCzechRegionTitle(centerLat, centerLon)
                     }
@@ -557,7 +557,7 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Automaticky přiřadí stažené oblasti srozumitelný český název podle nejbližšího pohoří nebo kraje.
+     * Automatically resolves a human-readable English region title for given coordinates.
      */
     fun resolveCzechRegionTitle(lat: Double, lon: Double): String {
         data class Landmark(val name: String, val lat: Double, val lon: Double, val radiusDeg: Double)
@@ -566,27 +566,27 @@ object OfflineRegionHelper {
             Landmark("Šumava", 49.02, 13.55, 0.40),
             Landmark("Beskydy", 49.50, 18.42, 0.35),
             Landmark("Jeseníky", 50.08, 17.22, 0.35),
-            Landmark("Jizerské hory", 50.83, 15.25, 0.25),
-            Landmark("Orlické hory", 50.28, 16.40, 0.28),
-            Landmark("Krušné hory", 50.42, 13.05, 0.40),
-            Landmark("Český ráj", 50.55, 15.20, 0.22),
-            Landmark("České Švýcarsko", 50.88, 14.35, 0.22),
+            Landmark("Jizera Mountains", 50.83, 15.25, 0.25),
+            Landmark("Orlické Mountains", 50.28, 16.40, 0.28),
+            Landmark("Ore Mountains", 50.42, 13.05, 0.40),
+            Landmark("Bohemian Paradise", 50.55, 15.20, 0.22),
+            Landmark("Bohemian Switzerland", 50.88, 14.35, 0.22),
             Landmark("Brdy & Křivoklátsko", 49.75, 13.85, 0.32),
-            Landmark("Praha a okolí", 50.08, 14.43, 0.32),
-            Landmark("Vysočina & Žďárské vrchy", 49.58, 15.95, 0.40),
-            Landmark("Jižní Čechy", 49.05, 14.48, 0.45),
-            Landmark("Západní Čechy", 49.75, 13.35, 0.45),
-            Landmark("Východní Čechy", 50.15, 15.82, 0.45),
-            Landmark("Střední Čechy", 49.95, 14.85, 0.45),
-            Landmark("Severní Čechy", 50.62, 14.05, 0.45),
-            Landmark("Střední Morava", 49.55, 17.25, 0.45),
-            Landmark("Jihomoravský kraj", 49.15, 16.45, 0.45)
+            Landmark("Prague & Surroundings", 50.08, 14.43, 0.32),
+            Landmark("Vysočina Region", 49.58, 15.95, 0.40),
+            Landmark("South Bohemia", 49.05, 14.48, 0.45),
+            Landmark("Plzeň Region", 49.75, 13.35, 0.45),
+            Landmark("Hradec Králové Region", 50.15, 15.82, 0.45),
+            Landmark("Central Bohemia", 49.95, 14.85, 0.45),
+            Landmark("Ústí nad Labem Region", 50.62, 14.05, 0.45),
+            Landmark("Olomouc Region", 49.55, 17.25, 0.45),
+            Landmark("South Moravia", 49.15, 16.45, 0.45)
         )
         val match = landmarks.minByOrNull { hypot(lat - it.lat, lon - it.lon) }
         if (match != null && hypot(lat - match.lat, lon - match.lon) <= match.radiusDeg) {
             return match.name
         }
-        val regionPrefix = if (lon < 15.6) "Čechy" else "Morava"
+        val regionPrefix = if (lon < 15.6) "Bohemia" else "Moravia"
         return "$regionPrefix (${"%.2f".format(Locale.US, lat)}, ${"%.2f".format(Locale.US, lon)})"
     }
 }

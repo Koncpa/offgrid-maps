@@ -164,7 +164,7 @@ class LocationTrackingService : Service() {
             isBatteryReceiverRegistered = true
         }
 
-        val notification = buildNotification("Zaznamenávám trasu...")
+        val notification = buildNotification("Recording track...")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -271,17 +271,17 @@ class LocationTrackingService : Service() {
         val distKm = TrackingManager.totalDistanceMeters.value / 1000.0
         val ascentM = TrackingManager.totalAscentMeters.value.toInt()
 
-        val prefix = if (emergencyLowBattery) "baterie5pct" else "tura"
+        val prefix = if (emergencyLowBattery) "lowbat5pct" else "hike"
         val savedFile = GpxExporter.saveTrackToGpx(this, recordedPoints, prefix = prefix)
         TrackingManager.setTrackingActive(false)
 
         if (emergencyLowBattery) {
-            TrackingManager.setSavedSummary("Baterie ≤5 %! GPX uloženo (%.2f km)".format(distKm))
+            TrackingManager.setSavedSummary("Battery ≤5%! GPX saved (%.2f km)".format(distKm))
         } else if (savedFile != null) {
             TrackingManager.setSavedSummary("GPX: %.2f km • ↑%d m".format(distKm, ascentM))
         } else {
             GpxExporter.clearRecoveryCheckpoint(this)
-            TrackingManager.setSavedSummary("Záznam ukončen (0 bodů)")
+            TrackingManager.setSavedSummary("Recording stopped (0 pts)")
         }
 
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -307,10 +307,10 @@ class LocationTrackingService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Záznam trasy OffGrid",
+                "OffGrid Track Recording",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Zobrazuje aktivní stav záznamu offline trasy"
+                description = "Shows active offline GPS track recording status"
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
@@ -329,7 +329,7 @@ class LocationTrackingService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("OffGrid Záznam")
+            .setContentTitle("OffGrid Recording")
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setCategory(NotificationCompat.CATEGORY_WORKOUT)

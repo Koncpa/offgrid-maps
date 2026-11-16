@@ -201,7 +201,7 @@ fun MapScreen(
                         val startLatLng = LatLng(points.first().latitude, points.first().longitude)
                         maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(startLatLng, 14.0))
                         zoomLevel = 14.0f
-                        TrackingManager.setSavedSummary("Načteno: ${importedFile.nameWithoutExtension}")
+                        TrackingManager.setSavedSummary("Loaded: ${importedFile.nameWithoutExtension}")
                     }
                     availableGpxFiles = withContext(Dispatchers.IO) { GpxExporter.listSavedGpxFiles(context) }
                     showGpxPicker = false
@@ -214,10 +214,9 @@ fun MapScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
-        // Pokud se hodinky na předchozí túře vybily před stiskem STOP, zachráníme rozpracovanou trasu
         val recoveredFile = GpxExporter.recoverUnfinishedTrackIfAny(context)
         if (recoveredFile != null) {
-            TrackingManager.setSavedSummary("Obnovena trasa po vypnutí")
+            TrackingManager.setSavedSummary("Track recovered")
         }
 
         val hasLocation = ContextCompat.checkSelfPermission(
@@ -311,9 +310,8 @@ fun MapScreen(
             )
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Kompaktní text: Při stahování mapy procenta (DL XX%), jinak nadmořská výška (▲ m n.m.)
             val displayAltitude = currentAltitudeMeters ?: latestGpsPoint?.altitudeMeters
-            val altitudeText = displayAltitude?.let { "▲ ${it.roundToInt()} m n.m." }
+            val altitudeText = displayAltitude?.let { "▲ ${it.roundToInt()} m" }
             val pillLabel = if (offlineStatus.startsWith("DL")) {
                 offlineStatus
             } else {
@@ -328,7 +326,6 @@ fun MapScreen(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Směr kompasu (S, SV, V, JV, J, JZ, Z, SZ)
             Text(
                 text = formatCompassCardinal(azimuthDegrees),
                 color = TrailYellow,
@@ -337,7 +334,6 @@ fun MapScreen(
             )
         }
 
-        // Varování při odchýlení od načtené GPX trasy (> 60 m) nebo diskrétní měřítko mapy pod horní lištou
         if (isOffRoute) {
             Box(
                 modifier = Modifier
@@ -348,7 +344,7 @@ fun MapScreen(
                     .padding(horizontal = 7.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "Mimo GPX trasu (>60 m)",
+                    text = "Off route (>60 m)",
                     color = TrailRed,
                     fontSize = 8.5.sp,
                     fontWeight = FontWeight.Bold
@@ -568,7 +564,7 @@ fun MapScreen(
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     val ok = GpxExporter.shareAndExportGpxFile(context, file)
                     if (ok) {
-                        TrackingManager.setSavedSummary("Uloženo v Download/OffGridMaps")
+                        TrackingManager.setSavedSummary("Saved to Download/OffGridMaps")
                     }
                     showGpxPicker = false
                 },
@@ -580,7 +576,6 @@ fun MapScreen(
                     availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
                 },
                 onRemoveActiveRoute = {
-                    // Zruší aktivní navigaci po trase (soubor zůstává uložený) a vrátí kameru na aktuální GPS polohu
                     TrackingManager.setPlannedRoute(null, emptyList())
                     isFollowingGps = true
                     maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLng(activeLocation))
@@ -591,7 +586,7 @@ fun MapScreen(
                     try {
                         gpxImportLauncher.launch(arrayOf("*/*"))
                     } catch (_: Exception) {
-                        TrackingManager.setSavedSummary("Vlož .gpx do složky Download")
+                        TrackingManager.setSavedSummary("Place .gpx in Download folder")
                         showGpxPicker = false
                     }
                 },
@@ -625,16 +620,15 @@ fun MapScreen(
 }
 
 /**
- * Kompaktní grafické měřítko mapy (Scale Bar) spočítané ze zeměpisné šířky a úrovně přiblížení.
+ * Compact cartographic scale bar calculated from latitude and zoom level.
  */
 @Composable
 private fun MapScaleBar(
     latitude: Double,
     zoomLevel: Float
 ) {
-    // Metry na 1 dp při dané zeměpisné šířce a zoomu (Web Mercator projekce)
     val metersPerDp = (156543.03392 * cos(Math.toRadians(latitude))) / 2.0.pow(zoomLevel.toDouble())
-    val targetMeters = metersPerDp * 34.0 // Cílová šířka měřítka kolem 34 dp
+    val targetMeters = metersPerDp * 34.0
 
     val niceSteps = intArrayOf(20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000)
     val chosenMeters = niceSteps.minByOrNull { kotlin.math.abs(it - targetMeters) } ?: 200
@@ -648,7 +642,6 @@ private fun MapScaleBar(
             .background(AmoledBlack.copy(alpha = 0.82f), RoundedCornerShape(6.dp))
             .padding(horizontal = 5.dp, vertical = 1.5.dp)
     ) {
-        // Grafické pravítko měřítka mapy se svislými patkami |---|
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
@@ -679,9 +672,9 @@ private fun MapScaleBar(
 }
 
 /**
- * Čistě černý AMOLED překryvný panel se dvěma samostatnými záložkami a velkými dotykovými tlačítky:
- * 1) Trasy GPX (import, seznam tras, export/sdílení, smazání)
- * 2) Offline mapy (stažení aktuální oblasti + přehled uložených offline oblastí s rychlým přesunem kamery)
+ * Pure black AMOLED overlay menu with two tabs:
+ * 1) Routes (GPX import, route list, export/share, delete, clear active route)
+ * 2) Offline (saved regions + multi-country GitHub catalog for 1-click download)
  */
 @Composable
 private fun GpxRoutePickerOverlay(
@@ -700,7 +693,7 @@ private fun GpxRoutePickerOverlay(
     onDeleteOfflineRegion: (SavedOfflineRegion) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // 0 = Trasy GPX, 1 = Offline mapy
+    // 0 = Routes, 1 = Offline Maps
     var selectedTab by remember { mutableIntStateOf(0) }
     val scrollState = rememberScrollState()
 
@@ -719,7 +712,7 @@ private fun GpxRoutePickerOverlay(
                 .verticalScroll(scrollState)
                 .padding(vertical = 8.dp)
         ) {
-            // Horní přepínač záložek: [Trasy GPX] | [Offline]
+            // Top tab switcher: [Routes] | [Offline]
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -739,7 +732,7 @@ private fun GpxRoutePickerOverlay(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Trasy (${files.size})",
+                        text = "Routes (${files.size})",
                         color = if (isGpxTab) TrailGreen else OutdoorTextSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -770,7 +763,7 @@ private fun GpxRoutePickerOverlay(
             }
 
             if (selectedTab == 0) {
-                // --- ZÁLOŽKA 1: TRASY GPX ---
+                // --- TAB 1: GPX ROUTES ---
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -782,7 +775,7 @@ private fun GpxRoutePickerOverlay(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "+ Importovat GPX",
+                        text = "+ Import GPX",
                         color = TrailGreen,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
@@ -791,7 +784,7 @@ private fun GpxRoutePickerOverlay(
 
                 if (files.isEmpty()) {
                     Text(
-                        text = "Žádné uložené trasy",
+                        text = "No saved routes",
                         color = OutdoorTextSecondary,
                         fontSize = 11.sp,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -861,7 +854,7 @@ private fun GpxRoutePickerOverlay(
                     }
                 }
             } else {
-                // --- ZÁLOŽKA 2: OFFLINE MAPY ---
+                // --- TAB 2: OFFLINE MAPS ---
                 val isDownloading = offlineStatus.startsWith("DL")
 
                 if (isDownloading) {
@@ -877,7 +870,7 @@ private fun GpxRoutePickerOverlay(
                         val dlLabel = if (!activeDownloadTitle.isNullOrBlank()) {
                             "⏳ $activeDownloadTitle ($offlineStatus)"
                         } else {
-                            "⏳ Stahuji mapu ($offlineStatus)"
+                            "⏳ Downloading ($offlineStatus)"
                         }
                         Text(
                             text = dlLabel,
@@ -890,9 +883,9 @@ private fun GpxRoutePickerOverlay(
                     }
                 }
 
-                // 1) Stažené offline oblasti v hodinkách (klepnutí vycentruje mapu)
+                // 1) Downloaded offline regions stored on the watch
                 Text(
-                    text = "ULOŽENÉ V HODINKÁCH",
+                    text = "SAVED ON WATCH",
                     color = TrailGreen,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
@@ -946,7 +939,7 @@ private fun GpxRoutePickerOverlay(
                     }
                 }
 
-                // 2) Katalog zemí a jejich krajů/oblastí načtený z GitHub repozitáře (Koncpa/offgrid-maps-data)
+                // 2) Multi-country catalog loaded from GitHub (Koncpa/offgrid-maps-data)
                 val catalogRegions by OfflineRegionHelper.catalogRegions.collectAsState()
                 val savedTitles = remember(savedRegions) {
                     savedRegions.map { it.displayName }.toSet()
@@ -1031,7 +1024,7 @@ private fun GpxRoutePickerOverlay(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Zrušit trasu",
+                            text = "Clear route",
                             color = TrailYellow,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -1048,7 +1041,7 @@ private fun GpxRoutePickerOverlay(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Zpět",
+                        text = "Back",
                         color = OutdoorTextPrimary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold

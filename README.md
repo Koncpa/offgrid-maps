@@ -1,25 +1,25 @@
 # OffGrid Maps (Wear OS)
 
-Outdoorová offline mapová aplikace pro hodinky se systémem **Wear OS** zaměřená na maximální výdrž baterie, spolehlivou navigaci v českém terénu a intuitivní ovládání.
+Standalone offline outdoor map and GPX navigation app for **Wear OS** smartwatches, engineered for maximum battery life, reliable trail navigation, and effortless outdoor usability.
 
-Detailní popis architektury a plán dalšího rozvoje (backlog) najdeš v souboru **[PRODUCT_ROADMAP.md](./PRODUCT_ROADMAP.md)**.
+For detailed system architecture and the future product backlog, see **[PRODUCT_ROADMAP.md](./PRODUCT_ROADMAP.md)**.
 
-## Klíčové vlastnosti
-- **100% Offline navigace & Katalog krajů ČR po vzoru Mapy.com (1-klik stažení):**
-  - Předinstalovaný Jihomoravský kraj + vestavěný katalog všech 14 krajů ČR (*Kraj Vysočina, Jihočeský, Zlínský, Olomoucký, Moravskoslezský, Pardubický, Královéhradecký, Středočeský, Praha, Plzeňský, Liberecký, Ústecký, Karlovarský*) pro okamžité stažení jedním klepnutím včetně vlastního výřezu mapy.
-- **Offline vrstevnice (10 m / 50 m) a české značení KČT:**
-  - Web Mercator dlaždicová cache vrstevnic a kompletní vrstvy turistických tras KČT (červená, modrá, zelená, žlutá), lesních cest a pěšin podle kartografických konvencí.
-- **Blesková GPS v lese & Ortometrický výškoměr (EGM2008):**
-  - Hybridní příjem (úsporný Bluetooth fix z telefonu v otevřeném terénu + okamžitý přímý zámek hardwarového GNSS čipu hodinek v lese a při aktivním treku).
-  - Barometrický a satelitní výškoměr s korekcí geoidu EGM2008 (`▲ m n.m.`), který eliminuje ~45m elipsoidickou odchylku WGS84 v ČR.
-- **GPX Navigace & Záznam trasy:**
-  - Import/export `.gpx` tras (včetně tras z Mapy.cz), výpočet kolmé vzdálenosti k úsečce trasy (*Cross-Track Distance*), haptické varování při opuštění trasy (>60 m) a nouzové uložení při 5 % baterie.
-- **Extrémní šetrnost k baterii (Ultra-Pure AMOLED):**
-  - Čistě černé pozadí (`#000000` = `0 mW`) a jantarová křivka naplánované trasy s nulovou modrou složkou (`#E66800`, >52% úspora energie displeje).
+## Key Features
+- **100% Offline Navigation & Multi-Country Region Catalog (1-Click Download):**
+  - Pre-installed **South Moravia** (`z8–z14`) + built-in catalog of all **14 Regions of Czechia**, **Slovakia**, and **Austria** dynamically synced from a dedicated GitHub map repository (`Koncpa/offgrid-maps-data`) for instant one-tap offline downloads.
+- **Offline Contour Lines (10 m / 50 m) & Marked Hiking Trails (KČT):**
+  - Web Mercator contour tile cache (`10 m` minor / `50 m` index contours) and complete hiking trail layers (Red, Blue, Green, Yellow), forest tracks, and footpaths following topographic cartographic conventions.
+- **Instant Forest GNSS Lock & Orthometric Altimeter (EGM2008):**
+  - Hybrid location engine: uses low-power companion phone Bluetooth GPS in open terrain ($\le 10\text{ m}$) and immediately locks the watch's internal dual-frequency GNSS receiver (`LocationManager.GPS_PROVIDER`) under forest canopy or during active trek recording.
+  - Barometric and satellite altimeter with **EGM2008 geoid undulation correction** (`▲ m`), eliminating the ~45 m WGS84 ellipsoidal height offset in Central Europe.
+- **GPX Route Navigation & Track Recording:**
+  - Non-blocking `Dispatchers.IO` GPX import/export (compatible with Mapy.com `<rtept>` and `<trkpt>`), **Cross-Track (Point-to-Segment)** off-route distance calculation, haptic off-route alerts (>60 m), crash recovery checkpointing, and automatic emergency save at $\le 5\%$ battery.
+- **Ultra-Pure AMOLED Power Efficiency:**
+  - True black background (`#000000` = `0 mW`) and zero-blue amber-orange planned route rendering (`#E66800`, `B = 0`, >52% lower OLED subpixel power draw than white).
 
-## Technický stack
-- **Jazyk:** Kotlin (Coroutines, StateFlow)
+## Tech Stack
+- **Language:** Kotlin (Coroutines, StateFlow)
 - **UI:** Jetpack Compose for Wear OS
-- **Mapový Engine:** MapLibre Native Android + lokální loopback tile/style server
-- **Lokalizace & Senzory:** `FusedLocationProviderClient` + přímý `LocationManager.GPS_PROVIDER`, `Sensor.TYPE_PRESSURE` (barometr s korekcí EGM2008), `Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR` (kompas)
-- **Testy:** JUnit 4 sada unit testů (`./gradlew test`)
+- **Map Engine:** MapLibre Native Android + local loopback style/tile server
+- **Location & Sensors:** `FusedLocationProviderClient` + direct `LocationManager.GPS_PROVIDER`, `Sensor.TYPE_PRESSURE` (barometer with EGM2008 geoid model), `Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR` (tilt-compensated compass)
+- **Testing:** JUnit 4 unit test suite (`./gradlew test`)
