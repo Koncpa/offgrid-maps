@@ -89,6 +89,44 @@ class TrackingManagerTest {
     }
 
     @Test
+    fun setTrackingActiveFalse_clearsLiveTrackPointsAndSessionCounters() {
+        TrackingManager.setTrackingActive(true)
+        TrackingManager.addPoint(TrackPoint(49.1246, 16.3353, accuracyMeters = 4.0f))
+        TrackingManager.addPoint(TrackPoint(49.1268, 16.3321, accuracyMeters = 4.0f))
+        TrackingManager.updateAltitude(250.0, isBarometric = true)
+        TrackingManager.updateAltitude(258.0, isBarometric = true)
+
+        assertTrue(TrackingManager.trackPoints.value.size >= 2)
+        assertTrue(TrackingManager.totalDistanceMeters.value > 0.0)
+        assertEquals(8.0, TrackingManager.totalAscentMeters.value, 0.01)
+
+        TrackingManager.setTrackingActive(false)
+
+        assertFalse(TrackingManager.isTracking.value)
+        assertTrue(TrackingManager.trackPoints.value.isEmpty())
+        assertEquals(0.0, TrackingManager.totalDistanceMeters.value, 0.001)
+        assertEquals(0.0, TrackingManager.totalAscentMeters.value, 0.001)
+    }
+
+    @Test
+    fun applyAltitudeCalibration_doesNotInflateAscentAndPreservesPartialClimb() {
+        TrackingManager.setTrackingActive(true)
+        // Baseline 300 m, walk +2 m (below 3 m hysteresis threshold)
+        TrackingManager.applyAltitudeCalibration(300.0)
+        TrackingManager.updateAltitude(302.0, isBarometric = true)
+        assertEquals(0.0, TrackingManager.totalAscentMeters.value, 0.01)
+
+        // Sudden +45 m GPS calibration shift must NOT count as climbed meters
+        TrackingManager.applyAltitudeCalibration(altitudeMeters = 347.0, shiftMeters = 45.0)
+        assertEquals(347.0, TrackingManager.currentAltitudeMeters.value!!, 0.01)
+        assertEquals(0.0, TrackingManager.totalAscentMeters.value, 0.01)
+
+        // Walking 1.5 m further reaches total +3.5 m above shifted baseline (345 m -> 348.5 m)
+        TrackingManager.updateAltitude(348.5, isBarometric = true)
+        assertEquals(3.5, TrackingManager.totalAscentMeters.value, 0.01)
+    }
+
+    @Test
     fun addPoint_withPlannedRoute_detectsOffRouteOver60Meters() {
         val route = listOf(
             TrackPoint(49.1246, 16.3353),

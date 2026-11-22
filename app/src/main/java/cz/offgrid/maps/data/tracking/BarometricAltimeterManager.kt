@@ -21,7 +21,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * - This class converts ellipsoidal height into true orthometric elevation above mean sea level ($H_{MSL}$),
  *   matching topographic contour lines and trailhead signs to the meter, and uses it to calibrate the barometer.
  */
-class BarometricAltimeterManager(context: Context) : SensorEventListener {
+class BarometricAltimeterManager(
+    context: Context,
+    private val isTrackingOwner: Boolean = false
+) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val pressureSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
@@ -40,20 +43,40 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
     private var pendingCalibrationMslAltitude: Double? = null
     private var smoothedBaroAltitude: Double? = null
     private var lastUpdateMillis = 0L
+    private var lastCalibrationTimeMillis = 0L
 
     init {
-        if (prefs.contains(KEY_BARO_OFFSET)) {
-            baroCalibrationOffsetMeters = prefs.getFloat(KEY_BARO_OFFSET, 0f).toDouble()
-            isCalibratedWithGps = true
-        }
+        loadCalibrationFromPrefs()
         if (prefs.contains(KEY_LAST_MSL_ALT)) {
             val savedAlt = prefs.getFloat(KEY_LAST_MSL_ALT, 368f).toDouble()
             _altitudeMeters.value = savedAlt
-            TrackingManager.updateAltitude(savedAlt, isBarometric = hasHardwareBarometer)
+            if (canPublishToTrackingManager() && TrackingManager.currentAltitudeMeters.value == null) {
+                TrackingManager.applyAltitudeCalibration(savedAlt)
+            }
+        }
+    }
+
+    private fun canPublishToTrackingManager(): Boolean {
+        return isTrackingOwner || !TrackingManager.isTracking.value
+    }
+
+    private fun loadCalibrationFromPrefs() {
+        val savedTime = prefs.getLong(KEY_CALIBRATION_TIME_MS, 0L)
+        if (prefs.contains(KEY_BARO_OFFSET) && savedTime >= lastCalibrationTimeMillis) {
+            baroCalibrationOffsetMeters = prefs.getFloat(KEY_BARO_OFFSET, 0f).toDouble()
+            isCalibratedWithGps = true
+            lastCalibrationTimeMillis = savedTime
+            // Allow the first good GPS fix in a new session to replace an older cached offset
+            if (System.currentTimeMillis() - savedTime > 120_000L) {
+                bestCalibrationVertAcc = Float.MAX_VALUE
+            }
         }
     }
 
     fun start() {
+        loadCalibrationFromPrefs()
+        smoothedBaroAltitude = null
+        lastUpdateMillis = 0L
         pressureSensor?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
@@ -61,12 +84,16 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
 
     fun stop() {
         sensorManager.unregisterListener(this)
+        smoothedBaroAltitude = null
+        pendingCalibrationMslAltitude = null
+        lastUpdateMillis = 0L
     }
 
     /**
      * Called when a new GPS location arrives (already converted to true MSL elevation).
      * - On watches without a barometer, directly updates smoothed altitude.
-     * - On watches with a barometer, immediately or smoothly calibrates barometric elevation.
+     * - On watches with a barometer, calibrates the barometric MSL offset cleanly without
+     *   injecting GPS vertical jitter into accumulated ascent.
      */
     fun onGpsAltitudeReceived(
         mslAltitudeMeters: Double?,
@@ -84,7 +111,13 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
             val prev = _altitudeMeters.value
             val next = if (prev == null) mslAltitudeMeters else (prev * 0.7 + mslAltitudeMeters * 0.3)
             _altitudeMeters.value = next
-            TrackingManager.updateAltitude(next, isBarometric = false)
+            if (canPublishToTrackingManager()) {
+                if (prev == null) {
+                    TrackingManager.applyAltitudeCalibration(next)
+                } else {
+                    TrackingManager.updateAltitude(next, isBarometric = false)
+                }
+            }
             saveCalibrationToPrefs(0.0, next)
             return
         }
@@ -101,12 +134,16 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
                 pendingCalibrationMslAltitude = mslAltitudeMeters
                 bestCalibrationVertAcc = effectiveVertAcc
                 _altitudeMeters.value = mslAltitudeMeters
-                TrackingManager.updateAltitude(mslAltitudeMeters, isBarometric = true)
+                if (canPublishToTrackingManager()) {
+                    TrackingManager.applyAltitudeCalibration(mslAltitudeMeters)
+                }
             }
             return
         }
 
         if (!isCalibratedWithGps || (isGoodHorizontalFix && isGoodVerticalFix)) {
+            val prevOffset = baroCalibrationOffsetMeters
+            val wasCalibrated = isCalibratedWithGps
             val targetOffset = mslAltitudeMeters - rawBaro
             val isMuchBetterVerticalFix = effectiveVertAcc < bestCalibrationVertAcc * 0.7f
             baroCalibrationOffsetMeters = if (!isCalibratedWithGps || isMuchBetterVerticalFix) {
@@ -119,8 +156,11 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
                 baroCalibrationOffsetMeters * (1.0 - alpha) + targetOffset * alpha
             }
             val calibratedAltitude = rawBaro + baroCalibrationOffsetMeters
+            val shiftMeters = if (wasCalibrated) (baroCalibrationOffsetMeters - prevOffset) else null
             _altitudeMeters.value = calibratedAltitude
-            TrackingManager.updateAltitude(calibratedAltitude, isBarometric = true)
+            if (canPublishToTrackingManager()) {
+                TrackingManager.applyAltitudeCalibration(calibratedAltitude, shiftMeters)
+            }
             saveCalibrationToPrefs(baroCalibrationOffsetMeters, calibratedAltitude)
         }
     }
@@ -144,11 +184,13 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         smoothedBaroAltitude = nextRaw
 
         // If a GPS altitude arrived before the first barometer tick, calibrate immediately
+        var justConsumedPendingCalibration = false
         val pendingMsl = pendingCalibrationMslAltitude
         if (pendingMsl != null) {
             baroCalibrationOffsetMeters = pendingMsl - nextRaw
             isCalibratedWithGps = true
             pendingCalibrationMslAltitude = null
+            justConsumedPendingCalibration = true
             saveCalibrationToPrefs(baroCalibrationOffsetMeters, pendingMsl)
         }
 
@@ -160,13 +202,22 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         val calibratedAltitude = nextRaw + baroCalibrationOffsetMeters
         lastUpdateMillis = now
         _altitudeMeters.value = calibratedAltitude
-        TrackingManager.updateAltitude(calibratedAltitude, isBarometric = true)
+        if (canPublishToTrackingManager()) {
+            if (justConsumedPendingCalibration || prev == null) {
+                TrackingManager.applyAltitudeCalibration(calibratedAltitude)
+            } else {
+                TrackingManager.updateAltitude(calibratedAltitude, isBarometric = true)
+            }
+        }
     }
 
     private fun saveCalibrationToPrefs(offsetMeters: Double, mslAltMeters: Double) {
+        val now = System.currentTimeMillis()
+        lastCalibrationTimeMillis = now
         prefs.edit()
             .putFloat(KEY_BARO_OFFSET, offsetMeters.toFloat())
             .putFloat(KEY_LAST_MSL_ALT, mslAltMeters.toFloat())
+            .putLong(KEY_CALIBRATION_TIME_MS, now)
             .apply()
     }
 
@@ -176,6 +227,7 @@ class BarometricAltimeterManager(context: Context) : SensorEventListener {
         private const val PREFS_NAME = "offgrid_altimeter_prefs"
         private const val KEY_BARO_OFFSET = "baro_calibration_offset_m"
         private const val KEY_LAST_MSL_ALT = "last_calibrated_msl_alt_m"
+        private const val KEY_CALIBRATION_TIME_MS = "baro_calibration_time_ms"
 
         /**
          * Extracts true orthometric elevation above mean sea level (MSL) from a [Location]:

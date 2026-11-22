@@ -67,7 +67,7 @@ class LocationTrackingService : Service() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        altimeterManager = BarometricAltimeterManager(this)
+        altimeterManager = BarometricAltimeterManager(this, isTrackingOwner = true)
         createNotificationChannel()
 
         hardwareGpsListener = LocationListener { location ->

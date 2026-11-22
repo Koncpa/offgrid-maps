@@ -68,11 +68,33 @@ object TrackingManager {
             }
         } else if (!active) {
             _isTracking.value = false
+            // Clear the live recorded polyline and session counters after GPX export
+            // so the finished orange trace disappears from the map until a new route is loaded.
+            _trackPoints.value = emptyList()
+            _totalDistanceMeters.value = 0.0
+            _totalAscentMeters.value = 0.0
+            referenceAltitudeForAscent = _currentAltitudeMeters.value
+            _recordingStartMillis.value = 0L
         }
     }
 
     fun setSavedSummary(summary: String?) {
         _lastSavedSummary.value = summary
+    }
+
+    /**
+     * Applies a GPS-derived altimeter calibration offset without counting the calibration
+     * step toward [totalAscentMeters]. When [shiftMeters] is non-null and a reference baseline
+     * already exists, the baseline shifts by [shiftMeters] so any real in-progress climb is preserved.
+     */
+    fun applyAltitudeCalibration(altitudeMeters: Double, shiftMeters: Double? = null) {
+        _currentAltitudeMeters.value = altitudeMeters
+        val ref = referenceAltitudeForAscent
+        referenceAltitudeForAscent = if (shiftMeters != null && ref != null) {
+            ref + shiftMeters
+        } else {
+            altitudeMeters
+        }
     }
 
     /**
