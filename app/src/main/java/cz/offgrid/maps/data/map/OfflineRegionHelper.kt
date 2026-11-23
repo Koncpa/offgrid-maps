@@ -134,9 +134,20 @@ object OfflineRegionHelper {
     private val _activePois = MutableStateFlow<List<OutdoorPoi>>(emptyList())
     val activePois: StateFlow<List<OutdoorPoi>> = _activePois.asStateFlow()
 
+    @Volatile
     private var isInitialized = false
+    @Volatile
     private var isDownloading = false
+    @Volatile
+    private var isVectorDownloadInFlight = false
+    @Volatile
+    private var isPackageSyncInFlight = false
+    @Volatile
     private var isUserBrowsingMap = false
+    @Volatile
+    private var lastViewportLat = 49.1246
+    @Volatile
+    private var lastViewportLon = 16.3353
 
     @Volatile
     private var localStyleServerPort: Int = 0
@@ -385,6 +396,7 @@ object OfflineRegionHelper {
 
     private fun startRegionDownload(context: Context, offlineRegion: OfflineRegion) {
         isDownloading = true
+        isVectorDownloadInFlight = true
         _downloadError.value = null
         MapLibre.setConnected(true)
         offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
@@ -393,6 +405,7 @@ object OfflineRegionHelper {
                 if (status.isComplete) {
                     offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                     _downloadError.value = null
+                    isVectorDownloadInFlight = false
                     finishDownloadAndUpdateConnectivity(context)
                 } else if (status.requiredResourceCount > 0) {
                     val pct = (100.0 * status.completedResourceCount / status.requiredResourceCount)
@@ -409,6 +422,7 @@ object OfflineRegionHelper {
             override fun mapboxTileCountLimitExceeded(limit: Long) {
                 offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                 _downloadError.value = "Storage limit reached – delete old region"
+                isVectorDownloadInFlight = false
                 finishDownloadAndUpdateConnectivity(context)
             }
         })
@@ -450,13 +464,17 @@ object OfflineRegionHelper {
                         setRequestProperty("Authorization", "Bearer $token")
                     }
                 }
-                if (conn.responseCode in 200..299) {
-                    val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
-                    val parsed = parseCatalogJson(jsonText)
-                    if (!parsed.isNullOrEmpty()) {
-                        cacheFile.writeText(jsonText)
-                        _catalogRegions.value = parsed
+                try {
+                    if (conn.responseCode in 200..299) {
+                        val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
+                        val parsed = parseCatalogJson(jsonText)
+                        if (!parsed.isNullOrEmpty()) {
+                            cacheFile.writeText(jsonText)
+                            _catalogRegions.value = parsed
+                        }
                     }
+                } finally {
+                    conn.disconnect()
                 }
             } catch (_: Exception) {
             }
@@ -507,43 +525,50 @@ object OfflineRegionHelper {
         preset: OfflinePresetRegion
     ) {
         _downloadError.value = null
+        isDownloading = true
+        isPackageSyncInFlight = true
         // 1. Download pre-built regional packages (trails + contour tiles) from the private GitHub repository.
         //    If the contour package is missing (older repository layout), the watch falls back to
         //    generating contours from DEM tiles itself.
         thread(name = "OffGridGithubPkg_${preset.id}", isDaemon = true) {
-            val pkgDir = File(context.filesDir, "$PACKAGES_DIR/${preset.id}").apply {
-                if (!exists()) mkdirs()
+            try {
+                val pkgDir = File(context.filesDir, "$PACKAGES_DIR/${preset.id}").apply {
+                    if (!exists()) mkdirs()
+                }
+                downloadPackageFile(preset, "region_meta.json") { input ->
+                    File(pkgDir, "region_meta.json").outputStream().use { input.copyTo(it) }
+                }
+                val trailsOk = downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
+                    val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
+                    File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                }
+                downloadPackageFile(preset, "outdoor_pois.geojson.gz") { input ->
+                    val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
+                    File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                }
+                val contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
+                    ContourTileManager.importTilePackage(context, input)
+                }
+                if (contoursImported) {
+                    ContourTileManager.ensureViewportContours(
+                        context = context,
+                        centerLat = preset.centerLat,
+                        centerLon = preset.centerLon,
+                        zoom = 13.0,
+                        allowNetworkFetch = false
+                    )
+                } else {
+                    ContourTileManager.downloadContoursForArea(context, preset.centerLat, preset.centerLon)
+                }
+                if (!trailsOk && !contoursImported) {
+                    _downloadError.value = "Package sync failed – check Wi-Fi"
+                }
+                trailExecutor.execute { invalidateTrailPackages() }
+                updateTrailsForViewport(context, preset.centerLat, preset.centerLon)
+            } finally {
+                isPackageSyncInFlight = false
+                finishDownloadAndUpdateConnectivity(context)
             }
-            downloadPackageFile(preset, "region_meta.json") { input ->
-                File(pkgDir, "region_meta.json").outputStream().use { input.copyTo(it) }
-            }
-            val trailsOk = downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
-                val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
-                File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
-            }
-            downloadPackageFile(preset, "outdoor_pois.geojson.gz") { input ->
-                val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
-                File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
-            }
-            val contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
-                ContourTileManager.importTilePackage(context, input)
-            }
-            if (contoursImported) {
-                ContourTileManager.ensureViewportContours(
-                    context = context,
-                    centerLat = preset.centerLat,
-                    centerLon = preset.centerLon,
-                    zoom = 13.0,
-                    allowNetworkFetch = false
-                )
-            } else {
-                ContourTileManager.downloadContoursForArea(context, preset.centerLat, preset.centerLon)
-            }
-            if (!trailsOk && !contoursImported) {
-                _downloadError.value = "Package sync failed – check Wi-Fi"
-            }
-            trailExecutor.execute { invalidateTrailPackages() }
-            updateTrailsForViewport(context, preset.centerLat, preset.centerLon)
         }
 
         // 2. Download the vector tile pyramid for the region
@@ -648,7 +673,15 @@ object OfflineRegionHelper {
      * Only nearby regions are kept in memory, so having many regions on the watch does not
      * increase RAM use. Called on camera idle; does nothing when the region set is unchanged.
      */
-    fun updateTrailsForViewport(context: Context, lat: Double, lon: Double) = trailExecutor.execute {
+    fun updateTrailsForViewport(context: Context, lat: Double, lon: Double) {
+        lastViewportLat = lat
+        lastViewportLon = lon
+        trailExecutor.execute {
+            refreshActiveViewportOnExecutor(context, lat, lon)
+        }
+    }
+
+    private fun refreshActiveViewportOnExecutor(context: Context, lat: Double, lon: Double) {
         val margin = 0.05
         val visible = loadTrailPackages(context).filter { p ->
             lat <= p.bounds[0] + margin && lat >= p.bounds[2] - margin &&
@@ -656,7 +689,7 @@ object OfflineRegionHelper {
         }
         val inJmk = lat in 48.70..49.50 && lon in 15.90..17.00
         val key = visible.joinToString(",") { it.dir.name } + "|jmk=$inJmk"
-        if (key == activeTrailKey) return@execute
+        if (key == activeTrailKey) return
         activeTrailKey = key
 
         val trailFragments = visible.mapNotNull { p ->
@@ -679,14 +712,14 @@ object OfflineRegionHelper {
     }
 
     private val POI_FEATURE_REGEX = Regex(
-        """\"cat\"\s*:\s*\"([^\"]+)\"\s*,\s*\"label\"\s*:\s*\"([^\"]+)\"[^}]*\}\s*,\s*\"geometry\"\s*:\s*\{\s*\"type\"\s*:\s*\"Point\"\s*,\s*\"coordinates\"\s*:\s*\[\s*([-0-9.]+)\s*,\s*([-0-9.]+)\s*\]"""
+        """\"cat\"\s*:\s*\"([^\"]+)\"\s*,\s*\"label\"\s*:\s*\"((?:[^\"\\]|\\.)+)\"[^}]*\}\s*,\s*\"geometry\"\s*:\s*\{\s*\"type\"\s*:\s*\"Point\"\s*,\s*\"coordinates\"\s*:\s*\[\s*([-0-9.]+)\s*,\s*([-0-9.]+)\s*\]"""
     )
 
     internal fun parseOutdoorPois(featureCollectionJson: String): List<OutdoorPoi> {
         val list = mutableListOf<OutdoorPoi>()
         for (match in POI_FEATURE_REGEX.findAll(featureCollectionJson)) {
             val cat = match.groupValues[1]
-            val label = match.groupValues[2]
+            val label = match.groupValues[2].replace("\\\"", "\"")
             val lon = match.groupValues[3].toDoubleOrNull() ?: continue
             val lat = match.groupValues[4].toDoubleOrNull() ?: continue
             if (label.isNotBlank()) {
@@ -697,9 +730,13 @@ object OfflineRegionHelper {
     }
 
     /** Removes the downloaded trail package that belongs to a deleted offline region. */
-    private fun deleteTrailPackage(context: Context, regionTitle: String) = trailExecutor.execute {
-        loadTrailPackages(context).filter { it.title == regionTitle }.forEach { it.dir.deleteRecursively() }
-        invalidateTrailPackages()
+    private fun deleteTrailPackage(context: Context, regionTitle: String) {
+        val appCtx = context.applicationContext
+        trailExecutor.execute {
+            loadTrailPackages(appCtx).filter { it.title == regionTitle }.forEach { it.dir.deleteRecursively() }
+            invalidateTrailPackages()
+            refreshActiveViewportOnExecutor(appCtx, lastViewportLat, lastViewportLon)
+        }
     }
 
     private fun downloadCustomBounds(
@@ -734,6 +771,7 @@ object OfflineRegionHelper {
         val metadata = regionMeta.toByteArray(StandardCharsets.UTF_8)
 
         isDownloading = true
+        isVectorDownloadInFlight = true
         _activeDownloadTitle.value = explicitTitle
         _statusText.value = "DL 0%"
         MapLibre.setConnected(true)
@@ -748,6 +786,7 @@ object OfflineRegionHelper {
                 }
 
                 override fun onError(error: String) {
+                    isVectorDownloadInFlight = false
                     finishDownloadAndUpdateConnectivity(context)
                 }
             }
@@ -755,6 +794,7 @@ object OfflineRegionHelper {
     }
 
     private fun finishDownloadAndUpdateConnectivity(context: Context) {
+        if (isVectorDownloadInFlight || isPackageSyncInFlight) return
         isDownloading = false
         _activeDownloadTitle.value = null
         _isOfflineReady.value = true

@@ -121,6 +121,8 @@ fun MapScreen(
     }
 
     val isTracking by TrackingManager.isTracking.collectAsState()
+    val totalDistanceMeters by TrackingManager.totalDistanceMeters.collectAsState()
+    val totalAscentMeters by TrackingManager.totalAscentMeters.collectAsState()
     val currentAltitudeMeters by TrackingManager.currentAltitudeMeters.collectAsState()
     val latestGpsPoint by TrackingManager.currentLocation.collectAsState()
     val trackPoints by TrackingManager.trackPoints.collectAsState()
@@ -217,7 +219,9 @@ fun MapScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
-        val recoveredFile = GpxExporter.recoverUnfinishedTrackIfAny(context)
+        val recoveredFile = withContext(Dispatchers.IO) {
+            GpxExporter.recoverUnfinishedTrackIfAny(context)
+        }
         if (recoveredFile != null) {
             TrackingManager.setSavedSummary("Track recovered")
         }
@@ -270,6 +274,11 @@ fun MapScreen(
             onUserPanGesture = {
                 isFollowingGps = false
             },
+            onCameraZoomChanged = { camZoom ->
+                if (kotlin.math.abs(zoomLevel - camZoom) > 0.05f) {
+                    zoomLevel = camZoom.coerceIn(6.0f, 18.0f)
+                }
+            },
             onMapReady = { map ->
                 maplibreMapInstance = map
             }
@@ -294,10 +303,14 @@ fun MapScreen(
                 )
                 .clickable {
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                    availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
+                    showGpxPicker = true
+                    coroutineScope.launch {
+                        availableGpxFiles = withContext(Dispatchers.IO) {
+                            GpxExporter.listSavedGpxFiles(context)
+                        }
+                    }
                     OfflineRegionHelper.refreshSavedRegions(context)
                     OfflineRegionHelper.syncCatalogFromGithub(context)
-                    showGpxPicker = true
                 }
                 .padding(horizontal = 9.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -349,6 +362,26 @@ fun MapScreen(
                 Text(
                     text = "Off route (>60 m)",
                     color = TrailRed,
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        } else if (isTracking) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 31.dp)
+                    .background(AmoledBlack.copy(alpha = 0.94f), RoundedCornerShape(8.dp))
+                    .border(1.1.dp, TrailRed, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "%.2f km • ↑%d m".format(
+                        Locale.US,
+                        totalDistanceMeters / 1000.0,
+                        totalAscentMeters.roundToInt()
+                    ),
+                    color = OutdoorTextPrimary,
                     fontSize = 8.5.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -565,18 +598,26 @@ fun MapScreen(
                 },
                 onShareFile = { file ->
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                    val ok = GpxExporter.shareAndExportGpxFile(context, file)
-                    if (ok) {
-                        TrackingManager.setSavedSummary("Saved to Download/OffGridMaps")
-                    }
                     showGpxPicker = false
+                    coroutineScope.launch {
+                        val ok = withContext(Dispatchers.IO) {
+                            GpxExporter.shareAndExportGpxFile(context, file)
+                        }
+                        if (ok) {
+                            TrackingManager.setSavedSummary("Saved to Download/OffGridMaps")
+                        }
+                    }
                 },
                 onDeleteFile = { file ->
                     if (plannedRouteName == file.nameWithoutExtension) {
                         TrackingManager.setPlannedRoute(null, emptyList())
                     }
-                    GpxExporter.deleteGpxFile(file)
-                    availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
+                    coroutineScope.launch {
+                        availableGpxFiles = withContext(Dispatchers.IO) {
+                            GpxExporter.deleteGpxFile(file)
+                            GpxExporter.listSavedGpxFiles(context)
+                        }
+                    }
                 },
                 onRemoveActiveRoute = {
                     TrackingManager.setPlannedRoute(null, emptyList())
@@ -585,7 +626,11 @@ fun MapScreen(
                     showGpxPicker = false
                 },
                 onImportGpx = {
-                    availableGpxFiles = GpxExporter.listSavedGpxFiles(context)
+                    coroutineScope.launch {
+                        availableGpxFiles = withContext(Dispatchers.IO) {
+                            GpxExporter.listSavedGpxFiles(context)
+                        }
+                    }
                     try {
                         gpxImportLauncher.launch(arrayOf("*/*"))
                     } catch (_: Exception) {
@@ -775,10 +820,10 @@ private fun GpxRoutePickerOverlay(
         enrichedPois.filter { it.first.category == "water" }.take(4)
     }
     val nearestShelters = remember(enrichedPois) {
-        enrichedPois.filter { it.first.category == "shelter" }.take(4)
+        enrichedPois.filter { it.first.category in setOf("shelter", "picnic") }.take(4)
     }
     val nearestLandmarks = remember(enrichedPois) {
-        enrichedPois.filter { it.first.category in setOf("saddle", "landmark", "rescue") }.take(4)
+        enrichedPois.filter { it.first.category in setOf("viewpoint", "saddle", "landmark", "rescue") }.take(4)
     }
 
     val isDownloading = offlineStatus.startsWith("DL")
@@ -1011,7 +1056,7 @@ private fun GpxRoutePickerOverlay(
                                 modifier = Modifier.padding(top = 2.dp)
                             )
                         }
-                        items(nearestWater, key = { "w_${it.first.label}_${it.first.lat}" }) { (poi, distM, dir) ->
+                        items(nearestWater, key = { "w_${it.first.label}_${it.first.lat}_${it.first.lon}" }) { (poi, distM, dir) ->
                             SurvivalPoiRow(
                                 title = poi.label,
                                 distanceMeters = distM,
@@ -1025,14 +1070,14 @@ private fun GpxRoutePickerOverlay(
                     if (nearestShelters.isNotEmpty()) {
                         item(key = "poi_shelter_header") {
                             Text(
-                                text = "NEAREST SHELTERS & HUTS",
+                                text = "NEAREST SHELTERS & PICNIC",
                                 color = TrailYellow,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
-                        items(nearestShelters, key = { "s_${it.first.label}_${it.first.lat}" }) { (poi, distM, dir) ->
+                        items(nearestShelters, key = { "s_${it.first.category}_${it.first.label}_${it.first.lat}_${it.first.lon}" }) { (poi, distM, dir) ->
                             SurvivalPoiRow(
                                 title = poi.label,
                                 distanceMeters = distM,
@@ -1046,14 +1091,14 @@ private fun GpxRoutePickerOverlay(
                     if (nearestLandmarks.isNotEmpty()) {
                         item(key = "poi_landmark_header") {
                             Text(
-                                text = "PASSES, CASTLES & RESCUE",
+                                text = "VIEWPOINTS & LANDMARKS",
                                 color = TrailGreen,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
-                        items(nearestLandmarks, key = { "l_${it.first.label}_${it.first.lat}" }) { (poi, distM, dir) ->
+                        items(nearestLandmarks, key = { "l_${it.first.category}_${it.first.label}_${it.first.lat}_${it.first.lon}" }) { (poi, distM, dir) ->
                             SurvivalPoiRow(
                                 title = poi.label,
                                 distanceMeters = distM,

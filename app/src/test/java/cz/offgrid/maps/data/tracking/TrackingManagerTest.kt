@@ -318,4 +318,44 @@ class TrackingManagerTest {
         val geoidPrague = BarometricAltimeterManager.estimateEgm2008GeoidUndulationMeters(50.08, 14.43)
         assertEquals(46.5, geoidPrague, 0.4)
     }
+
+    @Test
+    fun addPoint_outOfOrderTimestamp_ignoresStaleLocationFix() {
+        val now = 1_700_000_000_000L
+        TrackingManager.setTrackingActive(true)
+
+        val current = TrackPoint(49.1246, 16.3353, timestampMillis = now + 10_000L, accuracyMeters = 4.0f)
+        TrackingManager.addPoint(current)
+        assertEquals(1, TrackingManager.trackPoints.value.size)
+
+        // Older location arriving late must be discarded
+        val stale = TrackPoint(49.1260, 16.3370, timestampMillis = now + 5_000L, accuracyMeters = 4.0f)
+        TrackingManager.addPoint(stale)
+
+        assertEquals(1, TrackingManager.trackPoints.value.size)
+        assertEquals(49.1246, TrackingManager.currentLocation.value!!.latitude, 0.0001)
+    }
+
+    @Test
+    fun addPoint_unrealisticVelocitySpike_rejectsMultipathJump() {
+        val now = 1_700_000_000_000L
+        TrackingManager.setTrackingActive(true)
+
+        TrackingManager.addPoint(TrackPoint(49.1246, 16.3353, timestampMillis = now, accuracyMeters = 5.0f))
+        assertEquals(1, TrackingManager.trackPoints.value.size)
+
+        // ~1.5 km jump in 2 seconds (~750 m/s >> 35 m/s limit) must be rejected
+        TrackingManager.addPoint(TrackPoint(49.1380, 16.3353, timestampMillis = now + 2_000L, accuracyMeters = 8.0f))
+        assertEquals(1, TrackingManager.trackPoints.value.size)
+        assertEquals(0.0, TrackingManager.totalDistanceMeters.value, 0.001)
+    }
+
+    @Test
+    fun buildGpxXml_escapesSpecialXmlCharactersInTrackName() {
+        val xml = GpxExporter.buildGpxXml(
+            trackName = "Brno & Pálava <Ridge>",
+            points = listOf(TrackPoint(48.87, 16.65, altitudeMeters = 550.0, timestampMillis = 1_700_000_000_000L))
+        )
+        assertTrue(xml.contains("<name>Brno &amp; Pálava &lt;Ridge&gt;</name>"))
+    }
 }

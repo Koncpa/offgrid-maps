@@ -66,11 +66,13 @@ fun MapLibreMapView(
     mbtilesFile: File?,
     modifier: Modifier = Modifier,
     onUserPanGesture: () -> Unit = {},
+    onCameraZoomChanged: (Float) -> Unit = {},
     onMapReady: (MapLibreMap) -> Unit = {}
 ) {
     val context = LocalContext.current
     @Suppress("DEPRECATION")
     val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnCameraZoomChanged by rememberUpdatedState(onCameraZoomChanged)
 
     RememberMapLibreInit(context)
 
@@ -150,6 +152,7 @@ fun MapLibreMapView(
             // Load contour tiles and downloaded trail packages for the active camera viewport once camera movement settles
             map.addOnCameraIdleListener {
                 val camPos = map.cameraPosition
+                currentOnCameraZoomChanged(camPos.zoom.toFloat())
                 val target = camPos.target ?: return@addOnCameraIdleListener
                 ContourTileManager.ensureViewportContours(
                     context = context,
@@ -204,7 +207,8 @@ fun MapLibreMapView(
                     )
                 )
 
-                // 2. Icon and SymbolLayer for the location dot and heading chevron
+                // 2. Icons and SymbolLayers for outdoor POIs and the user location dot
+                registerOutdoorPoiIcons(style)
                 style.addImage(USER_LOCATION_ICON_ID, createMapyCzStyleLocationBitmap())
 
                 val locationPoint = Point.fromLngLat(targetLocation.longitude, targetLocation.latitude)
@@ -399,6 +403,131 @@ private fun createMapyCzStyleLocationBitmap(): Bitmap {
     canvas.drawCircle(center, center, 11.0f, ecoAmberPaint)
     canvas.drawCircle(center, center, 4.8f, innerCorePaint)
 
+    return bitmap
+}
+
+private data class PoiPaints(
+    val haloFill: Paint,
+    val fill: Paint,
+    val haloStroke: Paint,
+    val stroke: Paint
+)
+
+/**
+ * Registers compact, high-contrast AMOLED vector-drawn POI icons into the active MapLibre style.
+ */
+private fun registerOutdoorPoiIcons(style: Style) {
+    style.addImage("poi_water", createPoiIconBitmap("#00C8FF") { c, p, center ->
+        val path = Path().apply {
+            moveTo(center, center - 8.5f)
+            cubicTo(center + 6.5f, center - 1.5f, center + 6.5f, center + 5.0f, center, center + 8.0f)
+            cubicTo(center - 6.5f, center + 5.0f, center - 6.5f, center - 1.5f, center, center - 8.5f)
+            close()
+        }
+        c.drawPath(path, p.haloFill)
+        c.drawPath(path, p.fill)
+    })
+
+    style.addImage("poi_shelter", createPoiIconBitmap("#FFB300") { c, p, center ->
+        val roof = Path().apply {
+            moveTo(center - 8.5f, center + 1.0f)
+            lineTo(center, center - 7.5f)
+            lineTo(center + 8.5f, center + 1.0f)
+        }
+        c.drawPath(roof, p.haloStroke)
+        c.drawLine(center - 5.2f, center + 0.5f, center - 5.2f, center + 7.5f, p.haloStroke)
+        c.drawLine(center + 5.2f, center + 0.5f, center + 5.2f, center + 7.5f, p.haloStroke)
+        c.drawPath(roof, p.stroke)
+        c.drawLine(center - 5.2f, center + 0.5f, center - 5.2f, center + 7.5f, p.stroke)
+        c.drawLine(center + 5.2f, center + 0.5f, center + 5.2f, center + 7.5f, p.stroke)
+    })
+
+    style.addImage("poi_viewpoint", createPoiIconBitmap("#FFD54F") { c, p, center ->
+        c.drawLine(center, center + 4.5f, center - 7.5f, center - 5.5f, p.haloStroke)
+        c.drawLine(center, center + 4.5f, center, center - 7.5f, p.haloStroke)
+        c.drawLine(center, center + 4.5f, center + 7.5f, center - 5.5f, p.haloStroke)
+        c.drawCircle(center, center + 5.0f, 4.4f, p.haloFill)
+        c.drawLine(center, center + 4.5f, center - 7.5f, center - 5.5f, p.stroke)
+        c.drawLine(center, center + 4.5f, center, center - 7.5f, p.stroke)
+        c.drawLine(center, center + 4.5f, center + 7.5f, center - 5.5f, p.stroke)
+        c.drawCircle(center, center + 5.0f, 2.7f, p.fill)
+    })
+
+    style.addImage("poi_picnic", createPoiIconBitmap("#4CD964") { c, p, center ->
+        val lines = listOf(
+            floatArrayOf(center - 6.5f, center - 4.0f, center + 6.5f, center - 4.0f),
+            floatArrayOf(center - 8.5f, center + 2.0f, center + 8.5f, center + 2.0f),
+            floatArrayOf(center - 3.5f, center - 4.0f, center - 6.5f, center + 6.5f),
+            floatArrayOf(center + 3.5f, center - 4.0f, center + 6.5f, center + 6.5f)
+        )
+        lines.forEach { l -> c.drawLine(l[0], l[1], l[2], l[3], p.haloStroke) }
+        lines.forEach { l -> c.drawLine(l[0], l[1], l[2], l[3], p.stroke) }
+    })
+
+    style.addImage("poi_saddle", createPoiIconBitmap("#C8B88A") { c, p, center ->
+        val leftArc = Path().apply { moveTo(center - 7.0f, center - 5.5f); quadTo(center - 1.5f, center, center - 7.0f, center + 5.5f) }
+        val rightArc = Path().apply { moveTo(center + 7.0f, center - 5.5f); quadTo(center + 1.5f, center, center + 7.0f, center + 5.5f) }
+        c.drawPath(leftArc, p.haloStroke); c.drawPath(rightArc, p.haloStroke)
+        c.drawPath(leftArc, p.stroke); c.drawPath(rightArc, p.stroke)
+    })
+
+    style.addImage("poi_rescue", createPoiIconBitmap("#FF4444") { c, p, center ->
+        c.drawLine(center - 6.5f, center, center + 6.5f, center, p.haloStroke)
+        c.drawLine(center, center - 6.5f, center, center + 6.5f, p.haloStroke)
+        c.drawLine(center - 6.5f, center, center + 6.5f, center, p.stroke)
+        c.drawLine(center, center - 6.5f, center, center + 6.5f, p.stroke)
+    })
+
+    style.addImage("poi_landmark", createPoiIconBitmap("#E0E0D8") { c, p, center ->
+        val diamond = Path().apply {
+            moveTo(center, center - 7.2f)
+            lineTo(center + 7.2f, center)
+            lineTo(center, center + 7.2f)
+            lineTo(center - 7.2f, center)
+            close()
+        }
+        c.drawPath(diamond, p.haloFill)
+        c.drawPath(diamond, p.fill)
+        c.drawCircle(center, center, 2.2f, p.haloFill)
+    })
+}
+
+private fun createPoiIconBitmap(
+    hexColor: String,
+    draw: (Canvas, PoiPaints, Float) -> Unit
+): Bitmap {
+    val size = 28
+    val center = size / 2f
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val colorInt = android.graphics.Color.parseColor(hexColor)
+    val paints = PoiPaints(
+        haloFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.BLACK
+            style = android.graphics.Paint.Style.FILL_AND_STROKE
+            strokeWidth = 2.6f
+            strokeJoin = Paint.Join.ROUND
+        },
+        fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorInt
+            style = android.graphics.Paint.Style.FILL
+        },
+        haloStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.BLACK
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 5.0f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        },
+        stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = colorInt
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 2.5f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+    )
+    draw(canvas, paints, center)
     return bitmap
 }
 

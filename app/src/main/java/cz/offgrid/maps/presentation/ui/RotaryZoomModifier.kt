@@ -1,6 +1,11 @@
 package cz.offgrid.maps.presentation.ui
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
@@ -19,19 +24,21 @@ fun Modifier.rotaryZoom(
     onZoomOut: () -> Unit
 ): Modifier = composed {
     val view = LocalView.current
-    var accumulatedDelta = 0f
+    val currentOnZoomIn by rememberUpdatedState(onZoomIn)
+    val currentOnZoomOut by rememberUpdatedState(onZoomOut)
+    var accumulatedDelta by remember { mutableFloatStateOf(0f) }
     val threshold = 40f // Rotary scroll sensitivity threshold per zoom step
 
     this.onRotaryScrollEvent { event ->
         accumulatedDelta += event.verticalScrollPixels
         if (accumulatedDelta >= threshold) {
             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            onZoomIn()
+            currentOnZoomIn()
             accumulatedDelta = 0f
             true
         } else if (accumulatedDelta <= -threshold) {
             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            onZoomOut()
+            currentOnZoomOut()
             accumulatedDelta = 0f
             true
         } else {

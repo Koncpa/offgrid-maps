@@ -149,6 +149,11 @@ object TrackingManager {
             val existingAcc = existingLoc.accuracyMeters
             val ageDeltaMs = point.timestampMillis - existingLoc.timestampMillis
 
+            // 0. Reject out-of-order location fixes with older timestamps than the latest accepted point
+            if (point.timestampMillis > 0L && existingLoc.timestampMillis > 0L && ageDeltaMs < 0L) {
+                return
+            }
+
             // 1. Short-term guard (8 s) against overwriting a fresh <=10m fix with a less accurate estimate (>10m)
             if (incomingAcc > 10.0f && existingAcc <= 10.0f && ageDeltaMs in 0..8_000L) {
                 return
@@ -199,6 +204,14 @@ object TrackingManager {
             )
             // Filter stationary GPS jitter (< 1.5 meters)
             if (delta < 1.5) return
+
+            // Reject extreme multipath GPS teleportation spikes (> 35 m/s over >= 1 s intervals)
+            if (enrichedPoint.timestampMillis > 0L && previous.timestampMillis > 0L) {
+                val dtSec = (enrichedPoint.timestampMillis - previous.timestampMillis) / 1000.0
+                if (dtSec in 1.0..30.0 && (delta / dtSec) > 35.0) {
+                    return
+                }
+            }
             _totalDistanceMeters.value += delta
         }
 

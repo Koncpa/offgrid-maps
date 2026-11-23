@@ -446,19 +446,33 @@ object StyleBuilder {
               "id": "outdoor_poi_dots",
               "type": "circle",
               "source": "custom_outdoor_pois_source",
-              "minzoom": 12,
+              "minzoom": 13,
+              "filter": ["==", ["get", "cat"], "guidepost"],
               "paint": {
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 2.6, 14, 4.2, 16, 5.4],
-                "circle-color": ["match", ["get", "cat"],
-                  "water", "#00C8FF",
-                  "shelter", "#E6B800",
-                  "saddle", "#C8B88A",
-                  "rescue", "#FF4444",
-                  "landmark", "#E0E0D8",
-                  "#9AA4AE"
-                ],
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 1.8, 15, 2.8],
+                "circle-color": "#7E8892",
                 "circle-stroke-color": "#000000",
-                "circle-stroke-width": 1.3
+                "circle-stroke-width": 1.0
+              }
+            },
+            {
+              "id": "outdoor_poi_icons",
+              "type": "symbol",
+              "source": "custom_outdoor_pois_source",
+              "minzoom": 12,
+              "filter": ["!=", ["get", "cat"], "guidepost"],
+              "layout": {
+                "icon-image": ["match", ["get", "cat"],
+                  "water", "poi_water",
+                  "shelter", "poi_shelter",
+                  "viewpoint", "poi_viewpoint",
+                  "picnic", "poi_picnic",
+                  "saddle", "poi_saddle",
+                  "rescue", "poi_rescue",
+                  "poi_landmark"
+                ],
+                "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.70, 14, 0.90, 16, 1.08],
+                "icon-allow-overlap": true
               }
             },
             {
@@ -466,11 +480,16 @@ object StyleBuilder {
               "type": "symbol",
               "source": "custom_outdoor_pois_source",
               "minzoom": 13,
+              "filter": ["match", ["get", "label"],
+                ["Viewpoint", "Picnic", "Shelter", "Spring", "Drinking Water", "Trailhead", "Bivouac / Hut", "Alpine Hut", "Mountain Rescue"],
+                false,
+                true
+              ],
               "layout": {
                 "text-field": ["get", "label"],
                 "text-font": ["Noto Sans Regular"],
                 "text-size": 9.5,
-                "text-offset": [0, 1.05],
+                "text-offset": [0, 1.15],
                 "text-anchor": "top",
                 "text-optional": true
               },
@@ -478,6 +497,8 @@ object StyleBuilder {
                 "text-color": ["match", ["get", "cat"],
                   "water", "#00C8FF",
                   "shelter", "#E6B800",
+                  "viewpoint", "#FFD54F",
+                  "picnic", "#4CD964",
                   "saddle", "#C8B88A",
                   "rescue", "#FF4444",
                   "landmark", "#E0E0D8",

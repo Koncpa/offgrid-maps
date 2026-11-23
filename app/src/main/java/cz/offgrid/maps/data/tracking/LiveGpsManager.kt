@@ -198,6 +198,11 @@ class LiveGpsManager(
     fun requestImmediateHighAccuracyFix() {
         if (!isRunning || !hasFineLocationPermission()) return
 
+        if (TrackingManager.isTracking.value) {
+            LocationTrackingService.flushNow(context)
+            return
+        }
+
         // 1. Immediately engage the watch's hardware satellite receiver (0 ms delay)
         enableWatchHardwareGps()
 
@@ -283,6 +288,7 @@ class LiveGpsManager(
     }
 
     private fun calibrateAltimeterFromLocation(location: Location) {
+        if (TrackingManager.isTracking.value) return
         val mslAlt = BarometricAltimeterManager.extractMslAltitudeMeters(location) ?: return
         val gpsAcc = if (location.hasAccuracy()) location.accuracy else null
         val vertAcc = if (location.hasVerticalAccuracy()) location.verticalAccuracyMeters else null
@@ -290,6 +296,11 @@ class LiveGpsManager(
     }
 
     private fun processLocation(location: Location, isDirectWatchSatellite: Boolean) {
+        // When LocationTrackingService is recording, it owns the active GPS & altimeter pipeline exclusively
+        if (TrackingManager.isTracking.value) {
+            return
+        }
+
         val ageMs = if (location.elapsedRealtimeNanos > 0L) {
             (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000L
         } else {

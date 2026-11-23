@@ -13,9 +13,9 @@ import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Collections
 import java.util.Locale
 import java.util.zip.GZIPInputStream
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.*
 
 /**
@@ -33,6 +33,7 @@ object ContourTileManager {
 
     private const val TILES_DIR_NAME = "contour_tiles"
     private const val TILE_ZOOM = 12
+    private const val MAX_MEMORY_TILES = 24
 
     // z=12 tiles already pre-bundled in the APK (assets/jmk_contours.geojson for Oslavany / Ivančice / Zbýšov)
     internal val BUNDLED_JMK_TILES = setOf(
@@ -41,7 +42,13 @@ object ContourTileManager {
     )
 
     private val scope = CoroutineScope(Dispatchers.IO)
-    private val memoryTileCache = ConcurrentHashMap<String, String>()
+    private val memoryTileCache: MutableMap<String, String> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(32, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
+                return size > MAX_MEMORY_TILES
+            }
+        }
+    )
     @Volatile
     private var lastViewportKey: String = ""
 
@@ -217,7 +224,11 @@ object ContourTileManager {
             connectTimeout = 6000
             readTimeout = 6000
         }
-        val bytes = conn.inputStream.use { it.readBytes() }
+        val bytes = try {
+            conn.inputStream.use { it.readBytes() }
+        } finally {
+            conn.disconnect()
+        }
         val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return ""
         val w = bmp.width
         val h = bmp.height

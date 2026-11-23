@@ -5,10 +5,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import cz.offgrid.maps.data.tracking.GpxExporter
 import cz.offgrid.maps.data.tracking.TrackingManager
 import cz.offgrid.maps.presentation.theme.OffGridTheme
 import cz.offgrid.maps.presentation.ui.MapScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Main entry point activity for OffGrid Maps on Wear OS.
@@ -35,12 +38,15 @@ class MainActivity : ComponentActivity() {
     private fun handleIncomingGpxIntent(intent: Intent?) {
         val uri = intent?.data ?: return
         if (intent.action == Intent.ACTION_VIEW) {
-            val importedFile = GpxExporter.importGpxFromUri(this, uri)
-            if (importedFile != null) {
-                val points = GpxExporter.parseGpxFile(importedFile)
-                if (points.isNotEmpty()) {
-                    TrackingManager.setPlannedRoute(importedFile.nameWithoutExtension, points)
-                    TrackingManager.setSavedSummary("Loaded: ${importedFile.nameWithoutExtension}")
+            val appCtx = applicationContext
+            lifecycleScope.launch(Dispatchers.IO) {
+                val importedFile = GpxExporter.importGpxFromUri(appCtx, uri)
+                if (importedFile != null) {
+                    val points = GpxExporter.parseGpxFile(importedFile)
+                    if (points.isNotEmpty()) {
+                        TrackingManager.setPlannedRoute(importedFile.nameWithoutExtension, points)
+                        TrackingManager.setSavedSummary("Loaded: ${importedFile.nameWithoutExtension}")
+                    }
                 }
             }
         }

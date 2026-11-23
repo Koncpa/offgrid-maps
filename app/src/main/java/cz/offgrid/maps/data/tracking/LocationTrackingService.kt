@@ -14,10 +14,12 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import cz.offgrid.maps.MainActivity
 import cz.offgrid.maps.domain.model.TrackPoint
+import java.util.concurrent.Executors
 
 /**
  * Foreground service for continuous GPS track recording, barometric elevation gain,
@@ -30,13 +32,14 @@ class LocationTrackingService : Service() {
     private lateinit var locationCallback: LocationCallback
     private lateinit var hardwareGpsListener: LocationListener
     private lateinit var altimeterManager: BarometricAltimeterManager
+    private val ioExecutor = Executors.newSingleThreadExecutor()
     private var lastNotificationMillis = 0L
     private var lastNotifiedDistanceMeters = 0.0
     private var lastCheckpointPointsCount = 0
     private var isScreenInteractive = true
     private var isBatteryReceiverRegistered = false
     private var isWatchHardwareGpsActive = false
-    private var consecutiveAccurateFusedFixes = 0
+    private var lastHardwareGpsElapsedRealtimeNs = 0L
 
     /**
      * Passive system battery broadcast listener (0 mW overhead, no polling loop).
@@ -71,6 +74,9 @@ class LocationTrackingService : Service() {
         createNotificationChannel()
 
         hardwareGpsListener = LocationListener { location ->
+            if (location.hasAccuracy() && location.accuracy <= LiveGpsManager.FOREST_SAT_ACCURACY_METERS) {
+                lastHardwareGpsElapsedRealtimeNs = SystemClock.elapsedRealtimeNanos()
+            }
             handleIncomingLocation(location)
         }
 
@@ -82,7 +88,15 @@ class LocationTrackingService : Service() {
                     if (!isWatchHardwareGpsActive) {
                         enableWatchHardwareGps()
                     }
-                    handleIncomingLocation(location)
+                    // When the watch's hardware GPS recently delivered a satellite fix (< 5 s),
+                    // skip redundant or coarser Fused echoes to prevent sawtooth zig-zagging.
+                    val nowNs = SystemClock.elapsedRealtimeNanos()
+                    val hasRecentHwFix = isWatchHardwareGpsActive &&
+                        lastHardwareGpsElapsedRealtimeNs > 0L &&
+                        (nowNs - lastHardwareGpsElapsedRealtimeNs) < 5_000_000_000L
+                    if (!hasRecentHwFix) {
+                        handleIncomingLocation(location)
+                    }
                 }
             }
         }
@@ -104,11 +118,15 @@ class LocationTrackingService : Service() {
         )
         TrackingManager.addPoint(point)
 
-        // Save recovery checkpoint to disk every 10 recorded points
+        // Save recovery checkpoint to disk asynchronously every 10 recorded points
         val currentPoints = TrackingManager.trackPoints.value
         if (currentPoints.size - lastCheckpointPointsCount >= 10) {
             lastCheckpointPointsCount = currentPoints.size
-            GpxExporter.saveRecoveryCheckpoint(this@LocationTrackingService, currentPoints)
+            val snapshot = currentPoints.toList()
+            val appCtx = applicationContext
+            ioExecutor.execute {
+                GpxExporter.saveRecoveryCheckpoint(appCtx, snapshot)
+            }
         }
 
         updateNotificationThrottled()
@@ -156,7 +174,7 @@ class LocationTrackingService : Service() {
         lastNotifiedDistanceMeters = 0.0
         lastCheckpointPointsCount = 0
         isScreenInteractive = true
-        consecutiveAccurateFusedFixes = 0
+        lastHardwareGpsElapsedRealtimeNs = 0L
 
         if (!isBatteryReceiverRegistered) {
             registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -189,7 +207,11 @@ class LocationTrackingService : Service() {
             .addOnSuccessListener { loc ->
                 if (loc != null && TrackingManager.isTracking.value) {
                     handleIncomingLocation(loc)
-                    GpxExporter.saveRecoveryCheckpoint(this, TrackingManager.trackPoints.value)
+                    val snapshot = TrackingManager.trackPoints.value.toList()
+                    val appCtx = applicationContext
+                    ioExecutor.execute {
+                        GpxExporter.saveRecoveryCheckpoint(appCtx, snapshot)
+                    }
                 }
             }
 

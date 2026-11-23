@@ -55,21 +55,31 @@ object GpxExporter {
     }
 
     /**
-     * Periodically checkpoints the active track to disk in case of sudden battery depletion or reboot.
+     * Periodically checkpoints the active track to disk atomically so a sudden power loss
+     * mid-write never corrupts or truncates the previous checkpoint.
      */
     fun saveRecoveryCheckpoint(context: Context, points: List<TrackPoint>) {
         if (points.isEmpty()) return
-        val recoveryFile = File(getTracksDir(context), RECOVERY_FILE_NAME)
-        recoveryFile.writeText(buildGpxXml("Recovered hike", points))
+        val tracksDir = getTracksDir(context)
+        val tmpFile = File(tracksDir, "$RECOVERY_FILE_NAME.tmp")
+        val recoveryFile = File(tracksDir, RECOVERY_FILE_NAME)
+        tmpFile.writeText(buildGpxXml("Recovered hike", points))
+        if (!tmpFile.renameTo(recoveryFile)) {
+            recoveryFile.writeText(tmpFile.readText())
+            tmpFile.delete()
+        }
     }
 
     /**
      * Removes the temporary recovery checkpoint file after a clean track save.
      */
     fun clearRecoveryCheckpoint(context: Context) {
-        val recoveryFile = File(getTracksDir(context), RECOVERY_FILE_NAME)
-        if (recoveryFile.exists()) {
-            recoveryFile.delete()
+        val tracksDir = getTracksDir(context)
+        listOf(RECOVERY_FILE_NAME, "$RECOVERY_FILE_NAME.tmp").forEach { name ->
+            val file = File(tracksDir, name)
+            if (file.exists()) {
+                file.delete()
+            }
         }
     }
 
@@ -187,7 +197,7 @@ object GpxExporter {
         }
     }
 
-    private fun buildGpxXml(trackName: String, points: List<TrackPoint>): String {
+    internal fun buildGpxXml(trackName: String, points: List<TrackPoint>): String {
         val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
@@ -196,7 +206,7 @@ object GpxExporter {
         sb.appendLine("""<?xml version="1.0" encoding="UTF-8"?>""")
         sb.appendLine("""<gpx version="1.1" creator="OffGrid Maps Wear OS" xmlns="http://www.topografix.com/GPX/1/1">""")
         sb.appendLine("""  <trk>""")
-        sb.appendLine("""    <name>$trackName</name>""")
+        sb.appendLine("""    <name>${escapeXml(trackName)}</name>""")
         sb.appendLine("""    <trkseg>""")
 
         for (pt in points) {
@@ -213,6 +223,15 @@ object GpxExporter {
         sb.appendLine("""  </trk>""")
         sb.appendLine("""</gpx>""")
         return sb.toString()
+    }
+
+    private fun escapeXml(text: String): String {
+        return text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
     }
 
     /**
