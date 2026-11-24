@@ -833,9 +833,12 @@ private fun GpxRoutePickerOverlay(
     var selectedTab by remember { mutableIntStateOf(0) }
     var selectedContinent by remember { mutableStateOf<String?>(null) }
     var selectedCountry by remember { mutableStateOf<String?>(null) }
+    var showSavedMaps by remember { mutableStateOf(false) }
+    var expandedSavedCountries by remember { mutableStateOf(emptySet<String>()) }
 
     val stepBackOrDismiss = {
         when {
+            selectedTab == 1 && showSavedMaps -> showSavedMaps = false
             selectedTab == 1 && selectedCountry != null -> selectedCountry = null
             selectedTab == 1 && selectedContinent != null -> selectedContinent = null
             else -> onDismiss()
@@ -852,6 +855,19 @@ private fun GpxRoutePickerOverlay(
     val activePois by OfflineRegionHelper.activePois.collectAsState()
     val savedByTitle = remember(savedRegions) {
         savedRegions.associateBy { it.displayName }
+    }
+    val presetByTitle = remember(catalogRegions) {
+        catalogRegions.associateBy { it.title }
+    }
+    val savedGroupedByCountry = remember(savedRegions, presetByTitle) {
+        savedRegions
+            .groupBy { region ->
+                val rawCountry = presetByTitle[region.displayName]?.countryName
+                    ?: if (region.isDefaultJmk) "Czechia – Regions" else "Other Regions"
+                rawCountry.substringBefore(" – ")
+            }
+            .entries
+            .sortedBy { it.key }
     }
     val nearbyRegions = remember(catalogRegions, savedByTitle, currentLat, currentLon) {
         catalogRegions
@@ -1212,8 +1228,99 @@ private fun GpxRoutePickerOverlay(
                 val activeContinent = selectedContinent
                 val activeCountry = selectedCountry
 
-                if (activeContinent == null) {
-                    // --- LEVEL 0: OFFLINE ROOT (Nearby + Saved + Continents) ---
+                if (showSavedMaps) {
+                    // --- SAVED MAPS VIEW (Grouped by Country with Collapsible Sections) ---
+                    item(key = "back_from_saved") {
+                        BreadcrumbBackPill(
+                            label = "← Offline",
+                            onClick = { showSavedMaps = false }
+                        )
+                    }
+                    item(key = "saved_view_header") {
+                        Text(
+                            text = "SAVED ON WATCH (${savedRegions.size})",
+                            color = TrailGreen,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    if (savedRegions.isEmpty()) {
+                        item(key = "no_saved_maps") {
+                            Text(
+                                text = "No offline maps saved yet",
+                                color = OutdoorTextSecondary,
+                                fontSize = 10.5.sp,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    } else {
+                        val singleCountry = savedGroupedByCountry.size == 1
+                        savedGroupedByCountry.forEach { (countryName, countryRegions) ->
+                            val isExpanded = singleCountry || countryName in expandedSavedCountries
+                            if (singleCountry) {
+                                item(key = "saved_hdr_$countryName") {
+                                    Text(
+                                        text = countryName.uppercase(),
+                                        color = TrailGreen,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            } else {
+                                item(key = "saved_grp_$countryName") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(DarkSurface)
+                                            .border(
+                                                width = 1.2.dp,
+                                                color = TrailGreen.copy(alpha = 0.85f),
+                                                shape = RoundedCornerShape(14.dp)
+                                            )
+                                            .clickable {
+                                                expandedSavedCountries = if (countryName in expandedSavedCountries) {
+                                                    expandedSavedCountries - countryName
+                                                } else {
+                                                    expandedSavedCountries + countryName
+                                                }
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "${if (isExpanded) "▾" else "▸"} $countryName (${countryRegions.size})",
+                                            color = OutdoorTextPrimary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = if (isExpanded) "Hide" else "Show",
+                                            color = TrailGreen,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            if (isExpanded) {
+                                items(countryRegions, key = { "saved_${it.id}" }) { region ->
+                                    SavedRegionRow(
+                                        region = region,
+                                        onSelect = { onSelectOfflineRegion(region) },
+                                        onDelete = { onDeleteOfflineRegion(region) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else if (activeContinent == null) {
+                    // --- LEVEL 0: OFFLINE ROOT (Nearby + Saved Folder + Continents) ---
                     if (nearbyRegions.isNotEmpty()) {
                         item(key = "nearby_header") {
                             Text(
@@ -1255,51 +1362,22 @@ private fun GpxRoutePickerOverlay(
                         )
                     }
 
-                    items(savedRegions, key = { "saved_${it.id}" }) { region ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(DarkSurface)
-                                .border(
-                                    width = 1.3.dp,
-                                    color = if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.85f) else TrailGreen.copy(alpha = 0.85f),
-                                    shape = RoundedCornerShape(14.dp)
-                                )
-                                .clickable { onSelectOfflineRegion(region) }
-                                .padding(horizontal = 10.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = if (region.isDefaultJmk) "★ ${region.displayName}" else "✓ ${region.displayName}",
-                                color = OutdoorTextPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (!region.isDefaultJmk) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(AmoledBlack)
-                                        .border(1.2.dp, TrailRed, CircleShape)
-                                        .clickable { onDeleteOfflineRegion(region) },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "✕",
-                                        color = TrailRed,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                    item(key = "saved_folder") {
+                        val savedSummary = if (savedRegions.isEmpty()) {
+                            "No offline maps saved yet"
+                        } else {
+                            savedGroupedByCountry.joinToString(", ") { "${it.key} (${it.value.size})" }
+                        }
+                        DrillDownFolderRow(
+                            title = "✓ Saved Maps (${savedRegions.size})",
+                            subtitle = savedSummary,
+                            accentColor = TrailGreen,
+                            onClick = {
+                                if (savedRegions.isNotEmpty()) {
+                                    showSavedMaps = true
                                 }
                             }
-                        }
+                        )
                     }
 
                     item(key = "continents_header") {
@@ -1437,7 +1515,9 @@ private fun GpxRoutePickerOverlay(
                             .padding(horizontal = 18.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        val backLabel = if (selectedTab == 1 && (selectedCountry != null || selectedContinent != null)) {
+                        val backLabel = if (
+                            selectedTab == 1 && (showSavedMaps || selectedCountry != null || selectedContinent != null)
+                        ) {
                             "← Up"
                         } else {
                             "Close"
@@ -1519,6 +1599,7 @@ private fun BreadcrumbBackPill(
 private fun DrillDownFolderRow(
     title: String,
     subtitle: String,
+    accentColor: Color = TrailBlue,
     onClick: () -> Unit
 ) {
     Row(
@@ -1526,7 +1607,7 @@ private fun DrillDownFolderRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(DarkSurface)
-            .border(1.2.dp, TrailBlue.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+            .border(1.2.dp, accentColor.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1555,15 +1636,67 @@ private fun DrillDownFolderRow(
                 .size(26.dp)
                 .clip(CircleShape)
                 .background(AmoledBlack)
-                .border(1.2.dp, TrailBlue, CircleShape),
+                .border(1.2.dp, accentColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "›",
-                color = TrailBlue,
+                color = accentColor,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+@Composable
+private fun SavedRegionRow(
+    region: SavedOfflineRegion,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(DarkSurface)
+            .border(
+                width = 1.3.dp,
+                color = if (region.isDefaultJmk) TrailYellow.copy(alpha = 0.85f) else TrailGreen.copy(alpha = 0.85f),
+                shape = RoundedCornerShape(14.dp)
+            )
+            .clickable { onSelect() }
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = if (region.isDefaultJmk) "★ ${region.displayName}" else "✓ ${region.displayName}",
+            color = OutdoorTextPrimary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (!region.isDefaultJmk) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(AmoledBlack)
+                    .border(1.2.dp, TrailRed, CircleShape)
+                    .clickable { onDelete() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✕",
+                    color = TrailRed,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
