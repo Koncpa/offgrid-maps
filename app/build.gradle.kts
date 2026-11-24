@@ -14,6 +14,10 @@ val localProps = Properties().apply {
 }
 val mapsGithubRepo: String = localProps.getProperty("MAPS_GITHUB_REPO", "Koncpa/offgrid-maps-data")
 val mapsGithubToken: String = localProps.getProperty("MAPS_GITHUB_TOKEN", "")
+val mapsCdnBaseUrl: String = localProps.getProperty(
+    "MAPS_CDN_BASE_URL",
+    "https://pub-33e873553ed746db815f152b72306952.r2.dev"
+)
 
 android {
     namespace = "cz.offgrid.maps"
@@ -30,6 +34,7 @@ android {
         }
         buildConfigField("String", "MAPS_GITHUB_REPO", "\"$mapsGithubRepo\"")
         buildConfigField("String", "MAPS_GITHUB_TOKEN", "\"$mapsGithubToken\"")
+        buildConfigField("String", "MAPS_CDN_BASE_URL", "\"$mapsCdnBaseUrl\"")
     }
 
     buildTypes {

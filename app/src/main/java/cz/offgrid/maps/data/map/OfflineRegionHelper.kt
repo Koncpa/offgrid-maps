@@ -56,7 +56,8 @@ data class OfflinePresetRegion(
     val packagePath: String = "maps/cz/$id",
     val continent: String = OfflineRegionHelper.resolveContinent(countryCode),
     val releaseTag: String? = null,
-    val assetName: String? = null
+    val assetName: String? = null,
+    val releaseBaseUrl: String? = null
 )
 
 /**
@@ -70,8 +71,8 @@ data class OutdoorPoi(
 )
 
 /**
- * Offline map region manager connected to the private GitHub repository (`Koncpa/offgrid-maps-data`),
- * dynamically loading `catalog.json` worldwide and pre-built map packages via GitHub Releases.
+ * Offline map region manager connected to CDN / GitHub Releases (`Koncpa/offgrid-maps-data`),
+ * dynamically loading `catalog.json` worldwide and pre-built map packages.
  */
 object OfflineRegionHelper {
 
@@ -88,6 +89,8 @@ object OfflineRegionHelper {
 
     private val trailExecutor = Executors.newSingleThreadExecutor()
     private val releaseAssetUrlCache = ConcurrentHashMap<String, Map<String, String>>()
+    @Volatile
+    private var activeCatalogReleaseBaseUrl: String? = null
 
     private val _statusText = MutableStateFlow("NO MAP")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
@@ -492,26 +495,37 @@ object OfflineRegionHelper {
         thread(name = "OffGridCatalogSync", isDaemon = true) {
             try {
                 val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
-                val url = URL("https://raw.githubusercontent.com/$repo/main/catalog.json")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 5000
-                    readTimeout = 5000
-                    val token = BuildConfig.MAPS_GITHUB_TOKEN
-                    if (token.isNotBlank()) {
-                        setRequestProperty("Authorization", "Bearer $token")
-                    }
+                val cdnBase = (activeCatalogReleaseBaseUrl ?: BuildConfig.MAPS_CDN_BASE_URL)
+                    .trim()
+                    .trimEnd('/')
+                val candidates = buildList {
+                    if (cdnBase.isNotBlank()) add("$cdnBase/catalog.json" to false)
+                    add("https://raw.githubusercontent.com/$repo/main/catalog.json" to true)
                 }
-                try {
-                    if (conn.responseCode in 200..299) {
-                        val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
-                        val parsed = parseCatalogJson(jsonText)
-                        if (!parsed.isNullOrEmpty()) {
-                            cacheFile.writeText(jsonText)
-                            _catalogRegions.value = parsed
+                for ((catalogUrl, sendToken) in candidates) {
+                    val conn = (URL(catalogUrl).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 5000
+                        readTimeout = 5000
+                        val token = BuildConfig.MAPS_GITHUB_TOKEN
+                        if (sendToken && token.isNotBlank()) {
+                            setRequestProperty("Authorization", "Bearer $token")
                         }
                     }
-                } finally {
-                    conn.disconnect()
+                    var updated = false
+                    try {
+                        if (conn.responseCode in 200..299) {
+                            val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
+                            val parsed = parseCatalogJson(jsonText)
+                            if (!parsed.isNullOrEmpty()) {
+                                cacheFile.writeText(jsonText)
+                                _catalogRegions.value = parsed
+                                updated = true
+                            }
+                        }
+                    } finally {
+                        conn.disconnect()
+                    }
+                    if (updated) break
                 }
             } catch (_: Exception) {
             }
@@ -561,9 +575,24 @@ object OfflineRegionHelper {
         return ZipExtractResult(trailsOk, poisOk, contoursOk)
     }
 
+    internal fun resolveCdnZipUrl(preset: OfflinePresetRegion, defaultCdnBaseUrl: String): String? {
+        val base = (preset.releaseBaseUrl ?: defaultCdnBaseUrl).trim().trimEnd('/')
+        val tag = preset.releaseTag?.takeIf { it.isNotBlank() } ?: return null
+        if (base.isBlank()) return null
+        val asset = preset.assetName?.takeIf { it.isNotBlank() } ?: "${preset.id}.zip"
+        return "$base/releases/$tag/$asset"
+    }
+
     internal fun parseCatalogJson(jsonText: String): List<OfflinePresetRegion>? {
         return try {
             val root = JSONObject(jsonText)
+            val rootReleaseBase = root.optString("releaseBaseUrl", "")
+                .trim()
+                .trimEnd('/')
+                .takeIf { it.isNotBlank() }
+            if (rootReleaseBase != null) {
+                activeCatalogReleaseBaseUrl = rootReleaseBase
+            }
             val countries = root.optJSONArray("countries") ?: return null
             val result = mutableListOf<OfflinePresetRegion>()
             for (i in 0 until countries.length()) {
@@ -576,6 +605,11 @@ object OfflineRegionHelper {
                 for (j in 0 until regions.length()) {
                     val reg = regions.getJSONObject(j)
                     val id = reg.getString("id")
+                    val regionReleaseBase = reg.optString("releaseBaseUrl", "")
+                        .trim()
+                        .trimEnd('/')
+                        .takeIf { it.isNotBlank() }
+                        ?: rootReleaseBase
                     result.add(
                         OfflinePresetRegion(
                             id = id,
@@ -590,7 +624,8 @@ object OfflineRegionHelper {
                             packagePath = reg.optString("packagePath", "maps/${countryCode.lowercase(Locale.US)}/$id"),
                             continent = continent,
                             releaseTag = reg.optString("releaseTag", "").takeIf { it.isNotBlank() },
-                            assetName = reg.optString("assetName", "").takeIf { it.isNotBlank() }
+                            assetName = reg.optString("assetName", "").takeIf { it.isNotBlank() },
+                            releaseBaseUrl = regionReleaseBase
                         )
                     )
                 }
@@ -708,17 +743,52 @@ object OfflineRegionHelper {
         }
     }
 
+    private fun streamZipFromUrl(
+        context: Context,
+        pkgDir: File,
+        downloadUrl: String
+    ): ZipExtractResult? {
+        return try {
+            val conn = (URL(downloadUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 60000
+            }
+            try {
+                if (conn.responseCode !in 200..299) return null
+                conn.inputStream.use { input ->
+                    extractPackageZip(input, pkgDir) { contourStream ->
+                        ContourTileManager.importTilePackage(context, contourStream) > 0
+                    }
+                }
+            } finally {
+                conn.disconnect()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun downloadReleaseZipPackage(
         context: Context,
         pkgDir: File,
         preset: OfflinePresetRegion
     ): ZipExtractResult? {
+        val cdnDefault = activeCatalogReleaseBaseUrl ?: BuildConfig.MAPS_CDN_BASE_URL
+        resolveCdnZipUrl(preset, cdnDefault)?.let { cdnUrl ->
+            streamZipFromUrl(context, pkgDir, cdnUrl)?.let { return it }
+        }
+
         val releaseTag = preset.releaseTag ?: return null
         val assetName = preset.assetName ?: "${preset.id}.zip"
         val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
-        val apiUrl = resolveReleaseAssetUrl(repo, releaseTag, assetName) ?: return null
         val token = BuildConfig.MAPS_GITHUB_TOKEN
 
+        if (token.isBlank()) {
+            val publicUrl = "https://github.com/$repo/releases/download/$releaseTag/$assetName"
+            return streamZipFromUrl(context, pkgDir, publicUrl)
+        }
+
+        val apiUrl = resolveReleaseAssetUrl(repo, releaseTag, assetName) ?: return null
         return try {
             // Request with instanceFollowRedirects=false so Authorization header is NOT sent to S3 redirect
             val ghConn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
@@ -726,9 +796,7 @@ object OfflineRegionHelper {
                 readTimeout = 30000
                 instanceFollowRedirects = false
                 setRequestProperty("Accept", "application/octet-stream")
-                if (token.isNotBlank()) {
-                    setRequestProperty("Authorization", "Bearer $token")
-                }
+                setRequestProperty("Authorization", "Bearer $token")
             }
             val code = ghConn.responseCode
             val streamConn: HttpURLConnection = if (code in 300..399) {

@@ -146,4 +146,41 @@ class OfflineRegionHelperTest {
         )
         assertTrue(parsed.all { !it.releaseTag.isNullOrBlank() && !it.assetName.isNullOrBlank() })
     }
+
+    @Test
+    fun resolveCdnZipUrl_prefersCatalogReleaseBaseUrlOverDefault() {
+        val sampleJson = """
+            {
+              "version": 5,
+              "releaseBaseUrl": "https://maps.appmanufacture.dev/",
+              "countries": [
+                {
+                  "countryCode": "CZ",
+                  "countryName": "Czechia",
+                  "regions": [
+                    {
+                      "id": "jihomoravsky_kraj",
+                      "title": "South Moravia",
+                      "centerLat": 49.08,
+                      "centerLon": 16.58,
+                      "releaseTag": "world-eu",
+                      "assetName": "jihomoravsky_kraj.zip"
+                    }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+        val region = OfflineRegionHelper.parseCatalogJson(sampleJson)!!.single()
+        assertEquals(
+            "https://maps.appmanufacture.dev/releases/world-eu/jihomoravsky_kraj.zip",
+            OfflineRegionHelper.resolveCdnZipUrl(region, "https://pub-33e873553ed746db815f152b72306952.r2.dev")
+        )
+
+        val fallbackRegion = region.copy(releaseBaseUrl = null)
+        assertEquals(
+            "https://pub-33e873553ed746db815f152b72306952.r2.dev/releases/world-eu/jihomoravsky_kraj.zip",
+            OfflineRegionHelper.resolveCdnZipUrl(fallbackRegion, "https://pub-33e873553ed746db815f152b72306952.r2.dev/")
+        )
+    }
 }
