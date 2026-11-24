@@ -183,4 +183,18 @@ class OfflineRegionHelperTest {
             OfflineRegionHelper.resolveCdnZipUrl(fallbackRegion, "https://pub-33e873553ed746db815f152b72306952.r2.dev/")
         )
     }
+
+    @Test
+    fun enqueueUniquePreset_deduplicatesActiveAndQueuedRegions() {
+        val queue = mutableListOf<OfflinePresetRegion>()
+        val r1 = OfflinePresetRegion("at_wien", "Vienna", "Austria", 48.2, 16.3)
+        val r2 = OfflinePresetRegion("at_niederoesterreich", "Lower Austria", "Austria", 48.1, 15.6)
+        val r3 = OfflinePresetRegion("at_steiermark", "Styria", "Austria", 47.1, 15.4)
+
+        assertTrue(!OfflineRegionHelper.enqueueUniquePreset(queue, "at_wien", r1))
+        assertTrue(OfflineRegionHelper.enqueueUniquePreset(queue, "at_wien", r2))
+        assertTrue(!OfflineRegionHelper.enqueueUniquePreset(queue, "at_wien", r2))
+        assertTrue(OfflineRegionHelper.enqueueUniquePreset(queue, "at_wien", r3))
+        assertEquals(listOf("at_niederoesterreich", "at_steiermark"), queue.map { it.id })
+    }
 }

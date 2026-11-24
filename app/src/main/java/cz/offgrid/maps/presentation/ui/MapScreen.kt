@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -853,6 +852,8 @@ private fun GpxRoutePickerOverlay(
     }
 
     val catalogRegions by OfflineRegionHelper.catalogRegions.collectAsState()
+    val queuedRegions by OfflineRegionHelper.queuedRegions.collectAsState()
+    val queuedIds = remember(queuedRegions) { queuedRegions.map { it.id }.toSet() }
     val activePois by OfflineRegionHelper.activePois.collectAsState()
     val savedByTitle = remember(savedRegions) {
         savedRegions.associateBy { it.displayName }
@@ -939,10 +940,11 @@ private fun GpxRoutePickerOverlay(
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
                         ) {
+                            val queueSuffix = if (queuedRegions.isNotEmpty()) " · +${queuedRegions.size}" else ""
                             val dlLabel = if (!activeDownloadTitle.isNullOrBlank()) {
-                                "⏳ $activeDownloadTitle ($offlineStatus)"
+                                "⏳ $activeDownloadTitle ($offlineStatus)$queueSuffix"
                             } else {
-                                "⏳ Downloading ($offlineStatus)"
+                                "⏳ Downloading ($offlineStatus)$queueSuffix"
                             }
                             Text(
                                 text = dlLabel,
@@ -1229,14 +1231,21 @@ private fun GpxRoutePickerOverlay(
                         }
                         items(nearbyRegions, key = { "nearby_${it.first.id}" }) { (preset, distKm) ->
                             val isActiveDl = isDownloading && preset.title == activeDownloadTitle
+                            val isQueued = preset.id in queuedIds
                             OfflinePresetRow(
                                 preset = preset,
                                 subtitleOverride = "~$distKm km · ${preset.subtitle}",
                                 isSaved = false,
-                                isDownloading = isDownloading,
+                                isQueued = isQueued,
                                 isActiveDownload = isActiveDl,
                                 accentColor = TrailYellow,
-                                onClick = { onDownloadPresetRegion(preset) }
+                                onClick = {
+                                    if (isQueued) {
+                                        OfflineRegionHelper.removeFromDownloadQueue(preset.id)
+                                    } else if (!isActiveDl) {
+                                        onDownloadPresetRegion(preset)
+                                    }
+                                }
                             )
                         }
                     }
@@ -1381,18 +1390,19 @@ private fun GpxRoutePickerOverlay(
                     items(regionsInCountry, key = { "reg_${it.id}" }) { preset ->
                         val existingSaved = savedByTitle[preset.title]
                         val isActiveDl = isDownloading && preset.title == activeDownloadTitle
+                        val isQueued = preset.id in queuedIds
                         OfflinePresetRow(
                             preset = preset,
                             subtitleOverride = null,
                             isSaved = existingSaved != null,
-                            isDownloading = isDownloading,
+                            isQueued = isQueued,
                             isActiveDownload = isActiveDl,
                             accentColor = if (existingSaved != null) TrailGreen else TrailBlue,
                             onClick = {
-                                if (existingSaved != null) {
-                                    onSelectOfflineRegion(existingSaved)
-                                } else {
-                                    onDownloadPresetRegion(preset)
+                                when {
+                                    existingSaved != null -> onSelectOfflineRegion(existingSaved)
+                                    isQueued -> OfflineRegionHelper.removeFromDownloadQueue(preset.id)
+                                    !isActiveDl -> onDownloadPresetRegion(preset)
                                 }
                             }
                         )
@@ -1568,21 +1578,23 @@ private fun OfflinePresetRow(
     preset: OfflinePresetRegion,
     subtitleOverride: String?,
     isSaved: Boolean,
-    isDownloading: Boolean,
+    isQueued: Boolean,
     isActiveDownload: Boolean,
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    val effectiveAccent = if (isActiveDownload) TrailYellow else accentColor
-    val isDisabledByActive = !isSaved && isDownloading && !isActiveDownload
+    val effectiveAccent = when {
+        isActiveDownload -> TrailYellow
+        isQueued -> OutdoorAmber
+        else -> accentColor
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (isDisabledByActive) 0.45f else 1f)
             .clip(RoundedCornerShape(14.dp))
             .background(DarkSurface)
             .border(1.2.dp, effectiveAccent.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
-            .clickable(enabled = isSaved || !isDownloading) { onClick() }
+            .clickable(enabled = !isActiveDownload) { onClick() }
             .padding(horizontal = 10.dp, vertical = 6.5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -1592,17 +1604,22 @@ private fun OfflinePresetRow(
                 text = when {
                     isSaved -> "✓ ${preset.title}"
                     isActiveDownload -> "⏳ ${preset.title}"
+                    isQueued -> "⏱ ${preset.title}"
                     else -> preset.title
                 },
-                color = if (isActiveDownload) TrailYellow else OutdoorTextPrimary,
+                color = when {
+                    isActiveDownload -> TrailYellow
+                    isQueued -> OutdoorAmber
+                    else -> OutdoorTextPrimary
+                },
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = subtitleOverride ?: preset.subtitle,
-                color = OutdoorTextSecondary,
+                text = if (isQueued) "Queued · tap to remove" else (subtitleOverride ?: preset.subtitle),
+                color = if (isQueued) OutdoorAmber.copy(alpha = 0.85f) else OutdoorTextSecondary,
                 fontSize = 8.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1621,6 +1638,7 @@ private fun OfflinePresetRow(
                 text = when {
                     isSaved -> "✓"
                     isActiveDownload -> "⏳"
+                    isQueued -> "⏱"
                     else -> "⬇"
                 },
                 color = effectiveAccent,

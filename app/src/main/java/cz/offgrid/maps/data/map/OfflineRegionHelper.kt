@@ -1,6 +1,8 @@
 package cz.offgrid.maps.data.map
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import cz.offgrid.maps.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,15 +90,23 @@ object OfflineRegionHelper {
     private const val POIS_FRAGMENT_FILE = "pois.features"
 
     private val trailExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val releaseAssetUrlCache = ConcurrentHashMap<String, Map<String, String>>()
+    private val downloadLock = Any()
+    private val pendingDownloadQueue = mutableListOf<OfflinePresetRegion>()
     @Volatile
     private var activeCatalogReleaseBaseUrl: String? = null
+    @Volatile
+    private var activeDownloadId: String? = null
 
     private val _statusText = MutableStateFlow("NO MAP")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
 
     private val _activeDownloadTitle = MutableStateFlow<String?>(null)
     val activeDownloadTitle: StateFlow<String?> = _activeDownloadTitle.asStateFlow()
+
+    private val _queuedRegions = MutableStateFlow<List<OfflinePresetRegion>>(emptyList())
+    val queuedRegions: StateFlow<List<OfflinePresetRegion>> = _queuedRegions.asStateFlow()
 
     private val _downloadError = MutableStateFlow<String?>(null)
     val downloadError: StateFlow<String?> = _downloadError.asStateFlow()
@@ -418,12 +428,12 @@ object OfflineRegionHelper {
                         if (status != null && !status.isComplete) {
                             startRegionDownload(context, latest)
                         } else {
-                            finishDownloadAndUpdateConnectivity(context)
+                            finishDownloadPart(context, vectorDone = true)
                         }
                     }
 
                     override fun onError(error: String?) {
-                        finishDownloadAndUpdateConnectivity(context)
+                        finishDownloadPart(context, vectorDone = true)
                     }
                 })
             }
@@ -435,8 +445,10 @@ object OfflineRegionHelper {
     }
 
     private fun startRegionDownload(context: Context, offlineRegion: OfflineRegion) {
-        isDownloading = true
-        isVectorDownloadInFlight = true
+        synchronized(downloadLock) {
+            isDownloading = true
+            isVectorDownloadInFlight = true
+        }
         _downloadError.value = null
         MapLibre.setConnected(true)
         offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
@@ -445,8 +457,7 @@ object OfflineRegionHelper {
                 if (status.isComplete) {
                     offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                     _downloadError.value = null
-                    isVectorDownloadInFlight = false
-                    finishDownloadAndUpdateConnectivity(context)
+                    finishDownloadPart(context, vectorDone = true)
                 } else if (status.requiredResourceCount > 0) {
                     val pct = (100.0 * status.completedResourceCount / status.requiredResourceCount)
                         .toInt()
@@ -458,15 +469,13 @@ object OfflineRegionHelper {
             override fun onError(error: OfflineRegionError) {
                 offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                 _downloadError.value = "Connection lost – check Wi-Fi"
-                isVectorDownloadInFlight = false
-                finishDownloadAndUpdateConnectivity(context)
+                finishDownloadPart(context, vectorDone = true)
             }
 
             override fun mapboxTileCountLimitExceeded(limit: Long) {
                 offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                 _downloadError.value = "Storage limit reached – delete old region"
-                isVectorDownloadInFlight = false
-                finishDownloadAndUpdateConnectivity(context)
+                finishDownloadPart(context, vectorDone = true)
             }
         })
     }
@@ -639,23 +648,80 @@ object OfflineRegionHelper {
         }
     }
 
+    internal fun enqueueUniquePreset(
+        queue: MutableList<OfflinePresetRegion>,
+        currentActiveId: String?,
+        preset: OfflinePresetRegion
+    ): Boolean {
+        if (currentActiveId == preset.id || queue.any { it.id == preset.id }) {
+            return false
+        }
+        queue.add(preset)
+        return true
+    }
+
     /**
-     * Downloads the selected catalog region ([preset]) with a single tap, preferring single-ZIP
-     * bundles from GitHub Releases (`Koncpa/offgrid-maps-data`) with fallback to raw files.
+     * Removes a waiting region from the sequential download queue (does not abort the active one).
+     */
+    fun removeFromDownloadQueue(presetId: String) {
+        synchronized(downloadLock) {
+            if (pendingDownloadQueue.removeAll { it.id == presetId }) {
+                _queuedRegions.value = pendingDownloadQueue.toList()
+            }
+        }
+    }
+
+    /**
+     * Clears all waiting regions from the download queue.
+     */
+    fun clearDownloadQueue() {
+        synchronized(downloadLock) {
+            pendingDownloadQueue.clear()
+            _queuedRegions.value = emptyList()
+        }
+    }
+
+    /**
+     * Enqueues or starts downloading the selected catalog region ([preset]) with a single tap,
+     * preferring single-ZIP bundles from Cloudflare R2 CDN / GitHub Releases with fallback to raw files.
      */
     fun downloadPresetRegion(
         context: Context,
         preset: OfflinePresetRegion
     ) {
-        _downloadError.value = null
-        isDownloading = true
-        isPackageSyncInFlight = true
+        val appContext = context.applicationContext
+        var startNow = false
+        synchronized(downloadLock) {
+            if (isDownloading) {
+                if (enqueueUniquePreset(pendingDownloadQueue, activeDownloadId, preset)) {
+                    _queuedRegions.value = pendingDownloadQueue.toList()
+                }
+            } else {
+                isDownloading = true
+                isPackageSyncInFlight = true
+                isVectorDownloadInFlight = true
+                activeDownloadId = preset.id
+                _activeDownloadTitle.value = preset.title
+                _downloadError.value = null
+                _statusText.value = "DL 0%"
+                startNow = true
+            }
+        }
+        if (startNow) {
+            startPresetDownloadInternal(appContext, preset)
+        }
+    }
+
+    private fun startPresetDownloadInternal(
+        appContext: Context,
+        preset: OfflinePresetRegion
+    ) {
         thread(name = "OffGridGithubPkg_${preset.id}", isDaemon = true) {
             try {
-                val pkgDir = File(context.filesDir, "$PACKAGES_DIR/${preset.id}").apply {
+                val pkgDir = File(appContext.filesDir, "$PACKAGES_DIR/${preset.id}").apply {
                     if (!exists()) mkdirs()
                 }
-                val zipResult = downloadReleaseZipPackage(context, pkgDir, preset)
+                val zipResult = downloadReleaseZipPackage(appContext, pkgDir, preset)
                 val trailsOk: Boolean
                 val contoursImported: Boolean
                 if (zipResult != null && (zipResult.trailsOk || zipResult.contoursOk)) {
@@ -674,40 +740,46 @@ object OfflineRegionHelper {
                         File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
                     }
                     contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
-                        ContourTileManager.importTilePackage(context, input)
+                        ContourTileManager.importTilePackage(appContext, input)
                     }
                 }
                 if (contoursImported) {
                     ContourTileManager.ensureViewportContours(
-                        context = context,
+                        context = appContext,
                         centerLat = preset.centerLat,
                         centerLon = preset.centerLon,
                         zoom = 13.0,
                         allowNetworkFetch = false
                     )
                 } else {
-                    ContourTileManager.downloadContoursForArea(context, preset.centerLat, preset.centerLon)
+                    ContourTileManager.downloadContoursForArea(appContext, preset.centerLat, preset.centerLon)
                 }
                 if (!trailsOk && !contoursImported) {
                     _downloadError.value = "Package sync failed – check Wi-Fi"
                 }
                 trailExecutor.execute { invalidateTrailPackages() }
-                updateTrailsForViewport(context, preset.centerLat, preset.centerLon)
+                updateTrailsForViewport(appContext, preset.centerLat, preset.centerLon)
             } finally {
-                isPackageSyncInFlight = false
-                finishDownloadAndUpdateConnectivity(context)
+                finishDownloadPart(appContext, packageDone = true)
             }
         }
 
-        // 2. Download the vector tile pyramid for the region
-        downloadCustomBounds(
-            context = context,
-            centerLat = preset.centerLat,
-            centerLon = preset.centerLon,
-            halfLatSpan = preset.latSpanDeg / 2.0,
-            halfLonSpan = preset.lonSpanDeg / 2.0,
-            explicitTitle = preset.title
-        )
+        // 2. Download the vector tile pyramid on main looper for MapLibre thread safety
+        val startVector = {
+            downloadCustomBounds(
+                context = appContext,
+                centerLat = preset.centerLat,
+                centerLon = preset.centerLon,
+                halfLatSpan = preset.latSpanDeg / 2.0,
+                halfLonSpan = preset.lonSpanDeg / 2.0,
+                explicitTitle = preset.title
+            )
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            startVector()
+        } else {
+            mainHandler.post { startVector() }
+        }
     }
 
     private fun resolveReleaseAssetUrl(repo: String, releaseTag: String, assetName: String): String? {
@@ -1027,10 +1099,12 @@ object OfflineRegionHelper {
         val regionMeta = "Custom_${"%.2f".format(Locale.US, centerLat)}_${"%.2f".format(Locale.US, centerLon)}|$explicitTitle"
         val metadata = regionMeta.toByteArray(StandardCharsets.UTF_8)
 
-        isDownloading = true
-        isVectorDownloadInFlight = true
-        _activeDownloadTitle.value = explicitTitle
-        _statusText.value = "DL 0%"
+        synchronized(downloadLock) {
+            isDownloading = true
+            isVectorDownloadInFlight = true
+            _activeDownloadTitle.value = explicitTitle
+            _statusText.value = "DL 0%"
+        }
         MapLibre.setConnected(true)
 
         offlineManager.createOfflineRegion(
@@ -1043,22 +1117,49 @@ object OfflineRegionHelper {
                 }
 
                 override fun onError(error: String) {
-                    isVectorDownloadInFlight = false
-                    finishDownloadAndUpdateConnectivity(context)
+                    finishDownloadPart(context, vectorDone = true)
                 }
             }
         )
     }
 
-    private fun finishDownloadAndUpdateConnectivity(context: Context) {
-        if (isVectorDownloadInFlight || isPackageSyncInFlight) return
-        isDownloading = false
-        _activeDownloadTitle.value = null
-        val hasSaved = _savedRegions.value.isNotEmpty()
-        _isOfflineReady.value = hasSaved
-        _statusText.value = if (hasSaved) "OFFLINE" else "NO MAP"
-        refreshSavedRegions(context)
-        if (!isUserBrowsingMap && hasSaved) {
+    private fun finishDownloadPart(
+        context: Context,
+        vectorDone: Boolean = false,
+        packageDone: Boolean = false
+    ) {
+        val appContext = context.applicationContext
+        var nextPreset: OfflinePresetRegion? = null
+        var hasSavedSnapshot = false
+        synchronized(downloadLock) {
+            if (vectorDone) isVectorDownloadInFlight = false
+            if (packageDone) isPackageSyncInFlight = false
+            if (isVectorDownloadInFlight || isPackageSyncInFlight) return
+
+            if (pendingDownloadQueue.isNotEmpty()) {
+                val dequeued = pendingDownloadQueue.removeAt(0)
+                _queuedRegions.value = pendingDownloadQueue.toList()
+                isDownloading = true
+                isPackageSyncInFlight = true
+                isVectorDownloadInFlight = true
+                activeDownloadId = dequeued.id
+                _activeDownloadTitle.value = dequeued.title
+                _statusText.value = "DL 0%"
+                nextPreset = dequeued
+            } else {
+                isDownloading = false
+                activeDownloadId = null
+                _activeDownloadTitle.value = null
+                hasSavedSnapshot = _savedRegions.value.isNotEmpty()
+                _isOfflineReady.value = hasSavedSnapshot
+                _statusText.value = if (hasSavedSnapshot) "OFFLINE" else "NO MAP"
+            }
+        }
+        refreshSavedRegions(appContext)
+        val presetToStart = nextPreset
+        if (presetToStart != null) {
+            startPresetDownloadInternal(appContext, presetToStart)
+        } else if (!isUserBrowsingMap && hasSavedSnapshot) {
             MapLibre.setConnected(false)
         }
     }
