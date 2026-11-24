@@ -5,35 +5,110 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OffGrid Maps — Offline Hiking Maps for Wear OS</title>
   <style>
+    :root {
+      --amoled-black: #000000;
+      --dark-surface: #121212;
+      --surface-variant: #1e1e1e;
+      --border: #2c2c28;
+      --amber: #e07a00;
+      --lime: #00c814;
+      --text-primary: #d8d8d0;
+      --text-secondary: #a0a098;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #0f1412;
-      color: #e6ede9;
+      background: var(--amoled-black);
+      color: var(--text-primary);
       display: grid;
       place-items: center;
       min-height: 100vh;
       padding: 1.5rem;
+      line-height: 1.6;
     }
     main {
       max-width: 560px;
-      background: #171f1b;
-      border: 1px solid #26332c;
-      border-radius: 14px;
+      width: 100%;
+      background: var(--dark-surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
       padding: 2rem;
+      text-align: center;
     }
-    h1 { margin-top: 0; }
-    a { color: #4ade80; }
+    .icon-wrap {
+      display: inline-flex;
+      padding: 4px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      margin-bottom: 0.85rem;
+    }
+    svg { width: 76px; height: 76px; display: block; }
+    h1 { margin: 0 0 0.35rem; color: #ffffff; font-size: 1.7rem; }
+    .tagline { margin: 0 0 1.2rem; color: var(--text-secondary); font-size: 0.95rem; }
+    .trail-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      height: 4px;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 0 auto 1.4rem;
+      max-width: 240px;
+    }
+    .trail-bar span:nth-child(1) { background: #ea0000; }
+    .trail-bar span:nth-child(2) { background: #0077e6; }
+    .trail-bar span:nth-child(3) { background: #00c814; }
+    .trail-bar span:nth-child(4) { background: #e6b800; }
+    .actions {
+      display: grid;
+      gap: 0.7rem;
+      margin-top: 1.25rem;
+    }
+    a.pill {
+      display: block;
+      background: var(--surface-variant);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.85rem 1.15rem;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+    a.pill.primary {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: #000000;
+    }
+    a.pill:hover { border-color: var(--amber); }
+    .foot { margin-top: 1.4rem; font-size: 0.85rem; color: var(--text-secondary); }
   </style>
 </head>
 <body>
   <main>
-    <h1>OffGrid Maps (Wear OS)</h1>
-    <p>Standalone offline hiking maps, contour lines, survival POIs, and local GPX track recording for Wear OS watches.</p>
-    <ul>
-      <li><a href="./privacy.html">Privacy Policy</a></li>
-      <li>Support: <a href="mailto:appmanufacture.dev@gmail.com">appmanufacture.dev@gmail.com</a></li>
-    </ul>
+    <div class="icon-wrap">
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-label="OffGrid Maps watch icon">
+        <path fill="#000000" d="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0" />
+        <path fill="none" stroke="#242424" stroke-width="1.2" d="M24,24m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0" />
+        <path fill="none" stroke="#FFFFFF" stroke-width="2.0" stroke-linejoin="round" stroke-linecap="round" d="M10,21 L18,12 L23,17 L30,9 L38,21" />
+        <path fill="#FFFFFF" d="M11,23.5 h26 a1.5,1.5 0 0 1 1.5,1.5 v1.5 h-29 v-1.5 a1.5,1.5 0 0 1 1.5,-1.5 z" />
+        <path fill="#EA0000" d="M9.5,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#0077E6" d="M16.75,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#00C814" d="M24.0,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#E6B800" d="M31.25,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#FFFFFF" d="M9.5,34.5 h29 v1.5 a1.5,1.5 0 0 1 -1.5,1.5 h-26 a1.5,1.5 0 0 1 -1.5,-1.5 z" />
+      </svg>
+    </div>
+    <h1>OffGrid Maps</h1>
+    <p class="tagline">Standalone offline hiking maps, elevation contours, survival POIs, and local GPX track recording for Wear OS watches.</p>
+    <div class="trail-bar" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="actions">
+      <a class="pill primary" href="./privacy.html">Privacy Policy</a>
+      <a class="pill" href="mailto:appmanufacture.dev@gmail.com">Support: appmanufacture.dev@gmail.com</a>
+    </div>
+    <p class="foot">AppManufacture &middot; <code>cz.offgrid.maps</code></p>
   </main>
 </body>
 </html>

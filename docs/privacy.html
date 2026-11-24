@@ -6,117 +6,207 @@
   <title>Privacy Policy — OffGrid Maps (Wear OS)</title>
   <style>
     :root {
-      --bg: #0f1412;
-      --surface: #171f1b;
-      --border: #26332c;
-      --text: #e6ede9;
-      --muted: #9eb0a6;
-      --accent: #4ade80;
+      --amoled-black: #000000;
+      --dark-surface: #121212;
+      --surface-variant: #1e1e1e;
+      --border: #2c2c28;
+      --amber: #e07a00;
+      --lime: #00c814;
+      --text-primary: #d8d8d0;
+      --text-secondary: #a0a098;
+      --trail-red: #ea0000;
+      --trail-blue: #0077e6;
+      --trail-green: #00c814;
+      --trail-yellow: #e6b800;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--amoled-black);
+      color: var(--text-primary);
       line-height: 1.65;
       padding: 2rem 1rem 4rem;
     }
     main {
       max-width: 760px;
       margin: 0 auto;
-      background: var(--surface);
+      background: var(--dark-surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 22px;
       padding: 2rem 2.2rem;
     }
-    h1 { margin-top: 0; font-size: 1.75rem; line-height: 1.25; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .brand svg {
+      width: 56px;
+      height: 56px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.65rem;
+      line-height: 1.25;
+      color: #ffffff;
+    }
+    .subtitle {
+      margin: 0.2rem 0 0;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
+    .trail-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      height: 4px;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 1.1rem 0 1.35rem;
+    }
+    .trail-bar span:nth-child(1) { background: var(--trail-red); }
+    .trail-bar span:nth-child(2) { background: var(--trail-blue); }
+    .trail-bar span:nth-child(3) { background: var(--trail-green); }
+    .trail-bar span:nth-child(4) { background: var(--trail-yellow); }
+    .meta {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin: 0 0 1.4rem;
+    }
+    .pill-box {
+      background: var(--surface-variant);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--lime);
+      padding: 0.95rem 1.1rem;
+      border-radius: 14px;
+      margin: 1rem 0 1.6rem;
+    }
+    .pill-box strong.badge {
+      color: var(--lime);
+      text-transform: uppercase;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
     h2 {
-      margin-top: 2rem;
-      font-size: 1.15rem;
-      color: var(--accent);
-      border-bottom: 1px solid var(--border);
+      margin-top: 1.9rem;
+      font-size: 1.1rem;
+      color: var(--amber);
+      border-bottom: 1px solid var(--surface-variant);
       padding-bottom: 0.35rem;
     }
-    p, li { color: var(--text); }
-    .meta { color: var(--muted); font-size: 0.92rem; margin-bottom: 1.5rem; }
-    .box {
-      background: rgba(74, 222, 128, 0.08);
-      border-left: 3px solid var(--accent);
-      padding: 0.85rem 1rem;
-      border-radius: 6px;
-      margin: 1rem 0;
-    }
-    a { color: var(--accent); }
+    p, li { color: var(--text-primary); }
+    ul { padding-left: 1.25rem; }
+    li { margin-bottom: 0.45rem; }
+    a { color: var(--amber); text-decoration: none; }
+    a:hover { text-decoration: underline; }
     code {
-      background: #0b0f0d;
-      padding: 0.15rem 0.35rem;
-      border-radius: 4px;
-      font-size: 0.9em;
+      background: var(--amoled-black);
+      border: 1px solid var(--surface-variant);
+      color: var(--text-primary);
+      padding: 0.12rem 0.4rem;
+      border-radius: 6px;
+      font-size: 0.88em;
+    }
+    footer {
+      margin-top: 2.2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--surface-variant);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      color: var(--text-secondary);
+      font-size: 0.88rem;
     }
     @media (max-width: 600px) {
-      main { padding: 1.35rem 1.15rem; }
+      main { padding: 1.35rem 1.1rem; border-radius: 18px; }
     }
   </style>
 </head>
 <body>
   <main>
-    <h1>Privacy Policy — OffGrid Maps</h1>
+    <div class="brand">
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-label="OffGrid Maps watch icon">
+        <path fill="#000000" d="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0" />
+        <path fill="none" stroke="#242424" stroke-width="1.2" d="M24,24m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0" />
+        <path fill="none" stroke="#FFFFFF" stroke-width="2.0" stroke-linejoin="round" stroke-linecap="round" d="M10,21 L18,12 L23,17 L30,9 L38,21" />
+        <path fill="#FFFFFF" d="M11,23.5 h26 a1.5,1.5 0 0 1 1.5,1.5 v1.5 h-29 v-1.5 a1.5,1.5 0 0 1 1.5,-1.5 z" />
+        <path fill="#EA0000" d="M9.5,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#0077E6" d="M16.75,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#00C814" d="M24.0,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#E6B800" d="M31.25,27.5 h7.25 v6 h-7.25 z" />
+        <path fill="#FFFFFF" d="M9.5,34.5 h29 v1.5 a1.5,1.5 0 0 1 -1.5,1.5 h-26 a1.5,1.5 0 0 1 -1.5,-1.5 z" />
+      </svg>
+      <div>
+        <h1>Privacy Policy</h1>
+        <p class="subtitle">OffGrid Maps &middot; Standalone Wear OS Hiking Navigation</p>
+      </div>
+    </div>
+
+    <div class="trail-bar" aria-hidden="true">
+      <span></span><span></span><span></span><span></span>
+    </div>
+
     <p class="meta">
-      Application: <strong>OffGrid Maps</strong> (<code>cz.offgrid.maps</code>, Wear OS)<br />
-      Developer: <strong>AppManufacture</strong> &middot; Contact:
-      <a href="mailto:appmanufacture.dev@gmail.com">appmanufacture.dev@gmail.com</a><br />
+      Package: <code>cz.offgrid.maps</code> &middot; Developer: <strong>AppManufacture</strong> &middot;
       Effective Date: November 24, 2026
     </p>
 
-    <div class="box">
-      <strong>Summary:</strong> OffGrid Maps is an offline-first hiking map and GPX tracker for Wear OS.
-      The app does <strong>not</strong> require an account, does <strong>not</strong> contain ads or analytics SDKs,
-      and does <strong>not</strong> upload your location or recorded tracks to developer servers.
+    <div class="pill-box">
+      <strong class="badge">Offline-First &middot; Zero Telemetry</strong>
+      OffGrid Maps is a standalone Wear OS app. It requires <strong>no account</strong>, contains <strong>no ads or analytics SDKs</strong>, and <strong>never uploads</strong> your GPS location or recorded GPX tracks to developer servers.
     </div>
 
     <h2>1. Information We Do Not Collect</h2>
-    <p>OffGrid Maps does not collect, sell, rent, or transmit personal identifiers such as your name, email address, phone number, device advertising ID, crash telemetry, or usage analytics. There are no user accounts and no third-party advertising or analytics SDKs bundled in the application.</p>
+    <p>OffGrid Maps does not collect, sell, rent, or transmit personal identifiers such as your name, email address, phone number, advertising ID, crash telemetry, or usage analytics. There are no user accounts and no third-party advertising or analytics libraries inside the app.</p>
 
     <h2>2. Location Data &amp; Background Tracking</h2>
-    <p>OffGrid Maps requests location permissions (<code>ACCESS_FINE_LOCATION</code>, <code>ACCESS_COARSE_LOCATION</code>, and optionally <code>ACCESS_BACKGROUND_LOCATION</code> with <code>FOREGROUND_SERVICE_LOCATION</code>) solely to provide core navigation and outdoor tracking features on your watch:</p>
+    <p>OffGrid Maps requests location permissions (<code>ACCESS_FINE_LOCATION</code>, <code>ACCESS_COARSE_LOCATION</code>, and optionally <code>ACCESS_BACKGROUND_LOCATION</code> with <code>FOREGROUND_SERVICE_LOCATION</code>) solely for core outdoor navigation on your watch:</p>
     <ul>
-      <li><strong>Real-time map positioning:</strong> Displaying your current GPS coordinates on offline hiking maps.</li>
-      <li><strong>Workout &amp; hike GPX recording:</strong> Recording your route continuously while a tracking session is active, including when the watch screen turns off or the app is in the background.</li>
+      <li><strong>Live map positioning:</strong> Displaying your current GPS position on offline hiking maps.</li>
+      <li><strong>GPX track recording:</strong> Continuously recording your hiking route while a tracking session is active, including when the watch screen dims or turns off.</li>
     </ul>
-    <p>
-      <strong>Local-only storage:</strong> All GPS positions and recorded GPX routes remain strictly on your watch in local app storage.
-      The developer never receives or accesses your location history. You can delete individual tracks inside the app or remove all local data at any time by clearing app storage or uninstalling OffGrid Maps.
-    </p>
+    <p><strong>Local-only storage:</strong> All GPS coordinates and recorded GPX routes stay strictly on your watch in local app storage. The developer never receives or accesses your location history. You can delete recorded tracks in the app or remove all data at any time by clearing app storage or uninstalling OffGrid Maps.</p>
 
     <h2>3. GPX Export &amp; Sharing</h2>
-    <p>If you explicitly tap the export or share action for a recorded route, the app writes a <code>.gpx</code> file on your device or passes it via Android's system share mechanism (<code>FileProvider</code>) to an app you choose. Once shared to an external app, that app's own privacy policy applies.</p>
+    <p>When you explicitly choose to export or share a recorded route, the app writes a <code>.gpx</code> file locally or hands it off through Android's system share mechanism (<code>FileProvider</code>) to an app you select. Once shared, that target app's own privacy policy applies.</p>
 
     <h2>4. Network Connections &amp; Offline Map Downloads</h2>
-    <p>When you browse online or choose to download offline regional map packages, the watch makes standard HTTPS requests (without user accounts or personal tracking parameters) to retrieve public map data:</p>
+    <p>When you browse online or download offline regional map packages, the watch performs standard HTTPS requests (without user accounts or personal tracking parameters) to fetch public map data:</p>
     <ul>
-      <li><strong>Map Catalog &amp; Regional Packages (Cloudflare Workers / R2 CDN, with GitHub Releases fallback):</strong> Downloads the public region catalog and compressed regional hiking/POI/contour ZIP bundles that you select.</li>
-      <li><strong>Vector Base Map Tiles &amp; Fonts (OpenFreeMap):</strong> Streams base vector map tiles and map fonts when online or when caching an area for offline viewing.</li>
-      <li><strong>Elevation Contour Fallback (AWS Open Data Terrain Tiles):</strong> Optionally fetches public terrain elevation tiles if they are not already bundled in your downloaded regional package.</li>
-      <li><strong>On-device Localhost Server (<code>127.0.0.1</code>):</strong> Used purely internally on the watch to feed locally stored GeoJSON and contour data to the map renderer; no data leaves the device.</li>
+      <li><strong>Map Catalog &amp; Region Packages (Cloudflare Workers / R2 CDN, with GitHub Releases fallback):</strong> Downloads the public region catalog and compressed hiking trail, POI, and contour ZIP packages you select.</li>
+      <li><strong>Vector Base Map Tiles &amp; Fonts (OpenFreeMap):</strong> Streams base vector map tiles and fonts when online or when caching an area on your watch.</li>
+      <li><strong>Elevation Contour Fallback (AWS Open Data Terrain Tiles):</strong> Optionally fetches public terrain tiles if elevation contours are not already bundled in your downloaded regional package.</li>
+      <li><strong>On-device Localhost Server (<code>127.0.0.1</code>):</strong> Communicates strictly internally on your watch between the local style/tile server and the map renderer; no data leaves the device.</li>
     </ul>
-    <p>Standard server access logs (such as IP address and requested file path) may be temporarily processed by those infrastructure providers strictly to deliver the requested map files.</p>
+    <p>Standard server access metadata (such as IP address and requested file path) may be temporarily processed by those infrastructure providers solely to serve the requested map files.</p>
 
     <h2>5. Other Permissions</h2>
     <ul>
-      <li><code>POST_NOTIFICATIONS</code>: Displays the active foreground service notification while GPS track recording is running.</li>
-      <li><code>WAKE_LOCK</code> &amp; <code>VIBRATE</code>: Keeps GPS recording reliable during hikes and provides tactile feedback.</li>
-      <li><code>INTERNET</code> &amp; <code>ACCESS_NETWORK_STATE</code>: Downloads user-requested map packages and checks connectivity before downloads.</li>
+      <li><code>POST_NOTIFICATIONS</code>: Shows the ongoing foreground notification while GPS track recording is active.</li>
+      <li><code>WAKE_LOCK</code> &amp; <code>VIBRATE</code>: Keeps GPS recording reliable during hikes and provides haptic feedback.</li>
+      <li><code>INTERNET</code> &amp; <code>ACCESS_NETWORK_STATE</code>: Downloads requested offline map packages and checks connectivity beforehand.</li>
     </ul>
 
     <h2>6. Children's Privacy</h2>
     <p>OffGrid Maps does not knowingly collect personal information from anyone, including children under 13 (or the applicable age in your jurisdiction).</p>
 
     <h2>7. Changes to This Policy</h2>
-    <p>We may update this Privacy Policy from time to time if app features or data sources change. Any updates will be published on this page with an updated effective date.</p>
+    <p>If app features or map data sources change, this Privacy Policy will be updated on this page with a revised effective date.</p>
 
     <h2>8. Contact</h2>
-    <p>If you have any questions about this Privacy Policy or how OffGrid Maps handles data, contact us at <a href="mailto:appmanufacture.dev@gmail.com">appmanufacture.dev@gmail.com</a>.</p>
+    <p>Questions about privacy or OffGrid Maps can be sent to <a href="mailto:appmanufacture.dev@gmail.com">appmanufacture.dev@gmail.com</a>.</p>
+
+    <footer>
+      <span>&copy; 2026 AppManufacture</span>
+      <a href="./index.html">&larr; OffGrid Maps Home</a>
+    </footer>
   </main>
 </body>
 </html>
