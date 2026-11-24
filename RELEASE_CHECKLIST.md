@@ -19,8 +19,10 @@ Standalone pre-release checklist before publishing OffGrid Maps to Google Play.
 - [ ] App UI, map labels (`name:en` → `name`), and Play Store listing metadata verified 100% in English.
 - [ ] Permissions (`ACCESS_FINE_LOCATION`, `FOREGROUND_SERVICE_LOCATION`, `BODY_SENSORS` if used) and privacy policy prepared for Google Play Console Data Safety form.
 
-## Studio Account & Domain Notes
+## Studio Account, Live Cloudflare Endpoints & Domain Notes
 - **Publisher / Developer Google Account:** `appmanufacture.dev@gmail.com`
-- **Available Domain Options (checked via RDAP / WHOIS on 2026-11-24):**
-  - `appmanufacture.dev` (available) — recommended studio domain for Privacy Policy hosting, Cloudflare R2 CDN (`maps.appmanufacture.dev`), and free per-app Cloudflare Email Routing aliases (`offgridmaps@appmanufacture.dev`).
+- **Privacy Policy URL (Cloudflare Pages):** `https://offgridmaps.pages.dev/privacy` (Home: `https://offgridmaps.pages.dev/`)
+- **Map CDN URL (Cloudflare Workers → R2 `offgridmapsdata`):** `https://offgrid-maps-cdn.appmanufacture-dev.workers.dev`
+- **Optional Future Custom Domain Notes (checked via RDAP / WHOIS on 2026-11-24):**
+  - `appmanufacture.dev` (available) — optional studio domain for custom-domain CDN (`maps.appmanufacture.dev`), branded Privacy Policy, and Cloudflare Email Routing aliases (`offgridmaps@appmanufacture.dev`).
   - `appmanufacture.cz`, `offgridmaps.app`, `offgridmaps.dev` (also available at time of check).
