@@ -71,3 +71,8 @@ The core mission of the product is to deliver **100% reliable offline topographi
 ### 5. On-Watch Elevation Profile Chart
 - **Description:**
   - Tapping the altitude indicator (`▲ 368 m`) in the top status pill opens a compact elevation profile chart of the active GPX route, highlighting the hiker's current position along the climb.
+
+### 6. Paid Companion Mobile App (GPX Manager & Route Library)
+- **Description:**
+  - Dedicated companion Android app for comfortable GPX import/organization, watch sync, and a lightweight curated + community route library (one-time purchase; watch app remains free).
+  - See full concept and phased launch notes in **[COMPANION_APP_IDEA.md](./COMPANION_APP_IDEA.md)**.
