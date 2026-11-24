@@ -71,6 +71,9 @@ data class OutdoorPoi(
 object OfflineRegionHelper {
 
     private const val REGION_NAME_JMK = "Jihomoravsky_kraj_z14_v3"
+    private const val MAP_PREFS_NAME = "offgrid_map_prefs"
+    private const val KEY_LAST_LAT = "last_viewport_lat"
+    private const val KEY_LAST_LON = "last_viewport_lon"
     private const val CACHED_CATALOG_FILE = "cached_github_catalog.json"
     private const val ASSET_DEFAULT_CATALOG_FILE = "default_catalog.json"
     private const val ASSET_JMK_POIS_FILE = "jmk_outdoor_pois.geojson"
@@ -80,7 +83,7 @@ object OfflineRegionHelper {
 
     private val trailExecutor = Executors.newSingleThreadExecutor()
 
-    private val _statusText = MutableStateFlow("JMK")
+    private val _statusText = MutableStateFlow("NO MAP")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
 
     private val _activeDownloadTitle = MutableStateFlow<String?>(null)
@@ -95,6 +98,27 @@ object OfflineRegionHelper {
     private val _savedRegions = MutableStateFlow<List<SavedOfflineRegion>>(emptyList())
     val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
 
+    fun saveLastKnownCenter(context: Context, lat: Double, lon: Double) {
+        context.getSharedPreferences(MAP_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(KEY_LAST_LAT, lat.toFloat())
+            .putFloat(KEY_LAST_LON, lon.toFloat())
+            .apply()
+    }
+
+    fun loadLastKnownCenter(context: Context): Pair<Double, Double> {
+        val prefs = context.getSharedPreferences(MAP_PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.contains(KEY_LAST_LAT) && prefs.contains(KEY_LAST_LON)) {
+            return prefs.getFloat(KEY_LAST_LAT, 49.1246f).toDouble() to
+                prefs.getFloat(KEY_LAST_LON, 16.3353f).toDouble()
+        }
+        val savedFirst = _savedRegions.value.firstOrNull()
+        if (savedFirst != null) {
+            return savedFirst.centerLat to savedFirst.centerLon
+        }
+        return 49.1246 to 16.3353
+    }
+
     fun resolveContinent(countryCode: String): String {
         return when (countryCode.uppercase(Locale.US)) {
             "US", "CA", "MX" -> "North America"
@@ -107,6 +131,7 @@ object OfflineRegionHelper {
      * Built-in default catalog of Czech regions (available even offline before first GitHub sync).
      */
     val presetRegions: List<OfflinePresetRegion> = listOf(
+        OfflinePresetRegion("jihomoravsky_kraj", "South Moravia", "Brno, Pálava, Moravian Karst, Podyjí, Znojmo", 49.08, 16.58, 0.78, 1.30),
         OfflinePresetRegion("kraj_vysocina", "Vysočina Region", "Jihlava, Třebíč, Žďár n. S., Havl. Brod", 49.45, 15.68, 0.55, 0.75),
         OfflinePresetRegion("jihocesky_kraj", "South Bohemia", "Č. Budějovice, Tábor, Č. Krumlov, Písek", 49.05, 14.48, 0.65, 0.90),
         OfflinePresetRegion("zlinsky_kraj", "Zlín Region", "Zlín, Vsetín, Uh. Hradiště, Kroměříž", 49.22, 17.72, 0.50, 0.70),
@@ -223,7 +248,7 @@ object OfflineRegionHelper {
         isUserBrowsingMap = browsing
         if (browsing) {
             MapLibre.setConnected(true)
-        } else if (!isDownloading) {
+        } else if (!isDownloading && _isOfflineReady.value) {
             MapLibre.setConnected(false)
         }
     }
@@ -277,10 +302,19 @@ object OfflineRegionHelper {
                 }
 
                 // Keep default South Moravia at the top, followed by newest regions
-                _savedRegions.value = uniqueMapped.sortedWith(
+                val sorted = uniqueMapped.sortedWith(
                     compareByDescending<SavedOfflineRegion> { it.isDefaultJmk }
                         .thenByDescending { it.id }
                 )
+                _savedRegions.value = sorted
+                val hasRegions = sorted.isNotEmpty()
+                _isOfflineReady.value = hasRegions
+                if (!isDownloading) {
+                    _statusText.value = if (hasRegions) "OFFLINE" else "NO MAP"
+                    if (!hasRegions) {
+                        MapLibre.setConnected(true)
+                    }
+                }
             }
 
             override fun onError(error: String) {
@@ -315,9 +349,13 @@ object OfflineRegionHelper {
         })
     }
 
-    fun ensureSouthMoraviaOffline(context: Context, @Suppress("UNUSED_PARAMETER") styleJson: String) {
-        ContourTileManager.loadCachedCustomContours(context)
-        updateTrailsForViewport(context, 49.1246, 16.3353)
+    /**
+     * Initializes offline region state around the user's current/last known coordinates without
+     * forcing a hardcoded South Moravia vector download for users in other regions.
+     */
+    fun initializeOfflineRegions(context: Context, centerLat: Double, centerLon: Double) {
+        ContourTileManager.loadCachedCustomContours(context, centerLat, centerLon)
+        updateTrailsForViewport(context, centerLat, centerLon)
         if (isInitialized) {
             refreshSavedRegions(context)
             return
@@ -330,66 +368,33 @@ object OfflineRegionHelper {
         offlineManager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
             override fun onList(offlineRegions: Array<OfflineRegion>?) {
                 refreshSavedRegions(context)
-                val existing = offlineRegions?.firstOrNull { region ->
-                    val name = String(region.metadata, StandardCharsets.UTF_8)
-                    name == REGION_NAME_JMK
-                }
-
-                if (existing != null) {
-                    existing.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
-                        override fun onStatus(status: OfflineRegionStatus?) {
-                            if (status != null && status.isComplete) {
-                                finishDownloadAndUpdateConnectivity(context)
-                            } else {
-                                startRegionDownload(context, existing)
-                            }
-                        }
-
-                        override fun onError(error: String?) {
-                            finishDownloadAndUpdateConnectivity(context)
-                        }
-                    })
+                val regions = offlineRegions ?: emptyArray()
+                if (regions.isEmpty()) {
+                    _isOfflineReady.value = false
+                    _statusText.value = "NO MAP"
+                    MapLibre.setConnected(true)
                     return
                 }
 
-                MapLibre.setConnected(true)
-                val styleUrl = ensureLocalStyleServerUrl()
-
-                val bounds = LatLngBounds.from(
-                    49.42,
-                    16.82,
-                    48.78,
-                    16.02
-                )
-
-                val definition = OfflineTilePyramidRegionDefinition(
-                    styleUrl,
-                    bounds,
-                    8.0,
-                    14.0,
-                    1.0f
-                )
-
-                val metadata = REGION_NAME_JMK.toByteArray(StandardCharsets.UTF_8)
-
-                offlineManager.createOfflineRegion(
-                    definition,
-                    metadata,
-                    object : OfflineManager.CreateOfflineRegionCallback {
-                        override fun onCreate(offlineRegion: OfflineRegion) {
-                            refreshSavedRegions(context)
-                            startRegionDownload(context, offlineRegion)
-                        }
-
-                        override fun onError(error: String) {
+                // Resume the latest region if its download was interrupted, otherwise lock offline mode
+                val latest = regions.maxByOrNull { it.id } ?: return
+                latest.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
+                    override fun onStatus(status: OfflineRegionStatus?) {
+                        if (status != null && !status.isComplete) {
+                            startRegionDownload(context, latest)
+                        } else {
                             finishDownloadAndUpdateConnectivity(context)
                         }
                     }
-                )
+
+                    override fun onError(error: String?) {
+                        finishDownloadAndUpdateConnectivity(context)
+                    }
+                })
             }
 
             override fun onError(error: String) {
-                _statusText.value = "JMK"
+                _statusText.value = "NO MAP"
             }
         })
     }

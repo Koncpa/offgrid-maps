@@ -131,6 +131,8 @@ fun MapScreen(
     val isOffRoute by TrackingManager.isOffRoute.collectAsState()
     val lastSavedSummary by TrackingManager.lastSavedSummary.collectAsState()
     val offlineStatus by OfflineRegionHelper.statusText.collectAsState()
+    val isOfflineReady by OfflineRegionHelper.isOfflineReady.collectAsState()
+    val catalogRegions by OfflineRegionHelper.catalogRegions.collectAsState()
     val activeDownloadTitle by OfflineRegionHelper.activeDownloadTitle.collectAsState()
     val downloadError by OfflineRegionHelper.downloadError.collectAsState()
     val savedOfflineRegions by OfflineRegionHelper.savedRegions.collectAsState()
@@ -138,6 +140,7 @@ fun MapScreen(
 
     var zoomLevel by remember { mutableFloatStateOf(13.0f) }
     var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    var dismissOfflinePrompt by remember { mutableStateOf(false) }
 
     // Haptic alert on the wrist when deviating from the planned GPX route (> 60 m)
     LaunchedEffect(isOffRoute) {
@@ -160,8 +163,11 @@ fun MapScreen(
         OfflineRegionHelper.setBrowsingMode(!isFollowingGps && !isTracking)
     }
 
-    // Default location: South Moravian Region (Oslavany: 49.1246, 16.3353)
-    var activeLocation by remember { mutableStateOf(LatLng(49.1246, 16.3353)) }
+    // Start on user's last known position (or nearest saved region / fallback)
+    var activeLocation by remember {
+        val (lat, lon) = OfflineRegionHelper.loadLastKnownCenter(context)
+        mutableStateOf(LatLng(lat, lon))
+    }
 
     // Camera follows GPS only while the screen is awake AND the user has not panned away (isFollowingGps)
     LaunchedEffect(latestGpsPoint, isScreenVisible) {
@@ -169,6 +175,7 @@ fun MapScreen(
             latestGpsPoint?.let { pt ->
                 val newLatLng = LatLng(pt.latitude, pt.longitude)
                 activeLocation = newLatLng
+                OfflineRegionHelper.saveLastKnownCenter(context, pt.latitude, pt.longitude)
                 if (isFollowingGps) {
                     maplibreMapInstance?.moveCamera(
                         CameraUpdateFactory.newLatLng(newLatLng)
@@ -219,6 +226,7 @@ fun MapScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+        OfflineRegionHelper.syncCatalogFromGithub(context)
         val recoveredFile = withContext(Dispatchers.IO) {
             GpxExporter.recoverUnfinishedTrackIfAny(context)
         }
@@ -415,6 +423,61 @@ fun MapScreen(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        }
+
+        // For users without any saved offline region yet, suggest the nearest catalog region by GPS
+        if (lastSavedSummary == null &&
+            !isOfflineReady &&
+            savedOfflineRegions.isEmpty() &&
+            activeDownloadTitle == null &&
+            offlineStatus == "NO MAP" &&
+            !dismissOfflinePrompt &&
+            latestGpsPoint != null
+        ) {
+            val nearestPreset = remember(catalogRegions, activeLocation) {
+                catalogRegions.minByOrNull { preset ->
+                    TrackingManager.calculateDistanceMeters(
+                        activeLocation.latitude, activeLocation.longitude,
+                        preset.centerLat, preset.centerLon
+                    )
+                }
+            }
+            if (nearestPreset != null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 58.dp, start = 22.dp, end = 22.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(AmoledBlack.copy(alpha = 0.94f), RoundedCornerShape(12.dp))
+                        .border(1.2.dp, TrailBlue, RoundedCornerShape(12.dp))
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            OfflineRegionHelper.downloadPresetRegion(context, nearestPreset)
+                        }
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "⬇ Get: ${nearestPreset.title}",
+                        color = TrailBlue,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Text(
+                        text = "✕",
+                        color = OutdoorTextSecondary,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { dismissOfflinePrompt = true }
+                            .padding(horizontal = 2.dp)
+                    )
+                }
             }
         }
 

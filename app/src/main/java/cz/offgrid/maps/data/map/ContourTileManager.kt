@@ -107,13 +107,17 @@ object ContourTileManager {
     }
 
     /**
-     * Loads offline contour tiles around the default location at app startup.
+     * Loads offline contour tiles around the specified startup location.
      */
-    fun loadCachedCustomContours(context: Context) {
+    fun loadCachedCustomContours(
+        context: Context,
+        centerLat: Double = 49.1246,
+        centerLon: Double = 16.3353
+    ) {
         ensureViewportContours(
             context = context,
-            centerLat = 49.1246,
-            centerLon = 16.3353,
+            centerLat = centerLat,
+            centerLon = centerLon,
             zoom = 13.0,
             allowNetworkFetch = false
         )

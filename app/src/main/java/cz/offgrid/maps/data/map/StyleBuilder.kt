@@ -426,7 +426,7 @@ object StyleBuilder {
                 "viewpoint", "castle", "ruins", "cave_entrance", "picnic_site"
               ]]],
               "layout": {
-                "text-field": ["coalesce", ["get", "name:cs"], ["get", "name"], ["get", "subclass"]],
+                "text-field": ["coalesce", ["get", "name:en"], ["get", "name"], ["get", "subclass"]],
                 "text-font": ["Noto Sans Regular"],
                 "text-size": 9,
                 "text-anchor": "center",
@@ -517,8 +517,8 @@ object StyleBuilder {
               "layout": {
                 "text-field": ["case",
                   ["has", "ele"],
-                  ["concat", "▲ ", ["coalesce", ["get", "name:cs"], ["get", "name"]], " (", ["to-string", ["get", "ele"]], " m)"],
-                  ["concat", "▲ ", ["coalesce", ["get", "name:cs"], ["get", "name"]]]
+                  ["concat", "▲ ", ["coalesce", ["get", "name:en"], ["get", "name"]], " (", ["to-string", ["get", "ele"]], " m)"],
+                  ["concat", "▲ ", ["coalesce", ["get", "name:en"], ["get", "name"]]]
                 ],
                 "text-font": ["Noto Sans Regular"],
                 "text-size": 10,
@@ -536,7 +536,7 @@ object StyleBuilder {
               "source": "offline_source",
               "source-layer": "place",
               "layout": {
-                "text-field": ["coalesce", ["get", "name:cs"], ["get", "name"]],
+                "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
                 "text-font": ["Noto Sans Regular"],
                 "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 14, 12],
                 "text-anchor": "center"
@@ -555,7 +555,7 @@ object StyleBuilder {
               "minzoom": 14,
               "layout": {
                 "symbol-placement": "line",
-                "text-field": ["coalesce", ["get", "name:cs"], ["get", "name"]],
+                "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
                 "text-font": ["Noto Sans Regular"],
                 "text-size": 10
               },

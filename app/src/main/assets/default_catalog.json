@@ -1,12 +1,22 @@
 {
-  "version": 3,
-  "updatedAt": "2026-11-16",
+  "version": 4,
+  "updatedAt": "2026-11-23",
   "countries": [
     {
       "countryCode": "CZ",
       "countryName": "Czechia – Regions",
       "geofabrik": "europe/czech-republic",
       "regions": [
+        {
+          "id": "jihomoravsky_kraj",
+          "title": "South Moravia",
+          "subtitle": "Brno, Pálava, Moravian Karst, Podyjí, Znojmo",
+          "centerLat": 49.08,
+          "centerLon": 16.58,
+          "latSpanDeg": 0.78,
+          "lonSpanDeg": 1.30,
+          "packagePath": "maps/cz/jihomoravsky_kraj"
+        },
         {
           "id": "kraj_vysocina",
           "title": "Vysočina Region",
@@ -165,6 +175,26 @@
           "packagePath": "maps/sk/sk_presovsky_kraj"
         },
         {
+          "id": "sk_banskobystricky_kraj",
+          "title": "Banská Bystrica Region",
+          "subtitle": "Low Tatras South, Veľká Fatra, Poľana, Štiavnica",
+          "centerLat": 48.62,
+          "centerLon": 19.35,
+          "latSpanDeg": 0.70,
+          "lonSpanDeg": 1.15,
+          "packagePath": "maps/sk/sk_banskobystricky_kraj"
+        },
+        {
+          "id": "sk_kosicky_kraj",
+          "title": "Košice Region",
+          "subtitle": "Slovak Paradise, Volovec Mtns, Vihorlat",
+          "centerLat": 48.72,
+          "centerLon": 21.15,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 1.15,
+          "packagePath": "maps/sk/sk_kosicky_kraj"
+        },
+        {
           "id": "sk_trenciansky_kraj",
           "title": "Trenčín Region",
           "subtitle": "Trenčín, Považská Bystrica, White Carpathians",
@@ -173,6 +203,26 @@
           "latSpanDeg": 0.50,
           "lonSpanDeg": 0.70,
           "packagePath": "maps/sk/sk_trenciansky_kraj"
+        },
+        {
+          "id": "sk_trnavsky_kraj",
+          "title": "Trnava Region",
+          "subtitle": "Little Carpathians North, Záhorie, Piešťany",
+          "centerLat": 48.42,
+          "centerLon": 17.65,
+          "latSpanDeg": 0.75,
+          "lonSpanDeg": 0.70,
+          "packagePath": "maps/sk/sk_trnavsky_kraj"
+        },
+        {
+          "id": "sk_nitriansky_kraj",
+          "title": "Nitra Region",
+          "subtitle": "Považský Inovec, Tribeč, Nitra, Komárno",
+          "centerLat": 48.20,
+          "centerLon": 18.25,
+          "latSpanDeg": 0.75,
+          "lonSpanDeg": 0.90,
+          "packagePath": "maps/sk/sk_nitriansky_kraj"
         },
         {
           "id": "sk_bratislavsky_kraj",
@@ -202,6 +252,26 @@
           "packagePath": "maps/at/at_niederoesterreich"
         },
         {
+          "id": "at_wien",
+          "title": "Vienna & Vienna Woods",
+          "subtitle": "Wien, Wienerwald, Kahlenberg, Lobau",
+          "centerLat": 48.21,
+          "centerLon": 16.37,
+          "latSpanDeg": 0.35,
+          "lonSpanDeg": 0.45,
+          "packagePath": "maps/at/at_wien"
+        },
+        {
+          "id": "at_oberoesterreich",
+          "title": "Upper Austria",
+          "subtitle": "Salzkammergut, Dachstein, Hallstatt, Mühlviertel",
+          "centerLat": 47.95,
+          "centerLon": 13.85,
+          "latSpanDeg": 0.75,
+          "lonSpanDeg": 1.00,
+          "packagePath": "maps/at/at_oberoesterreich"
+        },
+        {
           "id": "at_steiermark",
           "title": "Styria (Steiermark)",
           "subtitle": "Dachstein, Schladming, Hochschwab",
@@ -212,14 +282,54 @@
           "packagePath": "maps/at/at_steiermark"
         },
         {
-          "id": "at_salzburg_tirol",
-          "title": "Salzburg & Tyrol (Alps)",
-          "subtitle": "Zell am See, Hohe Tauern, Innsbruck",
-          "centerLat": 47.28,
-          "centerLon": 12.55,
-          "latSpanDeg": 0.60,
+          "id": "at_burgenland",
+          "title": "Burgenland",
+          "subtitle": "Neusiedler See, Rosalia, Geschriebenstein",
+          "centerLat": 47.55,
+          "centerLon": 16.52,
+          "latSpanDeg": 0.85,
+          "lonSpanDeg": 0.55,
+          "packagePath": "maps/at/at_burgenland"
+        },
+        {
+          "id": "at_kaernten",
+          "title": "Carinthia (Kärnten)",
+          "subtitle": "Großglockner South, Karawanks, Villach, Klagenfurt",
+          "centerLat": 46.72,
+          "centerLon": 13.85,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 1.10,
+          "packagePath": "maps/at/at_kaernten"
+        },
+        {
+          "id": "at_salzburg",
+          "title": "Salzburg",
+          "subtitle": "Hohe Tauern, Zell am See, Berchtesgaden East",
+          "centerLat": 47.38,
+          "centerLon": 13.15,
+          "latSpanDeg": 0.65,
           "lonSpanDeg": 0.90,
-          "packagePath": "maps/at/at_salzburg_tirol"
+          "packagePath": "maps/at/at_salzburg"
+        },
+        {
+          "id": "at_tirol",
+          "title": "Tyrol (Tirol)",
+          "subtitle": "Innsbruck, Karwendel, Zillertal, Ötztal, Zugspitze",
+          "centerLat": 47.25,
+          "centerLon": 11.40,
+          "latSpanDeg": 0.65,
+          "lonSpanDeg": 1.15,
+          "packagePath": "maps/at/at_tirol"
+        },
+        {
+          "id": "at_vorarlberg",
+          "title": "Vorarlberg",
+          "subtitle": "Bregenzerwald, Silvretta, Montafon, Arlberg",
+          "centerLat": 47.22,
+          "centerLon": 9.90,
+          "latSpanDeg": 0.55,
+          "lonSpanDeg": 0.55,
+          "packagePath": "maps/at/at_vorarlberg"
         }
       ]
     },

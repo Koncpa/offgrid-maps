@@ -62,8 +62,9 @@ class StyleBuilderTest {
     @Test
     fun presetRegions_containsCzechAdministrativeRegionsLikeMapyCom() {
         val presets = OfflineRegionHelper.presetRegions
-        assertEquals(13, presets.size)
+        assertEquals(14, presets.size)
         val titles = presets.map { it.title }.toSet()
+        assertTrue(titles.contains("South Moravia"))
         assertTrue(titles.contains("Vysočina Region"))
         assertTrue(titles.contains("South Bohemia"))
         assertTrue(titles.contains("Moravian-Silesian"))

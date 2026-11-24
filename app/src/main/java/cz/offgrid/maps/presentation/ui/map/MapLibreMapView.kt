@@ -228,7 +228,11 @@ fun MapLibreMapView(
                 isStyleLoaded = true
 
                 if (mbtilesFile == null) {
-                    OfflineRegionHelper.ensureSouthMoraviaOffline(context, styleJson)
+                    OfflineRegionHelper.initializeOfflineRegions(
+                        context = context,
+                        centerLat = targetLocation.latitude,
+                        centerLon = targetLocation.longitude
+                    )
                 }
             }
 
