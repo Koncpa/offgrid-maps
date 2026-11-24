@@ -2,7 +2,7 @@
 
 Standalone offline outdoor map and GPX navigation app for **Wear OS** smartwatches, engineered for maximum battery life, reliable trail navigation, and effortless outdoor usability.
 
-For detailed system architecture and the future product backlog, see **[PRODUCT_ROADMAP.md](./PRODUCT_ROADMAP.md)**.
+For detailed system architecture and the future product backlog, see **[PRODUCT_ROADMAP.md](./PRODUCT_ROADMAP.md)**. For future hosting migration see **[MIGRATION.md](./MIGRATION.md)**, and for Google Play preparation see **[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)**.
 
 ## Key Features
 - **100% Offline Navigation & Multi-Country Region Catalog (1-Click Download):**
