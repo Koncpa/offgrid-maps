@@ -16,7 +16,7 @@ val mapsGithubRepo: String = localProps.getProperty("MAPS_GITHUB_REPO", "Koncpa/
 val mapsGithubToken: String = localProps.getProperty("MAPS_GITHUB_TOKEN", "")
 val mapsCdnBaseUrl: String = localProps.getProperty(
     "MAPS_CDN_BASE_URL",
-    "https://pub-33e873553ed746db815f152b72306952.r2.dev"
+    "https://offgrid-maps-cdn.appmanufacture-dev.workers.dev"
 )
 
 android {
