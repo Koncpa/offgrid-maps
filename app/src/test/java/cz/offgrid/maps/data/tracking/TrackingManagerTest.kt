@@ -358,4 +358,39 @@ class TrackingManagerTest {
         )
         assertTrue(xml.contains("<name>Brno &amp; Pálava &lt;Ridge&gt;</name>"))
     }
+
+    @Test
+    fun calculateBearingDegrees_returnsExactCardinalDirections() {
+        val north = TrackingManager.calculateBearingDegrees(49.0, 16.0, 50.0, 16.0)
+        val east = TrackingManager.calculateBearingDegrees(49.0, 16.0, 49.0, 17.0)
+        val south = TrackingManager.calculateBearingDegrees(50.0, 16.0, 49.0, 16.0)
+        val west = TrackingManager.calculateBearingDegrees(49.0, 17.0, 49.0, 16.0)
+
+        assertTrue(north < 1f || north > 359f)
+        assertEquals(90.0f, east, 1.5f)
+        assertEquals(180.0f, south, 1.0f)
+        assertEquals(270.0f, west, 1.5f)
+    }
+
+    @Test
+    fun calculateRemainingRouteStats_computesDistanceAndPositiveAscentFromClosestPoint() {
+        TrackingManager.setPlannedRoute(null, emptyList())
+        assertNull(TrackingManager.calculateRemainingRouteStats(49.0, 16.0))
+
+        val p0 = TrackPoint(49.000, 16.000, altitudeMeters = 300.0)
+        val p1 = TrackPoint(49.010, 16.000, altitudeMeters = 450.0) // +150 m
+        val p2 = TrackPoint(49.020, 16.000, altitudeMeters = 400.0) // descent (-50 m ignored)
+        val p3 = TrackPoint(49.030, 16.000, altitudeMeters = 520.0) // +120 m
+        TrackingManager.setPlannedRoute("RidgeLoop", listOf(p0, p1, p2, p3))
+
+        // Standing near p1: only p1 -> p2 -> p3 remains, positive climb = +120 m
+        val stats = TrackingManager.calculateRemainingRouteStats(49.0102, 16.0001)
+        assertNotNull(stats)
+        val expectedKm = (
+            TrackingManager.calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude) +
+                TrackingManager.calculateDistanceMeters(p2.latitude, p2.longitude, p3.latitude, p3.longitude)
+            ) / 1000.0
+        assertEquals(expectedKm, stats!!.first, 0.01)
+        assertEquals(120, stats.second)
+    }
 }

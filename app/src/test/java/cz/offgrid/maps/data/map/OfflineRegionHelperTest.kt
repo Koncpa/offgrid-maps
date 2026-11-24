@@ -197,4 +197,113 @@ class OfflineRegionHelperTest {
         assertTrue(OfflineRegionHelper.enqueueUniquePreset(queue, "at_wien", r3))
         assertEquals(listOf("at_niederoesterreich", "at_steiermark"), queue.map { it.id })
     }
+
+    @Test
+    fun contourTileManager_importTilePackageToDir_parsesValidLinesAndSkipsMalformed() {
+        val tempDir = Files.createTempDirectory("offgrid_contours_test").toFile()
+        try {
+            val payload = listOf(
+                "12/2236/1393\t{\"type\":\"Feature\",\"properties\":{\"ele\":450}}",
+                "bad_line_without_tab",
+                "12/99\tinvalid_tile_key",
+                "12/2237/1393\t{\"type\":\"Feature\",\"properties\":{\"ele\":500}}"
+            ).joinToString("\n")
+            val gzBytes = ByteArrayOutputStream().use { baos ->
+                GZIPOutputStream(baos).use { it.write(payload.toByteArray()) }
+                baos.toByteArray()
+            }
+
+            val count = ContourTileManager.importTilePackageToDir(tempDir, ByteArrayInputStream(gzBytes))
+            assertEquals(2, count)
+            assertEquals(
+                """{"type":"Feature","properties":{"ele":450}}""",
+                File(tempDir, "tile_12_2236_1393.features").readText()
+            )
+            assertEquals(
+                """{"type":"Feature","properties":{"ele":500}}""",
+                File(tempDir, "tile_12_2237_1393.features").readText()
+            )
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun streamZipFromUrlWithImporter_downloadsValidZipAndReturnsNullOn404() {
+        val tempDir = Files.createTempDirectory("offgrid_http_zip_test").toFile()
+        val server = java.net.ServerSocket(0, 5, java.net.InetAddress.getByName("127.0.0.1"))
+        try {
+            val zipBytes = ByteArrayOutputStream().use { baos ->
+                ZipOutputStream(baos).use { zos ->
+                    fun gzipStr(s: String): ByteArray = ByteArrayOutputStream().use { out ->
+                        GZIPOutputStream(out).use { it.write(s.toByteArray()) }
+                        out.toByteArray()
+                    }
+                    zos.putNextEntry(ZipEntry("region_meta.json"))
+                    zos.write("""{"id":"test_reg"}""".toByteArray())
+                    zos.closeEntry()
+                    zos.putNextEntry(ZipEntry("kct_trails.geojson.gz"))
+                    zos.write(gzipStr("""{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"colour":"blue"}}]}"""))
+                    zos.closeEntry()
+                    zos.putNextEntry(ZipEntry("contours_z12.tiles.gz"))
+                    zos.write("contour-data".toByteArray())
+                    zos.closeEntry()
+                }
+                baos.toByteArray()
+            }
+            val serverThread = Thread {
+                while (!server.isClosed) {
+                    val sock = try {
+                        server.accept()
+                    } catch (_: Exception) {
+                        break
+                    }
+                    sock.use { client ->
+                        val reader = java.io.BufferedReader(java.io.InputStreamReader(client.getInputStream()))
+                        val requestLine = reader.readLine() ?: ""
+                        while (true) {
+                            val hdr = reader.readLine()
+                            if (hdr.isNullOrEmpty()) break
+                        }
+                        val out = client.getOutputStream()
+                        if (requestLine.contains("test_reg.zip")) {
+                            out.write(
+                                "HTTP/1.1 200 OK\r\nContent-Length: ${zipBytes.size}\r\nConnection: close\r\n\r\n".toByteArray()
+                            )
+                            out.write(zipBytes)
+                        } else {
+                            out.write(
+                                "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray()
+                            )
+                        }
+                        out.flush()
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                start()
+            }
+            val port = server.localPort
+
+            val missingRes = OfflineRegionHelper.streamZipFromUrlWithImporter(
+                tempDir,
+                "http://127.0.0.1:$port/releases/world-eu/missing.zip"
+            ) { true }
+            assertNull(missingRes)
+
+            val okRes = OfflineRegionHelper.streamZipFromUrlWithImporter(
+                tempDir,
+                "http://127.0.0.1:$port/releases/world-eu/test_reg.zip"
+            ) { it.readBytes().isNotEmpty() }
+            assertNotNull(okRes)
+            assertTrue(okRes!!.trailsOk)
+            assertTrue(okRes.contoursOk)
+            assertTrue(File(tempDir, "trails.features").readText().contains("blue"))
+            server.close()
+            serverThread.join(1000)
+        } finally {
+            if (!server.isClosed) server.close()
+            tempDir.deleteRecursively()
+        }
+    }
 }

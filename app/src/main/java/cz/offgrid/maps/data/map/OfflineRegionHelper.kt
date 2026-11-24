@@ -821,6 +821,14 @@ object OfflineRegionHelper {
         context: Context,
         pkgDir: File,
         downloadUrl: String
+    ): ZipExtractResult? = streamZipFromUrlWithImporter(pkgDir, downloadUrl) { contourStream ->
+        ContourTileManager.importTilePackage(context, contourStream) > 0
+    }
+
+    internal fun streamZipFromUrlWithImporter(
+        pkgDir: File,
+        downloadUrl: String,
+        contourImporter: (InputStream) -> Boolean
     ): ZipExtractResult? {
         return try {
             val conn = (URL(downloadUrl).openConnection() as HttpURLConnection).apply {
@@ -830,9 +838,7 @@ object OfflineRegionHelper {
             try {
                 if (conn.responseCode !in 200..299) return null
                 conn.inputStream.use { input ->
-                    extractPackageZip(input, pkgDir) { contourStream ->
-                        ContourTileManager.importTilePackage(context, contourStream) > 0
-                    }
+                    extractPackageZip(input, pkgDir, contourImporter)
                 }
             } finally {
                 conn.disconnect()

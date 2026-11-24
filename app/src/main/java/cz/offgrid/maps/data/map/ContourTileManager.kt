@@ -137,6 +137,11 @@ object ContourTileManager {
         val tilesDir = File(context.filesDir, TILES_DIR_NAME).apply {
             if (!exists()) mkdirs()
         }
+        return importTilePackageToDir(tilesDir, gzipStream)
+    }
+
+    internal fun importTilePackageToDir(tilesDir: File, gzipStream: InputStream): Int {
+        if (!tilesDir.exists()) tilesDir.mkdirs()
         var imported = 0
         GZIPInputStream(gzipStream).bufferedReader().useLines { lines ->
             for (line in lines) {
