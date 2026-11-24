@@ -456,7 +456,10 @@ object OfflineRegionHelper {
             }
 
             override fun onError(error: OfflineRegionError) {
+                offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                 _downloadError.value = "Connection lost – check Wi-Fi"
+                isVectorDownloadInFlight = false
+                finishDownloadAndUpdateConnectivity(context)
             }
 
             override fun mapboxTileCountLimitExceeded(limit: Long) {
@@ -1051,10 +1054,11 @@ object OfflineRegionHelper {
         if (isVectorDownloadInFlight || isPackageSyncInFlight) return
         isDownloading = false
         _activeDownloadTitle.value = null
-        _isOfflineReady.value = true
-        _statusText.value = "OFFLINE"
+        val hasSaved = _savedRegions.value.isNotEmpty()
+        _isOfflineReady.value = hasSaved
+        _statusText.value = if (hasSaved) "OFFLINE" else "NO MAP"
         refreshSavedRegions(context)
-        if (!isUserBrowsingMap) {
+        if (!isUserBrowsingMap && hasSaved) {
             MapLibre.setConnected(false)
         }
     }

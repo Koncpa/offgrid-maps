@@ -1,8 +1,10 @@
 package cz.offgrid.maps.presentation.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.view.HapticFeedbackConstants
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -161,6 +164,18 @@ fun MapScreen(
     // allow live tile preview (e.g. when browsing another region before downloading it).
     LaunchedEffect(isFollowingGps, isTracking) {
         OfflineRegionHelper.setBrowsingMode(!isFollowingGps && !isTracking)
+    }
+
+    // Keep screen on during active map downloads so Wear OS does not freeze the app mid-transfer.
+    val isDownloadActive = activeDownloadTitle != null || offlineStatus.startsWith("DL")
+    DisposableEffect(isDownloadActive) {
+        val window = (context as? Activity)?.window
+        if (isDownloadActive) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     // Start on user's last known position (or nearest saved region / fallback)
@@ -896,7 +911,8 @@ private fun GpxRoutePickerOverlay(
         enrichedPois.filter { it.first.category in setOf("viewpoint", "saddle", "landmark", "rescue") }.take(4)
     }
 
-    val isDownloading = offlineStatus.startsWith("DL")
+    val isDownloading = activeDownloadTitle != null || offlineStatus.startsWith("DL")
+    val hasPinnedStatus = selectedTab == 1 && (isDownloading || !downloadError.isNullOrBlank())
 
     Box(
         modifier = Modifier
@@ -905,12 +921,70 @@ private fun GpxRoutePickerOverlay(
             .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center
     ) {
-        LazyColumn(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-            contentPadding = PaddingValues(top = 32.dp, bottom = 40.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (hasPinnedStatus) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 26.dp, start = 16.dp, end = 16.dp, bottom = 4.dp)
+                ) {
+                    if (isDownloading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(1.6.dp, TrailYellow, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val dlLabel = if (!activeDownloadTitle.isNullOrBlank()) {
+                                "⏳ $activeDownloadTitle ($offlineStatus)"
+                            } else {
+                                "⏳ Downloading ($offlineStatus)"
+                            }
+                            Text(
+                                text = dlLabel,
+                                color = TrailYellow,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (!downloadError.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(1.4.dp, TrailRed, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "⚠ $downloadError",
+                                color = TrailRed,
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            LazyColumn(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+                contentPadding = PaddingValues(top = if (hasPinnedStatus) 4.dp else 32.dp, bottom = 40.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
             // Top tab switcher: [Routes] | [POIs] | [Offline] sized for the round-screen chord
             item(key = "tab_switcher") {
                 Row(
@@ -1138,57 +1212,6 @@ private fun GpxRoutePickerOverlay(
                 }
             } else {
                 // --- TAB 2: OFFLINE MAPS (3-Level Drill-Down) ---
-                if (isDownloading) {
-                    item(key = "dl_banner") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(DarkSurface)
-                                .border(1.6.dp, TrailYellow, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val dlLabel = if (!activeDownloadTitle.isNullOrBlank()) {
-                                "⏳ $activeDownloadTitle ($offlineStatus)"
-                            } else {
-                                "⏳ Downloading ($offlineStatus)"
-                            }
-                            Text(
-                                text = dlLabel,
-                                color = TrailYellow,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                if (!downloadError.isNullOrBlank()) {
-                    item(key = "dl_error") {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(DarkSurface)
-                                .border(1.4.dp, TrailRed, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "⚠ $downloadError",
-                                color = TrailRed,
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
                 val activeContinent = selectedContinent
                 val activeCountry = selectedCountry
 
@@ -1205,11 +1228,13 @@ private fun GpxRoutePickerOverlay(
                             )
                         }
                         items(nearbyRegions, key = { "nearby_${it.first.id}" }) { (preset, distKm) ->
+                            val isActiveDl = isDownloading && preset.title == activeDownloadTitle
                             OfflinePresetRow(
                                 preset = preset,
                                 subtitleOverride = "~$distKm km · ${preset.subtitle}",
                                 isSaved = false,
                                 isDownloading = isDownloading,
+                                isActiveDownload = isActiveDl,
                                 accentColor = TrailYellow,
                                 onClick = { onDownloadPresetRegion(preset) }
                             )
@@ -1355,11 +1380,13 @@ private fun GpxRoutePickerOverlay(
 
                     items(regionsInCountry, key = { "reg_${it.id}" }) { preset ->
                         val existingSaved = savedByTitle[preset.title]
+                        val isActiveDl = isDownloading && preset.title == activeDownloadTitle
                         OfflinePresetRow(
                             preset = preset,
                             subtitleOverride = null,
                             isSaved = existingSaved != null,
                             isDownloading = isDownloading,
+                            isActiveDownload = isActiveDl,
                             accentColor = if (existingSaved != null) TrailGreen else TrailBlue,
                             onClick = {
                                 if (existingSaved != null) {
@@ -1419,6 +1446,7 @@ private fun GpxRoutePickerOverlay(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -1541,15 +1569,19 @@ private fun OfflinePresetRow(
     subtitleOverride: String?,
     isSaved: Boolean,
     isDownloading: Boolean,
+    isActiveDownload: Boolean,
     accentColor: Color,
     onClick: () -> Unit
 ) {
+    val effectiveAccent = if (isActiveDownload) TrailYellow else accentColor
+    val isDisabledByActive = !isSaved && isDownloading && !isActiveDownload
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (isDisabledByActive) 0.45f else 1f)
             .clip(RoundedCornerShape(14.dp))
             .background(DarkSurface)
-            .border(1.2.dp, accentColor.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+            .border(1.2.dp, effectiveAccent.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
             .clickable(enabled = isSaved || !isDownloading) { onClick() }
             .padding(horizontal = 10.dp, vertical = 6.5.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1557,8 +1589,12 @@ private fun OfflinePresetRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (isSaved) "✓ ${preset.title}" else preset.title,
-                color = OutdoorTextPrimary,
+                text = when {
+                    isSaved -> "✓ ${preset.title}"
+                    isActiveDownload -> "⏳ ${preset.title}"
+                    else -> preset.title
+                },
+                color = if (isActiveDownload) TrailYellow else OutdoorTextPrimary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -1578,12 +1614,16 @@ private fun OfflinePresetRow(
                 .size(28.dp)
                 .clip(CircleShape)
                 .background(AmoledBlack)
-                .border(1.2.dp, accentColor, CircleShape),
+                .border(1.2.dp, effectiveAccent, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = if (isSaved) "✓" else "⬇",
-                color = accentColor,
+                text = when {
+                    isSaved -> "✓"
+                    isActiveDownload -> "⏳"
+                    else -> "⬇"
+                },
+                color = effectiveAccent,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
