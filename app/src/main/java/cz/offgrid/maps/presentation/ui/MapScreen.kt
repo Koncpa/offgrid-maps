@@ -854,7 +854,14 @@ private fun GpxRoutePickerOverlay(
             .sortedBy { it.second }
             .take(2)
     }
-    val continentOrder = listOf("Europe", "North America", "Australia & NZ")
+    val continentOrder = listOf(
+        "Europe",
+        "North America",
+        "South America",
+        "Asia",
+        "Africa",
+        "Australia & Oceania"
+    )
     val regionsByContinent = remember(catalogRegions) {
         val grouped = catalogRegions.groupBy { it.continent }
         continentOrder.mapNotNull { cont -> grouped[cont]?.let { cont to it } }
@@ -895,86 +902,43 @@ private fun GpxRoutePickerOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(AmoledBlack.copy(alpha = 0.96f))
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center
     ) {
         LazyColumn(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(7.dp),
-            contentPadding = PaddingValues(vertical = 8.dp),
+            contentPadding = PaddingValues(top = 32.dp, bottom = 40.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top tab switcher: [Routes] | [POIs] | [Offline]
+            // Top tab switcher: [Routes] | [POIs] | [Offline] sized for the round-screen chord
             item(key = "tab_switcher") {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val isGpxTab = selectedTab == 0
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (isGpxTab) DarkSurface else AmoledBlack)
-                            .border(
-                                width = if (isGpxTab) 1.8.dp else 1.2.dp,
-                                color = if (isGpxTab) TrailGreen else DarkSurfaceVariant,
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .clickable { selectedTab = 0 }
-                            .padding(horizontal = 9.dp, vertical = 6.5.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Routes (${files.size})",
-                            color = if (isGpxTab) TrailGreen else OutdoorTextSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    val isPoiTab = selectedTab == 2
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (isPoiTab) DarkSurface else AmoledBlack)
-                            .border(
-                                width = if (isPoiTab) 1.8.dp else 1.2.dp,
-                                color = if (isPoiTab) TrailYellow else DarkSurfaceVariant,
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .clickable { selectedTab = 2 }
-                            .padding(horizontal = 9.dp, vertical = 6.5.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "POIs",
-                            color = if (isPoiTab) TrailYellow else OutdoorTextSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    val isOfflineTab = selectedTab == 1
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (isOfflineTab) DarkSurface else AmoledBlack)
-                            .border(
-                                width = if (isOfflineTab) 1.8.dp else 1.2.dp,
-                                color = if (isOfflineTab) TrailBlue else DarkSurfaceVariant,
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .clickable { selectedTab = 1 }
-                            .padding(horizontal = 9.dp, vertical = 6.5.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Offline (${savedRegions.size})",
-                            color = if (isOfflineTab) TrailBlue else OutdoorTextSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    OverlayTabPill(
+                        label = if (files.isNotEmpty()) "Routes (${files.size})" else "Routes",
+                        selected = selectedTab == 0,
+                        accentColor = TrailGreen,
+                        modifier = Modifier.weight(1f),
+                        onClick = { selectedTab = 0 }
+                    )
+                    OverlayTabPill(
+                        label = "POIs",
+                        selected = selectedTab == 2,
+                        accentColor = TrailYellow,
+                        modifier = Modifier.weight(0.75f),
+                        onClick = { selectedTab = 2 }
+                    )
+                    OverlayTabPill(
+                        label = if (savedRegions.isNotEmpty()) "Offline (${savedRegions.size})" else "Offline",
+                        selected = selectedTab == 1,
+                        accentColor = TrailBlue,
+                        modifier = Modifier.weight(1f),
+                        onClick = { selectedTab = 1 }
+                    )
                 }
             }
 
@@ -1456,6 +1420,39 @@ private fun GpxRoutePickerOverlay(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OverlayTabPill(
+    label: String,
+    selected: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) DarkSurface else AmoledBlack)
+            .border(
+                width = if (selected) 1.8.dp else 1.2.dp,
+                color = if (selected) accentColor else DarkSurfaceVariant,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) accentColor else OutdoorTextSecondary,
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
