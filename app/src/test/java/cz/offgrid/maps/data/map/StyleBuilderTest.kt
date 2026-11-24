@@ -101,8 +101,11 @@ class StyleBuilderTest {
         assertEquals("Europe", OfflineRegionHelper.resolveContinent("NO"))
         assertEquals("North America", OfflineRegionHelper.resolveContinent("US"))
         assertEquals("North America", OfflineRegionHelper.resolveContinent("CA"))
-        assertEquals("Australia & NZ", OfflineRegionHelper.resolveContinent("AU"))
-        assertEquals("Australia & NZ", OfflineRegionHelper.resolveContinent("NZ"))
+        assertEquals("Australia & Oceania", OfflineRegionHelper.resolveContinent("AU"))
+        assertEquals("Australia & Oceania", OfflineRegionHelper.resolveContinent("NZ"))
+        assertEquals("South America", OfflineRegionHelper.resolveContinent("BR"))
+        assertEquals("Asia", OfflineRegionHelper.resolveContinent("JP"))
+        assertEquals("Africa", OfflineRegionHelper.resolveContinent("ZA"))
     }
 
     @Test

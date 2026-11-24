@@ -19,10 +19,13 @@ import java.net.ServerSocket
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.zip.GZIPInputStream
+import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
 import kotlin.math.hypot
+import kotlin.math.max
 
 /**
  * Data model for a saved offline map region displayed in the overview list.
@@ -37,7 +40,7 @@ data class SavedOfflineRegion(
 )
 
 /**
- * Predefined region in the multi-country catalog (`catalog.json` in the private GitHub repository)
+ * Predefined region in the global catalog (`catalog.json` in `Koncpa/offgrid-maps-data`)
  * for one-tap offline download.
  */
 data class OfflinePresetRegion(
@@ -51,7 +54,9 @@ data class OfflinePresetRegion(
     val countryCode: String = "CZ",
     val countryName: String = "Czechia – Regions",
     val packagePath: String = "maps/cz/$id",
-    val continent: String = OfflineRegionHelper.resolveContinent(countryCode)
+    val continent: String = OfflineRegionHelper.resolveContinent(countryCode),
+    val releaseTag: String? = null,
+    val assetName: String? = null
 )
 
 /**
@@ -66,7 +71,7 @@ data class OutdoorPoi(
 
 /**
  * Offline map region manager connected to the private GitHub repository (`Koncpa/offgrid-maps-data`),
- * dynamically loading `catalog.json` (Czechia, Slovakia, Austria, etc.) and pre-built map packages.
+ * dynamically loading `catalog.json` worldwide and pre-built map packages via GitHub Releases.
  */
 object OfflineRegionHelper {
 
@@ -82,6 +87,7 @@ object OfflineRegionHelper {
     private const val POIS_FRAGMENT_FILE = "pois.features"
 
     private val trailExecutor = Executors.newSingleThreadExecutor()
+    private val releaseAssetUrlCache = ConcurrentHashMap<String, Map<String, String>>()
 
     private val _statusText = MutableStateFlow("NO MAP")
     val statusText: StateFlow<String> = _statusText.asStateFlow()
@@ -119,10 +125,36 @@ object OfflineRegionHelper {
         return 49.1246 to 16.3353
     }
 
+    private val northAmericaCodes = setOf(
+        "US", "CA", "MX", "GL", "BS", "BZ", "CR", "CU", "DO", "GP", "GT", "HN", "HT", "JM", "MQ", "NI", "PA", "SV"
+    )
+    private val southAmericaCodes = setOf(
+        "AR", "BO", "BR", "CL", "CO", "EC", "FK", "GF", "GY", "PE", "PY", "SR", "UY", "VE"
+    )
+    private val asiaCodes = setOf(
+        "AE", "AF", "AM", "AZ", "BD", "BH", "BN", "BT", "CN", "ID", "IL", "IN", "IQ", "IR",
+        "JO", "JP", "KG", "KH", "KP", "KR", "KW", "KZ", "LA", "LB", "LK", "MM", "MN", "MV",
+        "MY", "NP", "OM", "PH", "PK", "PS", "QA", "SA", "SG", "SY", "TH", "TJ", "TL", "TM",
+        "TW", "UZ", "VN", "YE"
+    )
+    private val africaCodes = setOf(
+        "AO", "BF", "BI", "BJ", "BW", "CD", "CF", "CG", "CI", "CM", "CV", "DJ", "DZ", "EG",
+        "ER", "ET", "GA", "GH", "GM", "GN", "GQ", "GW", "KE", "KM", "LR", "LS", "LY", "MA",
+        "MG", "ML", "MR", "MU", "MW", "MZ", "NA", "NE", "NG", "RE", "RW", "SC", "SD", "SL",
+        "SN", "SO", "SS", "ST", "SZ", "TD", "TG", "TN", "TZ", "UG", "YT", "ZA", "ZM", "ZW"
+    )
+    private val oceaniaCodes = setOf(
+        "AU", "NZ", "CK", "FJ", "FM", "KI", "MH", "NC", "NR", "NU", "PF", "PG", "PW", "SB", "TO", "TV", "VU", "WS"
+    )
+
     fun resolveContinent(countryCode: String): String {
-        return when (countryCode.uppercase(Locale.US)) {
-            "US", "CA", "MX" -> "North America"
-            "AU", "NZ" -> "Australia & NZ"
+        val code = countryCode.uppercase(Locale.US)
+        return when {
+            code in northAmericaCodes -> "North America"
+            code in southAmericaCodes -> "South America"
+            code in asiaCodes -> "Asia"
+            code in africaCodes -> "Africa"
+            code in oceaniaCodes -> "Australia & Oceania"
             else -> "Europe"
         }
     }
@@ -486,6 +518,49 @@ object OfflineRegionHelper {
         }
     }
 
+    internal data class ZipExtractResult(
+        val trailsOk: Boolean,
+        val poisOk: Boolean,
+        val contoursOk: Boolean
+    )
+
+    internal fun extractPackageZip(
+        zipStream: InputStream,
+        pkgDir: File,
+        importContours: (InputStream) -> Boolean
+    ): ZipExtractResult {
+        var trailsOk = false
+        var poisOk = false
+        var contoursOk = false
+        ZipInputStream(zipStream).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                val entryBytes = zis.readBytes()
+                when (entry.name) {
+                    "region_meta.json" -> {
+                        File(pkgDir, "region_meta.json").writeBytes(entryBytes)
+                    }
+                    "kct_trails.geojson.gz" -> {
+                        val geoJson = GZIPInputStream(entryBytes.inputStream()).bufferedReader().use { it.readText() }
+                        File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                        trailsOk = true
+                    }
+                    "outdoor_pois.geojson.gz" -> {
+                        val geoJson = GZIPInputStream(entryBytes.inputStream()).bufferedReader().use { it.readText() }
+                        File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                        poisOk = true
+                    }
+                    "contours_z12.tiles.gz" -> {
+                        contoursOk = entryBytes.inputStream().use { importContours(it) }
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+        return ZipExtractResult(trailsOk, poisOk, contoursOk)
+    }
+
     internal fun parseCatalogJson(jsonText: String): List<OfflinePresetRegion>? {
         return try {
             val root = JSONObject(jsonText)
@@ -495,6 +570,8 @@ object OfflineRegionHelper {
                 val countryObj = countries.getJSONObject(i)
                 val countryCode = countryObj.optString("countryCode", "CZ")
                 val countryName = countryObj.optString("countryName", "Czechia – Regions")
+                val continent = countryObj.optString("continent", "").takeIf { it.isNotBlank() }
+                    ?: resolveContinent(countryCode)
                 val regions = countryObj.optJSONArray("regions") ?: continue
                 for (j in 0 until regions.length()) {
                     val reg = regions.getJSONObject(j)
@@ -510,7 +587,10 @@ object OfflineRegionHelper {
                             lonSpanDeg = reg.optDouble("lonSpanDeg", 0.75),
                             countryCode = countryCode,
                             countryName = countryName,
-                            packagePath = reg.optString("packagePath", "maps/${countryCode.lowercase()}/$id")
+                            packagePath = reg.optString("packagePath", "maps/${countryCode.lowercase(Locale.US)}/$id"),
+                            continent = continent,
+                            releaseTag = reg.optString("releaseTag", "").takeIf { it.isNotBlank() },
+                            assetName = reg.optString("assetName", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -522,8 +602,8 @@ object OfflineRegionHelper {
     }
 
     /**
-     * Downloads the selected catalog region ([preset]) with a single tap, including pre-built
-     * trail/contour packages from the private GitHub repository (`Koncpa/offgrid-maps-data`).
+     * Downloads the selected catalog region ([preset]) with a single tap, preferring single-ZIP
+     * bundles from GitHub Releases (`Koncpa/offgrid-maps-data`) with fallback to raw files.
      */
     fun downloadPresetRegion(
         context: Context,
@@ -532,27 +612,32 @@ object OfflineRegionHelper {
         _downloadError.value = null
         isDownloading = true
         isPackageSyncInFlight = true
-        // 1. Download pre-built regional packages (trails + contour tiles) from the private GitHub repository.
-        //    If the contour package is missing (older repository layout), the watch falls back to
-        //    generating contours from DEM tiles itself.
         thread(name = "OffGridGithubPkg_${preset.id}", isDaemon = true) {
             try {
                 val pkgDir = File(context.filesDir, "$PACKAGES_DIR/${preset.id}").apply {
                     if (!exists()) mkdirs()
                 }
-                downloadPackageFile(preset, "region_meta.json") { input ->
-                    File(pkgDir, "region_meta.json").outputStream().use { input.copyTo(it) }
-                }
-                val trailsOk = downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
-                    val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
-                    File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
-                }
-                downloadPackageFile(preset, "outdoor_pois.geojson.gz") { input ->
-                    val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
-                    File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
-                }
-                val contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
-                    ContourTileManager.importTilePackage(context, input)
+                val zipResult = downloadReleaseZipPackage(context, pkgDir, preset)
+                val trailsOk: Boolean
+                val contoursImported: Boolean
+                if (zipResult != null && (zipResult.trailsOk || zipResult.contoursOk)) {
+                    trailsOk = zipResult.trailsOk
+                    contoursImported = zipResult.contoursOk
+                } else {
+                    downloadPackageFile(preset, "region_meta.json") { input ->
+                        File(pkgDir, "region_meta.json").outputStream().use { input.copyTo(it) }
+                    }
+                    trailsOk = downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
+                        val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
+                        File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                    }
+                    downloadPackageFile(preset, "outdoor_pois.geojson.gz") { input ->
+                        val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
+                        File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                    }
+                    contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
+                        ContourTileManager.importTilePackage(context, input)
+                    }
                 }
                 if (contoursImported) {
                     ContourTileManager.ensureViewportContours(
@@ -585,6 +670,91 @@ object OfflineRegionHelper {
             halfLonSpan = preset.lonSpanDeg / 2.0,
             explicitTitle = preset.title
         )
+    }
+
+    private fun resolveReleaseAssetUrl(repo: String, releaseTag: String, assetName: String): String? {
+        val cached = releaseAssetUrlCache[releaseTag]?.get(assetName)
+        if (cached != null) return cached
+
+        val token = BuildConfig.MAPS_GITHUB_TOKEN
+        val url = URL("https://api.github.com/repos/$repo/releases/tags/$releaseTag")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10000
+            readTimeout = 15000
+            setRequestProperty("Accept", "application/vnd.github+json")
+            if (token.isNotBlank()) {
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+        }
+        return try {
+            if (conn.responseCode !in 200..299) return null
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val assets = JSONObject(body).optJSONArray("assets") ?: return null
+            val map = HashMap<String, String>(assets.length())
+            for (i in 0 until assets.length()) {
+                val obj = assets.getJSONObject(i)
+                val name = obj.optString("name", "")
+                val apiUrl = obj.optString("url", "")
+                if (name.isNotBlank() && apiUrl.isNotBlank()) {
+                    map[name] = apiUrl
+                }
+            }
+            releaseAssetUrlCache[releaseTag] = map
+            map[assetName]
+        } catch (_: Exception) {
+            null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun downloadReleaseZipPackage(
+        context: Context,
+        pkgDir: File,
+        preset: OfflinePresetRegion
+    ): ZipExtractResult? {
+        val releaseTag = preset.releaseTag ?: return null
+        val assetName = preset.assetName ?: "${preset.id}.zip"
+        val repo = BuildConfig.MAPS_GITHUB_REPO.ifBlank { "Koncpa/offgrid-maps-data" }
+        val apiUrl = resolveReleaseAssetUrl(repo, releaseTag, assetName) ?: return null
+        val token = BuildConfig.MAPS_GITHUB_TOKEN
+
+        return try {
+            // Request with instanceFollowRedirects=false so Authorization header is NOT sent to S3 redirect
+            val ghConn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 30000
+                instanceFollowRedirects = false
+                setRequestProperty("Accept", "application/octet-stream")
+                if (token.isNotBlank()) {
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+            }
+            val code = ghConn.responseCode
+            val streamConn: HttpURLConnection = if (code in 300..399) {
+                val redirectUrl = ghConn.getHeaderField("Location")
+                ghConn.disconnect()
+                if (redirectUrl.isNullOrBlank()) return null
+                (URL(redirectUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 10000
+                    readTimeout = 60000
+                }
+            } else {
+                ghConn
+            }
+            try {
+                if (streamConn.responseCode !in 200..299) return null
+                streamConn.inputStream.use { input ->
+                    extractPackageZip(input, pkgDir) { contourStream ->
+                        ContourTileManager.importTilePackage(context, contourStream) > 0
+                    }
+                }
+            } finally {
+                streamConn.disconnect()
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**
@@ -744,6 +914,16 @@ object OfflineRegionHelper {
         }
     }
 
+    internal fun computeAdaptiveZoomRange(halfLatSpan: Double, halfLonSpan: Double): Pair<Double, Double> {
+        val maxSpan = max(halfLatSpan, halfLonSpan) * 2.0
+        return when {
+            maxSpan <= 1.8 -> 8.0 to 14.0
+            maxSpan <= 4.0 -> 8.0 to 13.0
+            maxSpan <= 9.0 -> 7.0 to 12.0
+            else -> 6.0 to 11.0
+        }
+    }
+
     private fun downloadCustomBounds(
         context: Context,
         centerLat: Double,
@@ -764,11 +944,12 @@ object OfflineRegionHelper {
             (centerLon - halfLonSpan).coerceIn(-179.9, 179.9)
         )
 
+        val (minZoom, maxZoom) = computeAdaptiveZoomRange(halfLatSpan, halfLonSpan)
         val definition = OfflineTilePyramidRegionDefinition(
             styleUrl,
             bounds,
-            8.0,
-            14.0,
+            minZoom,
+            maxZoom,
             1.0f
         )
 
