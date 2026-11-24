@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — OffGrid Maps (Wear OS)</title>
+  <style>
+    :root {
+      --bg: #0f1412;
+      --surface: #171f1b;
+      --border: #26332c;
+      --text: #e6ede9;
+      --muted: #9eb0a6;
+      --accent: #4ade80;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      padding: 2rem 1rem 4rem;
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2rem 2.2rem;
+    }
+    h1 { margin-top: 0; font-size: 1.75rem; line-height: 1.25; }
+    h2 {
+      margin-top: 2rem;
+      font-size: 1.15rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.35rem;
+    }
+    p, li { color: var(--text); }
+    .meta { color: var(--muted); font-size: 0.92rem; margin-bottom: 1.5rem; }
+    .box {
+      background: rgba(74, 222, 128, 0.08);
+      border-left: 3px solid var(--accent);
+      padding: 0.85rem 1rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+    a { color: var(--accent); }
+    code {
+      background: #0b0f0d;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    @media (max-width: 600px) {
+      main { padding: 1.35rem 1.15rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Privacy Policy — OffGrid Maps</h1>
+    <p class="meta">
+      Application: <strong>OffGrid Maps</strong> (<code>cz.offgrid.maps</code>, Wear OS)<br />
+      Developer: <strong>AppManufacture</strong> &middot; Contact:
+      <a href="mailto:appmanufacture.dev@gmail.com">appmanufacture.dev@gmail.com</a><br />
+      Effective Date: November 24, 2026
+    </p>
+
+    <div class="box">
+      <strong>Summary:</strong> OffGrid Maps is an offline-first hiking map and GPX tracker for Wear OS.
+      The app does <strong>not</strong> require an account, does <strong>not</strong> contain ads or analytics SDKs,
+      and does <strong>not</strong> upload your location or recorded tracks to developer servers.
+    </div>
+
+    <h2>1. Information We Do Not Collect</h2>
+    <p>OffGrid Maps does not collect, sell, rent, or transmit personal identifiers such as your name, email address, phone number, device advertising ID, crash telemetry, or usage analytics. There are no user accounts and no third-party advertising or analytics SDKs bundled in the application.</p>
+
+    <h2>2. Location Data &amp; Background Tracking</h2>
+    <p>OffGrid Maps requests location permissions (<code>ACCESS_FINE_LOCATION</code>, <code>ACCESS_COARSE_LOCATION</code>, and optionally <code>ACCESS_BACKGROUND_LOCATION</code> with <code>FOREGROUND_SERVICE_LOCATION</code>) solely to provide core navigation and outdoor tracking features on your watch:</p>
+    <ul>
+      <li><strong>Real-time map positioning:</strong> Displaying your current GPS coordinates on offline hiking maps.</li>
+      <li><strong>Workout &amp; hike GPX recording:</strong> Recording your route continuously while a tracking session is active, including when the watch screen turns off or the app is in the background.</li>
+    </ul>
+    <p>
+      <strong>Local-only storage:</strong> All GPS positions and recorded GPX routes remain strictly on your watch in local app storage.
+      The developer never receives or accesses your location history. You can delete individual tracks inside the app or remove all local data at any time by clearing app storage or uninstalling OffGrid Maps.
+    </p>
+
+    <h2>3. GPX Export &amp; Sharing</h2>
+    <p>If you explicitly tap the export or share action for a recorded route, the app writes a <code>.gpx</code> file on your device or passes it via Android's system share mechanism (<code>FileProvider</code>) to an app you choose. Once shared to an external app, that app's own privacy policy applies.</p>
+
+    <h2>4. Network Connections &amp; Offline Map Downloads</h2>
+    <p>When you browse online or choose to download offline regional map packages, the watch makes standard HTTPS requests (without user accounts or personal tracking parameters) to retrieve public map data:</p>
+    <ul>
+      <li><strong>Map Catalog &amp; Regional Packages (Cloudflare Workers / R2 CDN, with GitHub Releases fallback):</strong> Downloads the public region catalog and compressed regional hiking/POI/contour ZIP bundles that you select.</li>
+      <li><strong>Vector Base Map Tiles &amp; Fonts (OpenFreeMap):</strong> Streams base vector map tiles and map fonts when online or when caching an area for offline viewing.</li>
+      <li><strong>Elevation Contour Fallback (AWS Open Data Terrain Tiles):</strong> Optionally fetches public terrain elevation tiles if they are not already bundled in your downloaded regional package.</li>
+      <li><strong>On-device Localhost Server (<code>127.0.0.1</code>):</strong> Used purely internally on the watch to feed locally stored GeoJSON and contour data to the map renderer; no data leaves the device.</li>
+    </ul>
+    <p>Standard server access logs (such as IP address and requested file path) may be temporarily processed by those infrastructure providers strictly to deliver the requested map files.</p>
+
+    <h2>5. Other Permissions</h2>
+    <ul>
+      <li><code>POST_NOTIFICATIONS</code>: Displays the active foreground service notification while GPS track recording is running.</li>
+      <li><code>WAKE_LOCK</code> &amp; <code>VIBRATE</code>: Keeps GPS recording reliable during hikes and provides tactile feedback.</li>
+      <li><code>INTERNET</code> &amp; <code>ACCESS_NETWORK_STATE</code>: Downloads user-requested map packages and checks connectivity before downloads.</li>
+    </ul>
+
+    <h2>6. Children's Privacy</h2>
+    <p>OffGrid Maps does not knowingly collect personal information from anyone, including children under 13 (or the applicable age in your jurisdiction).</p>
+
+    <h2>7. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time if app features or data sources change. Any updates will be published on this page with an updated effective date.</p>
+
+    <h2>8. Contact</h2>
+    <p>If you have any questions about this Privacy Policy or how OffGrid Maps handles data, contact us at <a href="mailto:appmanufacture.dev@gmail.com">appmanufacture.dev@gmail.com</a>.</p>
+  </main>
+</body>
+</html>
