@@ -154,11 +154,14 @@ object GpxExporter {
                 putExtra(Intent.EXTRA_SUBJECT, file.name)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val chooser = Intent.createChooser(shareIntent, "Share GPX").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (shareIntent.resolveActivity(context.packageManager) != null) {
+                val chooser = Intent.createChooser(shareIntent, "Share GPX").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(chooser)
+                return true
             }
-            context.startActivity(chooser)
-            return true
+            return exportedToDownloads
         } catch (_: Exception) {
             return exportedToDownloads
         }

@@ -3,6 +3,7 @@ package cz.offgrid.maps.presentation.ui
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -256,12 +257,7 @@ fun MapScreen(
             liveGpsManager.start()
             liveGpsManager.requestImmediateHighAccuracyFix()
         } else {
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
+            permissionLauncher.launch(requiredRuntimePermissions())
         }
     }
 
@@ -569,14 +565,17 @@ fun MapScreen(
                         ) == PackageManager.PERMISSION_GRANTED
 
                         if (hasFine) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                            }
                             LocationTrackingService.start(context)
                         } else {
-                            permissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                )
-                            )
+                            permissionLauncher.launch(requiredRuntimePermissions())
                         }
                     }
                 },
@@ -1745,5 +1744,13 @@ private fun formatCompassCardinal(azimuthDeg: Float): String {
     val index = ((azimuthDeg + 22.5f) / 45.0f).toInt() and 7
     return directions[index]
 }
+
+private fun requiredRuntimePermissions(): Array<String> = buildList {
+    add(Manifest.permission.ACCESS_FINE_LOCATION)
+    add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+}.toTypedArray()
 
 
