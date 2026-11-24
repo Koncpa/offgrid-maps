@@ -743,22 +743,21 @@ object OfflineRegionHelper {
                         ContourTileManager.importTilePackage(appContext, input)
                     }
                 }
-                if (contoursImported) {
-                    ContourTileManager.ensureViewportContours(
-                        context = appContext,
-                        centerLat = preset.centerLat,
-                        centerLon = preset.centerLon,
-                        zoom = 13.0,
-                        allowNetworkFetch = false
-                    )
-                } else {
+                if (!contoursImported) {
                     ContourTileManager.downloadContoursForArea(appContext, preset.centerLat, preset.centerLon)
                 }
+                ContourTileManager.ensureViewportContours(
+                    context = appContext,
+                    centerLat = lastViewportLat,
+                    centerLon = lastViewportLon,
+                    zoom = 13.0,
+                    allowNetworkFetch = false
+                )
                 if (!trailsOk && !contoursImported) {
                     _downloadError.value = "Package sync failed – check Wi-Fi"
                 }
                 trailExecutor.execute { invalidateTrailPackages() }
-                updateTrailsForViewport(appContext, preset.centerLat, preset.centerLon)
+                updateTrailsForViewport(appContext, lastViewportLat, lastViewportLon)
             } finally {
                 finishDownloadPart(appContext, packageDone = true)
             }

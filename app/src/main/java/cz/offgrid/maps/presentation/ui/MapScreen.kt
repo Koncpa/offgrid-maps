@@ -717,10 +717,6 @@ fun MapScreen(
                 },
                 onDownloadPresetRegion = { preset ->
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                    isFollowingGps = false
-                    val presetCenter = LatLng(preset.centerLat, preset.centerLon)
-                    maplibreMapInstance?.moveCamera(CameraUpdateFactory.newLatLngZoom(presetCenter, 12.5))
-                    zoomLevel = 12.5f
                     OfflineRegionHelper.downloadPresetRegion(context, preset)
                 },
                 activeDownloadTitle = activeDownloadTitle,
