@@ -2,6 +2,7 @@
   "version": 5,
   "updatedAt": "2026-11-24",
   "releaseRepo": "Koncpa/offgrid-maps-data",
+  "releaseBaseUrl": "https://offgrid-maps-cdn.appmanufacture-dev.workers.dev",
   "countries": [
     {
       "countryCode": "CZ",
@@ -786,7 +787,7 @@
         },
         {
           "id": "pl_dolnoslaskie",
-          "title": "Województwo dolnośląskie<br />(Lower Silesian Voivodeship)",
+          "title": "Województwo dolnośląskie (Lower Silesian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 50.9485,
           "centerLon": 16.307,
@@ -799,7 +800,7 @@
         },
         {
           "id": "pl_kujawsko_pomorskie",
-          "title": "Województwo kujawsko-pomorskie<br />(Kuyavian-Pomeranian Voivodeship)",
+          "title": "Województwo kujawsko-pomorskie (Kuyavian-Pomeranian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 53.0565,
           "centerLon": 18.5055,
@@ -812,7 +813,7 @@
         },
         {
           "id": "pl_lodzkie",
-          "title": "Województwo łódzkie<br />(Łódź Voivodeship)",
+          "title": "Województwo łódzkie (Łódź Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 51.6185,
           "centerLon": 19.3655,
@@ -825,7 +826,7 @@
         },
         {
           "id": "pl_lubelskie",
-          "title": "Województwo lubelskie<br />(Lublin Voivodeship)",
+          "title": "Województwo lubelskie (Lublin Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 51.2685,
           "centerLon": 22.882,
@@ -838,7 +839,7 @@
         },
         {
           "id": "pl_lubuskie",
-          "title": "Województwo lubuskie<br />(Lubusz Voivodeship)",
+          "title": "Województwo lubuskie (Lubusz Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 52.2385,
           "centerLon": 15.4625,
@@ -851,7 +852,7 @@
         },
         {
           "id": "pl_malopolskie",
-          "title": "Województwo małopolskie<br />(Lesser Poland Voivodeship)",
+          "title": "Województwo małopolskie (Lesser Poland Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 49.8485,
           "centerLon": 20.254,
@@ -864,7 +865,7 @@
         },
         {
           "id": "pl_mazowieckie",
-          "title": "Województwo mazowieckie<br />(Mazovian Voivodeship)",
+          "title": "Województwo mazowieckie (Mazovian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 52.2485,
           "centerLon": 21.195,
@@ -877,7 +878,7 @@
         },
         {
           "id": "pl_opolskie",
-          "title": "Województwo opolskie<br />(Opole Voivodeship)",
+          "title": "Województwo opolskie (Opole Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 50.5795,
           "centerLon": 17.8015,
@@ -890,7 +891,7 @@
         },
         {
           "id": "pl_podkarpackie",
-          "title": "Województwo podkarpackie<br />(Subcarpathian Voivodeship)",
+          "title": "Województwo podkarpackie (Subcarpathian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 49.906,
           "centerLon": 22.344,
@@ -903,7 +904,7 @@
         },
         {
           "id": "pl_podlaskie",
-          "title": "Województwo podlaskie<br />(Podlaskie Voivodeship)",
+          "title": "Województwo podlaskie (Podlaskie Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 53.348,
           "centerLon": 22.773,
@@ -916,7 +917,7 @@
         },
         {
           "id": "pl_pomorskie",
-          "title": "Województwo pomorskie<br />(Pomeranian Voivodeship)",
+          "title": "Województwo pomorskie (Pomeranian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 54.28,
           "centerLon": 18.174,
@@ -929,7 +930,7 @@
         },
         {
           "id": "pl_slaskie",
-          "title": "Województwo śląskie<br />(Silesian Voivodeship)",
+          "title": "Województwo śląskie (Silesian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 50.2465,
           "centerLon": 19.0035,
@@ -942,7 +943,7 @@
         },
         {
           "id": "pl_swietokrzyskie",
-          "title": "Województwo świętokrzyskie<br />(Świętokrzyskie Voivodeship)",
+          "title": "Województwo świętokrzyskie (Świętokrzyskie Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 50.764,
           "centerLon": 20.7875,
@@ -955,7 +956,7 @@
         },
         {
           "id": "pl_warminsko_mazurskie",
-          "title": "Województwo warmińsko-mazurskie<br />(Warmian-Masurian Voivodeship)",
+          "title": "Województwo warmińsko-mazurskie (Warmian-Masurian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 53.8205,
           "centerLon": 20.969,
@@ -968,7 +969,7 @@
         },
         {
           "id": "pl_wielkopolskie",
-          "title": "Województwo wielkopolskie<br />(Greater Poland Voivodeship)",
+          "title": "Województwo wielkopolskie (Greater Poland Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 52.3825,
           "centerLon": 17.4445,
@@ -981,7 +982,7 @@
         },
         {
           "id": "pl_zachodniopomorskie",
-          "title": "Województwo zachodniopomorskie<br />(West Pomeranian Voivodeship)",
+          "title": "Województwo zachodniopomorskie (West Pomeranian Voivodeship)",
           "subtitle": "Voivodeship extract",
           "centerLat": 53.812,
           "centerLon": 15.489,
@@ -1796,7 +1797,7 @@
         },
         {
           "id": "no_nord_norge",
-          "title": "Nord-Norge<br />(Northern Norway)",
+          "title": "Nord-Norge (Northern Norway)",
           "subtitle": "Norwegian region",
           "centerLat": 68.6725,
           "centerLon": 20.74,
@@ -1809,7 +1810,7 @@
         },
         {
           "id": "no_ostlandet",
-          "title": "Østlandet<br />(Eastern Norway)",
+          "title": "Østlandet (Eastern Norway)",
           "subtitle": "Norwegian region",
           "centerLat": 60.647,
           "centerLon": 9.988,
@@ -1822,7 +1823,7 @@
         },
         {
           "id": "no_sorlandet",
-          "title": "Sørlandet<br />(Southern Norway)",
+          "title": "Sørlandet (Southern Norway)",
           "subtitle": "Norwegian region",
           "centerLat": 58.6295,
           "centerLon": 7.9015,
@@ -1848,7 +1849,7 @@
         },
         {
           "id": "no_trondelag",
-          "title": "Trøndelag<br />(Central Norway)",
+          "title": "Trøndelag (Central Norway)",
           "subtitle": "Norwegian region",
           "centerLat": 64.1025,
           "centerLon": 10.063,
@@ -1861,7 +1862,7 @@
         },
         {
           "id": "no_vestlandet",
-          "title": "Vestlandet<br />(Western Norway)",
+          "title": "Vestlandet (Western Norway)",
           "subtitle": "Norwegian region",
           "centerLat": 61.3775,
           "centerLon": 5.852,
