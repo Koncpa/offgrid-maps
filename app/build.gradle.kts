@@ -43,12 +43,12 @@ val hasReleaseSigning = releaseKeystoreFile != null &&
 
 android {
     namespace = "cz.offgrid.maps"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "cz.offgrid.maps"
         minSdk = 30 // Wear OS 3+ (Android 11)
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
         vectorDrawables {
