@@ -3,5 +3,8 @@ build/
 app/build/
 local.properties
 *.apk
+*.aab
+*.jks
+*.keystore
 .secrets*
 .env*

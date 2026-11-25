@@ -18,6 +18,28 @@ val mapsCdnBaseUrl: String = localProps.getProperty(
     "MAPS_CDN_BASE_URL",
     "https://offgrid-maps-cdn.appmanufacture-dev.workers.dev"
 )
+val releaseStoreFilePath: String = localProps.getProperty(
+    "RELEASE_STORE_FILE",
+    System.getenv("RELEASE_STORE_FILE") ?: ""
+)
+val releaseStorePassword: String = localProps.getProperty(
+    "RELEASE_STORE_PASSWORD",
+    System.getenv("RELEASE_STORE_PASSWORD") ?: ""
+)
+val releaseKeyAlias: String = localProps.getProperty(
+    "RELEASE_KEY_ALIAS",
+    System.getenv("RELEASE_KEY_ALIAS") ?: ""
+)
+val releaseKeyPassword: String = localProps.getProperty(
+    "RELEASE_KEY_PASSWORD",
+    System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+)
+val releaseKeystoreFile = if (releaseStoreFilePath.isNotBlank()) file(releaseStoreFilePath) else null
+val hasReleaseSigning = releaseKeystoreFile != null &&
+    releaseKeystoreFile.exists() &&
+    releaseStorePassword.isNotBlank() &&
+    releaseKeyAlias.isNotBlank() &&
+    releaseKeyPassword.isNotBlank()
 
 android {
     namespace = "cz.offgrid.maps"
@@ -28,13 +50,24 @@ android {
         minSdk = 30 // Wear OS 3+ (Android 11)
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
         vectorDrawables {
             useSupportLibrary = true
         }
         buildConfigField("String", "MAPS_GITHUB_REPO", "\"$mapsGithubRepo\"")
         buildConfigField("String", "MAPS_GITHUB_TOKEN", "\"$mapsGithubToken\"")
         buildConfigField("String", "MAPS_CDN_BASE_URL", "\"$mapsCdnBaseUrl\"")
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -45,7 +78,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug") // Pro vývoj a sideloading
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
