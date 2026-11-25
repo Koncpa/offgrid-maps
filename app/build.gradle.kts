@@ -49,7 +49,7 @@ android {
         applicationId = "cz.offgrid.maps"
         minSdk = 30 // Wear OS 3+ (Android 11)
         targetSdk = 35
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0.0"
         vectorDrawables {
             useSupportLibrary = true
