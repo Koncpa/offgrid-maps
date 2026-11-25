@@ -15,6 +15,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.roundToInt
+
+/**
+ * Summary statistics parsed from a saved GPX route/track file.
+ */
+data class GpxRouteSummary(
+    val pointCount: Int,
+    val distanceKm: Double,
+    val ascentMeters: Int
+)
 
 /**
  * Exporter, importer, and parser for standard GPX 1.1 files (compatible with Mapy.com, Garmin, Strava, Komoot).
@@ -134,37 +144,90 @@ object GpxExporter {
         }
     }
 
-    /**
-     * Exports a .gpx file to `Download/OffGridMaps/` and opens the system share sheet
-     * (Quick Share / Bluetooth / phone transfer).
-     */
-    fun shareAndExportGpxFile(context: Context, file: File): Boolean {
-        if (!file.exists()) return false
-        val exportedToDownloads = exportToPublicDownloads(context, file.name, file.readText())
+    fun summarizeGpxFile(file: File): GpxRouteSummary = summarizePoints(parseGpxFile(file))
 
-        try {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/gpx+xml"
+    internal fun summarizePoints(points: List<TrackPoint>): GpxRouteSummary {
+        if (points.size < 2) {
+            return GpxRouteSummary(pointCount = points.size, distanceKm = 0.0, ascentMeters = 0)
+        }
+        var distMeters = 0.0
+        var ascent = 0.0
+        for (i in 0 until points.size - 1) {
+            val a = points[i]
+            val b = points[i + 1]
+            distMeters += TrackingManager.calculateDistanceMeters(a.latitude, a.longitude, b.latitude, b.longitude)
+            val altA = a.altitudeMeters
+            val altB = b.altitudeMeters
+            if (altA != null && altB != null && altB > altA) {
+                ascent += (altB - altA)
+            }
+        }
+        return GpxRouteSummary(
+            pointCount = points.size,
+            distanceKm = distMeters / 1000.0,
+            ascentMeters = ascent.roundToInt()
+        )
+    }
+
+    /**
+     * Copies a saved .gpx file to the public `Download/OffGridMaps/` folder.
+     */
+    fun exportGpxBackup(context: Context, file: File): Boolean {
+        if (!file.exists()) return false
+        return try {
+            exportToPublicDownloads(context, file.name, file.readText())
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun resolveShareIntent(context: Context, file: File): Intent? {
+        val uri = try {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        } catch (_: Exception) {
+            return null
+        }
+        val mimeCandidates = arrayOf("application/gpx+xml", "application/octet-stream", "*/*")
+        for (mime in mimeCandidates) {
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = mime
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_SUBJECT, file.name)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            if (shareIntent.resolveActivity(context.packageManager) != null) {
-                val chooser = Intent.createChooser(shareIntent, "Share GPX").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(chooser)
-                return true
+            if (intent.resolveActivity(context.packageManager) != null) {
+                return intent
             }
-            return exportedToDownloads
-        } catch (_: Exception) {
-            return exportedToDownloads
         }
+        return null
+    }
+
+    fun hasShareTarget(context: Context, file: File): Boolean {
+        return file.exists() && resolveShareIntent(context, file) != null
+    }
+
+    fun launchSystemShareIfAvailable(context: Context, file: File): Boolean {
+        if (!file.exists()) return false
+        val shareIntent = resolveShareIntent(context, file) ?: return false
+        return try {
+            val chooser = Intent.createChooser(shareIntent, "Share GPX").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Exports a .gpx file to `Download/OffGridMaps/` and opens the system share sheet
+     * if a compatible transfer receiver exists on the watch.
+     */
+    fun shareAndExportGpxFile(context: Context, file: File): Boolean {
+        if (!file.exists()) return false
+        val exportedToDownloads = exportGpxBackup(context, file)
+        return launchSystemShareIfAvailable(context, file) || exportedToDownloads
     }
 
     /**

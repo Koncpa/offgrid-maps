@@ -1,8 +1,15 @@
 package cz.offgrid.maps.data.map
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import cz.offgrid.maps.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,6 +101,10 @@ object OfflineRegionHelper {
     private val releaseAssetUrlCache = ConcurrentHashMap<String, Map<String, String>>()
     private val downloadLock = Any()
     private val pendingDownloadQueue = mutableListOf<OfflinePresetRegion>()
+    private var activeWifiNetworkCallback: ConnectivityManager.NetworkCallback? = null
+    private var boundWifiNetwork: Network? = null
+    private var activeWifiLock: WifiManager.WifiLock? = null
+    private var activeDownloadWakeLock: PowerManager.WakeLock? = null
     @Volatile
     private var activeCatalogReleaseBaseUrl: String? = null
     @Volatile
@@ -449,6 +460,7 @@ object OfflineRegionHelper {
             isDownloading = true
             isVectorDownloadInFlight = true
         }
+        acquireDownloadWifiAndWakeLocks(context)
         _downloadError.value = null
         MapLibre.setConnected(true)
         offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
@@ -716,6 +728,7 @@ object OfflineRegionHelper {
         appContext: Context,
         preset: OfflinePresetRegion
     ) {
+        acquireDownloadWifiAndWakeLocks(appContext)
         thread(name = "OffGridGithubPkg_${preset.id}", isDaemon = true) {
             try {
                 val pkgDir = File(appContext.filesDir, "$PACKAGES_DIR/${preset.id}").apply {
@@ -1164,8 +1177,124 @@ object OfflineRegionHelper {
         val presetToStart = nextPreset
         if (presetToStart != null) {
             startPresetDownloadInternal(appContext, presetToStart)
-        } else if (!isUserBrowsingMap && hasSavedSnapshot) {
-            MapLibre.setConnected(false)
+        } else {
+            releaseDownloadWifiAndWakeLocks(appContext)
+            if (!isUserBrowsingMap && hasSavedSnapshot) {
+                MapLibre.setConnected(false)
+            }
+        }
+    }
+
+    /**
+     * Keeps the watch Wi-Fi radio awake and bound during active region downloads so Wear OS
+     * does not drop Wi-Fi or route large tile transfers over Bluetooth proxy.
+     */
+    @SuppressLint("MissingPermission")
+    private fun acquireDownloadWifiAndWakeLocks(context: Context) {
+        val appCtx = context.applicationContext
+        synchronized(downloadLock) {
+            try {
+                if (activeDownloadWakeLock == null) {
+                    val pm = appCtx.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    activeDownloadWakeLock = pm?.newWakeLock(
+                        PowerManager.PARTIAL_WAKE_LOCK,
+                        "OffGridMaps:MapDownload"
+                    )?.apply { setReferenceCounted(false) }
+                }
+                if (activeDownloadWakeLock?.isHeld == false) {
+                    activeDownloadWakeLock?.acquire(20 * 60 * 1000L)
+                }
+            } catch (_: Exception) {
+            }
+
+            try {
+                if (activeWifiLock == null) {
+                    val wm = appCtx.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                    activeWifiLock = wm?.createWifiLock(
+                        WifiManager.WIFI_MODE_FULL_LOW_LATENCY,
+                        "OffGridMaps:MapDownload"
+                    )?.apply { setReferenceCounted(false) }
+                }
+                if (activeWifiLock?.isHeld == false) {
+                    activeWifiLock?.acquire()
+                }
+            } catch (_: Exception) {
+            }
+
+            if (activeWifiNetworkCallback == null) {
+                try {
+                    val cm = appCtx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                        ?: return
+                    val req = NetworkRequest.Builder()
+                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .build()
+                    val cb = object : ConnectivityManager.NetworkCallback() {
+                        override fun onAvailable(network: Network) {
+                            synchronized(downloadLock) {
+                                if (!isDownloading) return
+                                boundWifiNetwork = network
+                            }
+                            try {
+                                cm.bindProcessToNetwork(network)
+                            } catch (_: Exception) {
+                            }
+                        }
+
+                        override fun onLost(network: Network) {
+                            val shouldUnbind = synchronized(downloadLock) {
+                                if (boundWifiNetwork == network) {
+                                    boundWifiNetwork = null
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            if (shouldUnbind) {
+                                try {
+                                    cm.bindProcessToNetwork(null)
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }
+                    }
+                    activeWifiNetworkCallback = cb
+                    cm.requestNetwork(req, cb)
+                } catch (_: Exception) {
+                    activeWifiNetworkCallback = null
+                }
+            }
+        }
+    }
+
+    private fun releaseDownloadWifiAndWakeLocks(context: Context) {
+        val appCtx = context.applicationContext
+        val cb: ConnectivityManager.NetworkCallback?
+        val wifiLock: WifiManager.WifiLock?
+        val wakeLock: PowerManager.WakeLock?
+        synchronized(downloadLock) {
+            cb = activeWifiNetworkCallback
+            activeWifiNetworkCallback = null
+            boundWifiNetwork = null
+            wifiLock = activeWifiLock
+            activeWifiLock = null
+            wakeLock = activeDownloadWakeLock
+            activeDownloadWakeLock = null
+        }
+
+        try {
+            val cm = appCtx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            cm?.bindProcessToNetwork(null)
+            if (cb != null) cm?.unregisterNetworkCallback(cb)
+        } catch (_: Exception) {
+        }
+        try {
+            if (wifiLock?.isHeld == true) wifiLock.release()
+        } catch (_: Exception) {
+        }
+        try {
+            if (wakeLock?.isHeld == true) wakeLock.release()
+        } catch (_: Exception) {
         }
     }
 

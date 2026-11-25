@@ -393,4 +393,33 @@ class TrackingManagerTest {
         assertEquals(expectedKm, stats!!.first, 0.01)
         assertEquals(120, stats.second)
     }
+
+    @Test
+    fun summarizePoints_computesDistancePositiveAscentAndShortTrackEdgeCases() {
+        val emptySummary = GpxExporter.summarizePoints(emptyList())
+        assertEquals(0, emptySummary.pointCount)
+        assertEquals(0.0, emptySummary.distanceKm, 0.001)
+        assertEquals(0, emptySummary.ascentMeters)
+
+        val singleSummary = GpxExporter.summarizePoints(listOf(TrackPoint(49.0, 16.0, altitudeMeters = 300.0)))
+        assertEquals(1, singleSummary.pointCount)
+        assertEquals(0.0, singleSummary.distanceKm, 0.001)
+        assertEquals(0, singleSummary.ascentMeters)
+
+        val p0 = TrackPoint(49.000, 16.000, altitudeMeters = 250.0)
+        val p1 = TrackPoint(49.010, 16.000, altitudeMeters = 375.0) // +125 m
+        val p2 = TrackPoint(49.020, 16.000, altitudeMeters = 310.0) // descent ignored
+        val p3 = TrackPoint(49.030, 16.000, altitudeMeters = 390.0) // +80 m -> total +205 m
+        val summary = GpxExporter.summarizePoints(listOf(p0, p1, p2, p3))
+
+        val expectedKm = (
+            TrackingManager.calculateDistanceMeters(p0.latitude, p0.longitude, p1.latitude, p1.longitude) +
+                TrackingManager.calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude) +
+                TrackingManager.calculateDistanceMeters(p2.latitude, p2.longitude, p3.latitude, p3.longitude)
+            ) / 1000.0
+
+        assertEquals(4, summary.pointCount)
+        assertEquals(expectedKm, summary.distanceKm, 0.01)
+        assertEquals(205, summary.ascentMeters)
+    }
 }
