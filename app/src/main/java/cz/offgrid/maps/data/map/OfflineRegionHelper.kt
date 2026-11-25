@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
@@ -918,6 +919,9 @@ object OfflineRegionHelper {
                 if (trailsOk) {
                     TrailTileManager.ensurePackageIndexed(pkgDir)
                 }
+                if (File(pkgDir, POIS_FRAGMENT_FILE).exists()) {
+                    PoiTileManager.ensurePackageIndexed(pkgDir)
+                }
                 trailExecutor.execute { invalidateTrailPackages() }
                 updateTrailsForViewport(appContext, lastViewportLat, lastViewportLon)
             } finally {
@@ -1119,23 +1123,12 @@ object OfflineRegionHelper {
     private var trailPackages: List<TrailPackage>? = null
     @Volatile
     private var activeTrailKey: String? = null
-    @Volatile
-    private var bundledJmkPoisFragment: String? = null
+    private val viewportRequestSeq = AtomicLong(0L)
 
     private fun invalidateTrailPackages() {
         trailPackages = null
         activeTrailKey = null
         activePoiKey = null
-    }
-
-    private fun loadBundledJmkPoisFragment(context: Context): String {
-        bundledJmkPoisFragment?.let { return it }
-        return try {
-            val raw = context.assets.open(ASSET_JMK_POIS_FILE).bufferedReader().use { it.readText() }
-            extractFeatureArray(raw).also { bundledJmkPoisFragment = it }
-        } catch (_: Exception) {
-            ""
-        }
     }
 
     private fun loadTrailPackages(context: Context): List<TrailPackage> {
@@ -1156,18 +1149,28 @@ object OfflineRegionHelper {
 
     /**
      * Shows the marked trails and outdoor POIs of every downloaded region that covers the given map position.
-     * Only nearby regions are kept in memory, so having many regions on the watch does not
-     * increase RAM use. Called on camera idle; does nothing when the region set is unchanged.
+     * Both trails and POIs are spatially sliced to the local 3x3 grid around the viewport so having
+     * many or huge alpine regions on the watch does not spike native MapLibre heap.
      */
     fun updateTrailsForViewport(context: Context, lat: Double, lon: Double) {
         lastViewportLat = lat
         lastViewportLon = lon
+        val seq = viewportRequestSeq.incrementAndGet()
+        val appCtx = context.applicationContext
         trailExecutor.execute {
-            refreshActiveViewportOnExecutor(context, lat, lon)
+            refreshActiveViewportOnExecutor(appCtx, lat, lon, seq)
         }
     }
 
-    private fun refreshActiveViewportOnExecutor(context: Context, lat: Double, lon: Double) {
+    private fun refreshActiveViewportOnExecutor(
+        context: Context,
+        lat: Double,
+        lon: Double,
+        requestSeq: Long = viewportRequestSeq.get()
+    ) {
+        val isStale = { requestSeq != viewportRequestSeq.get() }
+        if (isStale()) return
+
         val margin = 0.05
         val visible = loadTrailPackages(context)
             .filter { p ->
@@ -1182,29 +1185,38 @@ object OfflineRegionHelper {
             .take(3)
         val inJmk = lat in 48.70..49.50 && lon in 15.90..17.00
         val regionKey = visible.joinToString(",") { it.dir.name } + "|jmk=$inJmk"
-        val trailKey = "${TrailTileManager.viewportTileKey(lat, lon)}|$regionKey"
-        if (trailKey != activeTrailKey) {
-            activeTrailKey = trailKey
-            _customTrailsGeoJson.value = TrailTileManager.loadViewportTrailsGeoJson(
-                packageDirs = visible.map { it.dir },
+        val tileKey = "${TrailTileManager.viewportTileKey(lat, lon)}|$regionKey"
+        val packageDirs = visible.map { it.dir }
+
+        if (tileKey != activeTrailKey) {
+            val loadedTrails = TrailTileManager.loadViewportTrailsGeoJsonOrNull(
+                packageDirs = packageDirs,
                 lat = lat,
-                lon = lon
-            )
+                lon = lon,
+                shouldCancel = isStale
+            ) ?: return
+            if (isStale()) return
+            activeTrailKey = tileKey
+            _customTrailsGeoJson.value = loadedTrails
         }
 
-        if (regionKey == activePoiKey) return
-        activePoiKey = regionKey
+        if (tileKey == activePoiKey || isStale()) return
 
-        val poiFragments = mutableListOf<String>()
-        if (inJmk) {
-            val jmkFrag = loadBundledJmkPoisFragment(context)
-            if (jmkFrag.isNotBlank()) poiFragments.add(jmkFrag)
+        val extraPoiDirs = if (inJmk) {
+            listOf(PoiTileManager.ensureJmkAssetIndexed(context, ASSET_JMK_POIS_FILE))
+        } else {
+            emptyList()
         }
-        visible.forEach { p ->
-            val frag = File(p.dir, POIS_FRAGMENT_FILE).takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
-            if (frag != null) poiFragments.add(frag)
-        }
-        val combinedPoisGeoJson = """{"type":"FeatureCollection","features":[${poiFragments.joinToString(",")}]}"""
+        val combinedPoisGeoJson = PoiTileManager.loadViewportPoisGeoJson(
+            packageDirs = packageDirs,
+            lat = lat,
+            lon = lon,
+            extraTileDirs = extraPoiDirs,
+            shouldCancel = isStale
+        ) ?: return
+        if (isStale()) return
+
+        activePoiKey = tileKey
         _customPoisGeoJson.value = combinedPoisGeoJson
         _activePois.value = parseOutdoorPois(combinedPoisGeoJson)
     }

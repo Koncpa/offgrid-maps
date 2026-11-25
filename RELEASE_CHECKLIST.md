@@ -15,12 +15,12 @@ Standalone pre-release checklist before publishing OffGrid Maps to Google Play.
 - [x] `app/src/main/assets/default_catalog.json` matches latest `catalog.json` v5 from `offgrid-maps-data`.
 
 ## App Build, UI & QA
-- [x] `./gradlew test` passes (`40` tests, `0` failures, `0` skipped).
+- [x] `./gradlew test` passes (`48` tests, `0` failures, `0` skipped).
 - [x] Release AAB (`app/build/outputs/bundle/release/app-release.aab`) builds cleanly with `minifyEnabled = true` and production upload signature (`CN=AppManufacture, OU=OffGridMaps`).
-- [ ] Final features verified on real Wear OS hardware (Wi-Fi download lock, GPX routes).
+- [x] Memory stability (`PoiTileManager`, spatial `TrailTileManager`, MapLibre cache bounds) and core features verified on real Wear OS hardware (Galaxy Watch Ultra).
 - [x] App UI, map labels (`name:en` → `name`), and documentation verified in English.
-- [ ] Re-upload updated `docs/` (`index.html`, `privacy.html`) to Cloudflare Pages (`https://offgridmaps.pages.dev/`).
-- [ ] Prepare Play Store Wear OS screenshots (`1:1`), `512×512` icon, `1024×500` graphic, Data Safety form, and upload `app-release.aab` in Google Play Console.
+- [x] Updated `docs/` (`index.html`, `privacy.html`) live on Cloudflare Pages (`https://offgridmaps.pages.dev/` and `/privacy`).
+- [x] Store assets prepared in `store-assets/` (`icon_512x512.png`, `feature_graphic_1024x500.png`, 4× `480×480` Wear OS screenshots, `PLAY_STORE_LISTING.md`) — ready to upload `app-release.aab` in Google Play Console.
 
 ## Studio Account, Live Cloudflare Endpoints & Domain Notes
 - **Publisher / Developer Google Account:** `appmanufacture.dev@gmail.com`

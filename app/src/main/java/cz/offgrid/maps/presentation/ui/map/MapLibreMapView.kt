@@ -27,6 +27,7 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.offline.OfflineManager
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.*
@@ -106,7 +107,10 @@ fun MapLibreMapView(
     DisposableEffect(lifecycleOwner, mapView) {
         val memCallbacks = object : ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
-                if (!isScreenVisible && level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ||
+                val isForegroundCritical =
+                    level in ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL until ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+                if (isForegroundCritical ||
+                    (!isScreenVisible && level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) ||
                     level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE
                 ) {
                     mapView.onLowMemory()
@@ -114,9 +118,7 @@ fun MapLibreMapView(
             }
             override fun onConfigurationChanged(newConfig: Configuration) = Unit
             override fun onLowMemory() {
-                if (!isScreenVisible) {
-                    mapView.onLowMemory()
-                }
+                mapView.onLowMemory()
             }
         }
         val appContext = context.applicationContext
@@ -153,6 +155,9 @@ fun MapLibreMapView(
     LaunchedEffect(mapView) {
         mapView.getMapAsync { map ->
             mapInstance = map
+            // Disable speculative child/parent zoom tile prefetching to bound native heap on Wear OS
+            map.setPrefetchesTiles(false)
+            map.setPrefetchZoomDelta(0)
 
             map.uiSettings.apply {
                 isAttributionEnabled = false
@@ -271,8 +276,6 @@ fun MapLibreMapView(
             mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_CONTOURS_SOURCE_ID)?.let { source ->
                 source.setGeoJson(geoJson)
                 mapInstance?.triggerRepaint()
-                delay(80L)
-                mapInstance?.triggerRepaint()
             }
         }
     }
@@ -294,8 +297,6 @@ fun MapLibreMapView(
         if (isStyleLoaded && !poisJson.isNullOrEmpty()) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_OUTDOOR_POIS_SOURCE_ID)?.let { source ->
                 source.setGeoJson(poisJson)
-                mapInstance?.triggerRepaint()
-                delay(80L)
                 mapInstance?.triggerRepaint()
             }
         }
@@ -560,6 +561,11 @@ private fun createPoiIconBitmap(
 @Composable
 private fun RememberMapLibreInit(context: android.content.Context) {
     remember {
-        MapLibre.getInstance(context)
+        val appContext = context.applicationContext
+        MapLibre.getInstance(appContext)
+        OfflineManager.getInstance(appContext).apply {
+            setMaximumAmbientCacheSize(16L * 1024L * 1024L, null)
+            runPackDatabaseAutomatically(false)
+        }
     }
 }

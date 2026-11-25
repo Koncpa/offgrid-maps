@@ -1,6 +1,7 @@
 package cz.offgrid.maps.performance
 
 import cz.offgrid.maps.data.map.OfflineRegionHelper
+import cz.offgrid.maps.data.map.PoiTileManager
 import cz.offgrid.maps.data.map.TrailTileManager
 import cz.offgrid.maps.data.tracking.GpxExporter
 import cz.offgrid.maps.data.tracking.TrackingManager
@@ -182,5 +183,73 @@ class MapPerformanceTest {
 
         assertTrue("10k GPX parse too slow: $parseMs ms", parseMs < 1500.0)
         assertTrue("10k remaining-route calculation too slow: $remainingMs ms", remainingMs < 200.0)
+    }
+
+    @Test
+    fun poiSpatialIndexing_cutsAlpinePoiPayloadBelowFifteenPercent() {
+        val tempDir = Files.createTempDirectory("offgrid_perf_pois").toFile()
+        try {
+            val cats = arrayOf("water", "shelter", "viewpoint", "picnic", "saddle", "guidepost")
+            val totalPois = 25_000
+            val sb = StringBuilder(totalPois * 125)
+            for (i in 0 until totalPois) {
+                if (i > 0) sb.append(',')
+                val lat = 46.20 + ((i * 29) % 180) * 0.010
+                val lon = 12.10 + ((i * 61) % 340) * 0.010
+                val cat = cats[i % cats.size]
+                sb.append(
+                    String.format(
+                        Locale.US,
+                        """{"type":"Feature","properties":{"cat":"%s","label":"Alpine POI %d"},"geometry":{"type":"Point","coordinates":[%.5f,%.5f]}}""",
+                        cat, i, lon, lat
+                    )
+                )
+            }
+            val poisFile = File(tempDir, "pois.features")
+            val rawBytesSize = sb.length
+            poisFile.writeText(sb.toString(), Charsets.UTF_8)
+            sb.setLength(0)
+
+            val indexMs = measureNanoTime {
+                PoiTileManager.ensurePackageIndexed(tempDir)
+            } / 1_000_000.0
+
+            var maxQueryMs = 0.0
+            var totalQueryMs = 0.0
+            var maxPayloadBytes = 0
+            for (step in 0 until 12) {
+                val lat = 46.40 + step * 0.12
+                val lon = 12.40 + step * 0.22
+                var payload = ""
+                val qMs = measureNanoTime {
+                    payload = PoiTileManager.loadViewportPoisGeoJson(listOf(tempDir), lat, lon)!!
+                } / 1_000_000.0
+                totalQueryMs += qMs
+                if (qMs > maxQueryMs) maxQueryMs = qMs
+                if (payload.length > maxPayloadBytes) maxPayloadBytes = payload.length
+            }
+            val avgQueryMs = totalQueryMs / 12.0
+            val payloadRatio = maxPayloadBytes.toDouble() / rawBytesSize.toDouble()
+
+            println(
+                String.format(
+                    Locale.US,
+                    "[PERF] poiRaw=%.2f MB (%d POIs) | index=%.1f ms | viewportAvg=%.1f ms (max=%.1f ms) | viewportPayload=%.1f KB (%.1f%% of region)",
+                    rawBytesSize / (1024.0 * 1024.0),
+                    totalPois,
+                    indexMs,
+                    avgQueryMs,
+                    maxQueryMs,
+                    maxPayloadBytes / 1024.0,
+                    payloadRatio * 100.0
+                )
+            )
+
+            assertTrue("POI spatial indexing too slow: $indexMs ms", indexMs < 4000.0)
+            assertTrue("POI viewport query too slow: max=$maxQueryMs ms", maxQueryMs < 300.0)
+            assertTrue("POI viewport payload exceeded 15% of region ($payloadRatio)", payloadRatio < 0.15)
+        } finally {
+            tempDir.deleteRecursively()
+        }
     }
 }

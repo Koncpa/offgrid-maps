@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +34,7 @@ object ContourTileManager {
 
     private const val TILES_DIR_NAME = "contour_tiles"
     private const val TILE_ZOOM = 12
-    private const val MAX_MEMORY_TILES = 24
+    private const val MAX_MEMORY_TILES = 12
 
     // z=12 tiles already pre-bundled in the APK (assets/jmk_contours.geojson for Oslavany / Ivančice / Zbýšov)
     internal val BUNDLED_JMK_TILES = setOf(
@@ -43,7 +44,7 @@ object ContourTileManager {
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private val memoryTileCache: MutableMap<String, String> = Collections.synchronizedMap(
-        object : LinkedHashMap<String, String>(32, 0.75f, true) {
+        object : LinkedHashMap<String, String>(16, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
                 return size > MAX_MEMORY_TILES
             }
@@ -51,6 +52,8 @@ object ContourTileManager {
     )
     @Volatile
     private var lastViewportKey: String = ""
+    @Volatile
+    private var activeViewportJob: Job? = null
 
     private val _customContoursGeoJson = MutableStateFlow<String?>(null)
     val customContoursGeoJson: StateFlow<String?> = _customContoursGeoJson.asStateFlow()
@@ -66,7 +69,8 @@ object ContourTileManager {
         zoom: Double,
         allowNetworkFetch: Boolean
     ) {
-        if (zoom < 11.0) return
+        // Style contour layers start at minzoom 12; avoid decoding heavy GeoJSON at overview zooms
+        if (zoom < 11.8) return
 
         val centerTx = lonToTileX(centerLon, TILE_ZOOM)
         val centerTy = latToTileY(centerLat, TILE_ZOOM)
@@ -74,7 +78,8 @@ object ContourTileManager {
         if (viewportKey == lastViewportKey) return
         lastViewportKey = viewportKey
 
-        scope.launch {
+        activeViewportJob?.cancel()
+        activeViewportJob = scope.launch {
             updateActiveViewportTiles(
                 context = context,
                 minTx = centerTx - 1,

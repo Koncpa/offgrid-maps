@@ -3,8 +3,58 @@ package cz.offgrid.maps.data.map
 import java.io.BufferedInputStream
 import java.io.BufferedWriter
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
 import kotlin.math.floor
+
+/**
+ * Bounded LRU pool of open [BufferedWriter] instances for writing spatial tile files (`t_*.tsv`, `p_*.features`)
+ * without hitting Android per-process file descriptor limits when indexing huge regions.
+ */
+internal class BoundedTileWriterPool(
+    private val tilesDir: File,
+    private val prefix: String,
+    private val suffix: String,
+    private val maxOpenWriters: Int = 120
+) : AutoCloseable {
+    private val writers = HashMap<String, BufferedWriter>()
+    private val createdFiles = HashSet<String>()
+
+    fun appendRow(bx: Int, by: Int, writeRow: (BufferedWriter) -> Unit) {
+        val key = "${bx}_${by}"
+        var writer = writers[key]
+        if (writer == null) {
+            val file = File(tilesDir, "$prefix$key$suffix")
+            val append = !createdFiles.add(key)
+            writer = FileOutputStream(file, append).bufferedWriter(StandardCharsets.UTF_8)
+            writers[key] = writer
+            if (writers.size > maxOpenWriters) {
+                val targetSize = maxOpenWriters / 2
+                val iter = writers.entries.iterator()
+                while (writers.size > targetSize && iter.hasNext()) {
+                    val entry = iter.next()
+                    if (entry.key != key) {
+                        entry.value.close()
+                        iter.remove()
+                    }
+                }
+            }
+        } else {
+            createdFiles.add(key)
+        }
+        writeRow(writer)
+    }
+
+    override fun close() {
+        writers.values.forEach {
+            try {
+                it.close()
+            } catch (_: Exception) {
+            }
+        }
+        writers.clear()
+    }
+}
 
 /**
  * Spatial tile indexer and viewport loader for downloaded `trails.features` files.
@@ -57,33 +107,14 @@ object TrailTileManager {
             tilesDir.mkdirs()
         }
 
-        val writers = HashMap<String, BufferedWriter>()
-        val createdFiles = HashSet<String>()
+        val writerPool = BoundedTileWriterPool(tilesDir, prefix = "t_", suffix = ".tsv")
         fun appendLineToCell(bx: Int, by: Int, colour: String, lineJson: String) {
-            val key = "${bx}_${by}"
-            var w = writers[key]
-            if (w == null) {
-                val file = File(tilesDir, "t_$key.tsv")
-                val append = !createdFiles.add(key)
-                w = java.io.FileOutputStream(file, append).bufferedWriter(StandardCharsets.UTF_8)
-                writers[key] = w
-                if (writers.size > 120) {
-                    val iter = writers.entries.iterator()
-                    while (writers.size > 60 && iter.hasNext()) {
-                        val entry = iter.next()
-                        if (entry.key != key) {
-                            entry.value.close()
-                            iter.remove()
-                        }
-                    }
-                }
-            } else {
-                createdFiles.add(key)
+            writerPool.appendRow(bx, by) { w ->
+                w.write(colour)
+                w.write('\t'.code)
+                w.write(lineJson)
+                w.write('\n'.code)
             }
-            w.write(colour)
-            w.write('\t'.code)
-            w.write(lineJson)
-            w.write('\n'.code)
         }
 
         try {
@@ -167,12 +198,7 @@ object TrailTileManager {
                 }
             }
         } finally {
-            writers.values.forEach {
-                try {
-                    it.close()
-                } catch (_: Exception) {
-                }
-            }
+            writerPool.close()
         }
     }
 
@@ -244,7 +270,17 @@ object TrailTileManager {
      * Loads trails from the 3x3 spatial tile grid surrounding ([lat], [lon]) across [packageDirs]
      * and returns a lightweight GeoJSON FeatureCollection string grouped into one MultiLineString per colour.
      */
-    fun loadViewportTrailsGeoJson(packageDirs: List<File>, lat: Double, lon: Double): String {
+    fun loadViewportTrailsGeoJson(packageDirs: List<File>, lat: Double, lon: Double): String =
+        loadViewportTrailsGeoJsonOrNull(packageDirs, lat, lon) { false }
+            ?: """{"type":"FeatureCollection","features":[]}"""
+
+    /** Same as [loadViewportTrailsGeoJson], returning `null` if [shouldCancel] triggers mid-scan. */
+    fun loadViewportTrailsGeoJsonOrNull(
+        packageDirs: List<File>,
+        lat: Double,
+        lon: Double,
+        shouldCancel: () -> Boolean
+    ): String? {
         if (packageDirs.isEmpty()) {
             return """{"type":"FeatureCollection","features":[]}"""
         }
@@ -254,12 +290,14 @@ object TrailTileManager {
         val byColour = LinkedHashMap<String, LinkedHashSet<String>>()
 
         for (pkgDir in packageDirs) {
+            if (shouldCancel()) return null
             ensurePackageIndexed(pkgDir)
             val tilesDir = File(pkgDir, TILES_SUBDIR)
             if (!tilesDir.exists()) continue
 
             for (bx in (cx - 1)..(cx + 1)) {
                 for (by in (cy - 1)..(cy + 1)) {
+                    if (shouldCancel()) return null
                     val cellFile = File(tilesDir, "t_${bx}_${by}.tsv")
                     if (!cellFile.exists() || cellFile.length() == 0L) continue
                     try {
