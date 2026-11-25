@@ -1,6 +1,8 @@
 package cz.offgrid.maps.presentation.ui.map
 
 import android.annotation.SuppressLint
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -80,7 +82,7 @@ fun MapLibreMapView(
     var isStyleLoaded by remember { mutableStateOf(false) }
     var isScreenVisible by remember { mutableStateOf(true) }
     val customContoursGeoJson by ContourTileManager.customContoursGeoJson.collectAsState()
-    val customTrailsGeoJson by OfflineRegionHelper.customTrailsGeoJson.collectAsState()
+    val customTrailsUri by OfflineRegionHelper.customTrailsUri.collectAsState()
     val customPoisGeoJson by OfflineRegionHelper.customPoisGeoJson.collectAsState()
 
     val mapView = remember {
@@ -102,6 +104,20 @@ fun MapLibreMapView(
     }
 
     DisposableEffect(lifecycleOwner, mapView) {
+        val memCallbacks = object : ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) {
+                if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+                    mapView.onLowMemory()
+                }
+            }
+            override fun onConfigurationChanged(newConfig: Configuration) = Unit
+            override fun onLowMemory() {
+                mapView.onLowMemory()
+            }
+        }
+        val appContext = context.applicationContext
+        appContext.registerComponentCallbacks(memCallbacks)
+
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()
@@ -114,13 +130,17 @@ fun MapLibreMapView(
                     isScreenVisible = false
                     mapView.onPause()
                 }
-                Lifecycle.Event.ON_STOP -> mapView.onStop()
+                Lifecycle.Event.ON_STOP -> {
+                    mapView.onStop()
+                    mapView.onLowMemory()
+                }
                 Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            appContext.unregisterComponentCallbacks(memCallbacks)
             lifecycleOwner.lifecycle.removeObserver(observer)
             mapView.onDestroy()
         }
@@ -253,12 +273,12 @@ fun MapLibreMapView(
         }
     }
 
-    // Update marked hiking trails downloaded from the GitHub repository (Koncpa/offgrid-maps-data)
-    LaunchedEffect(customTrailsGeoJson, isStyleLoaded) {
-        val trailsJson = customTrailsGeoJson
-        if (isStyleLoaded && !trailsJson.isNullOrEmpty()) {
+    // Update marked hiking trails from streamed file URI so multi-region GeoJSON stays off the Java heap
+    LaunchedEffect(customTrailsUri, isStyleLoaded) {
+        val trailsUri = customTrailsUri
+        if (isStyleLoaded && !trailsUri.isNullOrBlank()) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_KCT_TRAILS_SOURCE_ID)?.let { source ->
-                source.setGeoJson(trailsJson)
+                source.setUri(trailsUri)
                 mapInstance?.triggerRepaint()
                 delay(80L)
                 mapInstance?.triggerRepaint()

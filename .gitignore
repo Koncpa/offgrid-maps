@@ -6,5 +6,6 @@ local.properties
 *.aab
 *.jks
 *.keystore
+store-assets/
 .secrets*
 .env*

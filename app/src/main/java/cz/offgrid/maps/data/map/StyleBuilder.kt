@@ -47,19 +47,31 @@ object StyleBuilder {
             $sourceDefinition,
             "kct_trails_source": {
               "type": "geojson",
-              "data": "asset://jmk_kct_trails.geojson"
+              "data": "asset://jmk_kct_trails.geojson",
+              "maxzoom": 14,
+              "buffer": 16,
+              "tolerance": 1.2
             },
             "custom_kct_trails_source": {
               "type": "geojson",
-              "data": {"type": "FeatureCollection", "features": []}
+              "data": {"type": "FeatureCollection", "features": []},
+              "maxzoom": 14,
+              "buffer": 16,
+              "tolerance": 1.2
             },
             "jmk_contours_source": {
               "type": "geojson",
-              "data": "asset://jmk_contours.geojson"
+              "data": "asset://jmk_contours.geojson",
+              "maxzoom": 14,
+              "buffer": 16,
+              "tolerance": 1.0
             },
             "custom_contours_source": {
               "type": "geojson",
-              "data": {"type": "FeatureCollection", "features": []}
+              "data": {"type": "FeatureCollection", "features": []},
+              "maxzoom": 14,
+              "buffer": 16,
+              "tolerance": 1.0
             },
             "custom_outdoor_pois_source": {
               "type": "geojson",

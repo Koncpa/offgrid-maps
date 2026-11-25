@@ -19,7 +19,9 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.offline.*
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -30,6 +32,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
@@ -206,8 +209,10 @@ object OfflineRegionHelper {
     private val _catalogRegions = MutableStateFlow<List<OfflinePresetRegion>>(presetRegions)
     val catalogRegions: StateFlow<List<OfflinePresetRegion>> = _catalogRegions.asStateFlow()
 
-    private val _customTrailsGeoJson = MutableStateFlow<String?>(null)
-    val customTrailsGeoJson: StateFlow<String?> = _customTrailsGeoJson.asStateFlow()
+    private val _customTrailsUri = MutableStateFlow<String?>(null)
+    val customTrailsUri: StateFlow<String?> = _customTrailsUri.asStateFlow()
+
+    private val trailFileGen = AtomicInteger(0)
 
     private val _customPoisGeoJson = MutableStateFlow<String?>(null)
     val customPoisGeoJson: StateFlow<String?> = _customPoisGeoJson.asStateFlow()
@@ -562,6 +567,152 @@ object OfflineRegionHelper {
         val contoursOk: Boolean
     )
 
+    private class NonClosingInputStream(input: InputStream) : FilterInputStream(input) {
+        override fun close() {}
+    }
+
+    /**
+     * Streams a `.geojson.gz` FeatureCollection directly to [targetFile] extracting only the inner
+     * elements of `"features":[...]`, using ~48 KB of memory instead of buffering whole Strings on the heap.
+     */
+    internal fun streamFeatureArrayFromGzip(gzippedStream: InputStream, targetFile: File): Boolean {
+        return try {
+            GZIPInputStream(NonClosingInputStream(gzippedStream), 16 * 1024).use { gzis ->
+                val marker = "\"features\":[".toByteArray(StandardCharsets.US_ASCII)
+                val header = ByteArrayOutputStream(512)
+                var markerPos = -1
+                val probe = ByteArray(1024)
+                while (header.size() < 8192) {
+                    val n = gzis.read(probe)
+                    if (n < 0) break
+                    header.write(probe, 0, n)
+                    val cur = header.toByteArray()
+                    val idx = indexOfBytes(cur, marker)
+                    if (idx >= 0) {
+                        markerPos = idx
+                        break
+                    }
+                }
+                if (markerPos < 0) {
+                    targetFile.writeText("")
+                    return false
+                }
+
+                val headerBytes = header.toByteArray()
+                val afterMarker = markerPos + marker.size
+                val tailCap = 64
+                val tail = ByteArray(tailCap)
+                var tailLen = 0
+                var startedWriting = false
+
+                targetFile.outputStream().buffered(32 * 1024).use { out ->
+                    fun pushChunk(chunk: ByteArray, offset: Int, length: Int) {
+                        var i = offset
+                        val end = offset + length
+                        while (i < end) {
+                            if (tailLen < tailCap) {
+                                val take = minOf(tailCap - tailLen, end - i)
+                                System.arraycopy(chunk, i, tail, tailLen, take)
+                                tailLen += take
+                                i += take
+                            } else {
+                                val space = end - i
+                                if (space >= tailCap) {
+                                    // Flush whole tail then write excess directly
+                                    if (!startedWriting) {
+                                        var s = 0
+                                        while (s < tailLen && isAsciiWhitespace(tail[s])) s++
+                                        if (s < tailLen) {
+                                            out.write(tail, s, tailLen - s)
+                                            startedWriting = true
+                                        }
+                                    } else {
+                                        out.write(tail, 0, tailLen)
+                                    }
+                                    val excess = space - tailCap
+                                    if (excess > 0) {
+                                        var pos = i
+                                        val excessEnd = i + excess
+                                        if (!startedWriting) {
+                                            while (pos < excessEnd && isAsciiWhitespace(chunk[pos])) pos++
+                                        }
+                                        if (pos < excessEnd) {
+                                            out.write(chunk, pos, excessEnd - pos)
+                                            startedWriting = true
+                                        }
+                                        i += excess
+                                    }
+                                    System.arraycopy(chunk, i, tail, 0, tailCap)
+                                    tailLen = tailCap
+                                    i += tailCap
+                                } else {
+                                    // Flush oldest `space` bytes from tail and shift
+                                    if (!startedWriting) {
+                                        var s = 0
+                                        while (s < space && isAsciiWhitespace(tail[s])) s++
+                                        if (s < space) {
+                                            out.write(tail, s, space - s)
+                                            startedWriting = true
+                                        }
+                                    } else {
+                                        out.write(tail, 0, space)
+                                    }
+                                    System.arraycopy(tail, space, tail, 0, tailCap - space)
+                                    System.arraycopy(chunk, i, tail, tailCap - space, space)
+                                    i += space
+                                }
+                            }
+                        }
+                    }
+
+                    if (afterMarker < headerBytes.size) {
+                        pushChunk(headerBytes, afterMarker, headerBytes.size - afterMarker)
+                    }
+                    val buf = ByteArray(16 * 1024)
+                    while (true) {
+                        val n = gzis.read(buf)
+                        if (n < 0) break
+                        if (n > 0) pushChunk(buf, 0, n)
+                    }
+
+                    // Trim trailing `]}` from tail
+                    var endIdx = tailLen - 1
+                    while (endIdx >= 0 && tail[endIdx] != ']'.code.toByte()) {
+                        endIdx--
+                    }
+                    if (endIdx < 0) {
+                        // File might exceed 64B? At minimum strip whitespace if malformed
+                        endIdx = tailLen
+                    }
+                    var startIdx = 0
+                    if (!startedWriting) {
+                        while (startIdx < endIdx && isAsciiWhitespace(tail[startIdx])) startIdx++
+                    }
+                    while (endIdx > startIdx && isAsciiWhitespace(tail[endIdx - 1])) endIdx--
+                    if (endIdx > startIdx) {
+                        out.write(tail, startIdx, endIdx - startIdx)
+                    }
+                }
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isAsciiWhitespace(b: Byte): Boolean =
+        b == ' '.code.toByte() || b == '\n'.code.toByte() || b == '\r'.code.toByte() || b == '\t'.code.toByte()
+
+    private fun indexOfBytes(haystack: ByteArray, needle: ByteArray): Int {
+        outer@ for (i in 0..(haystack.size - needle.size)) {
+            for (j in needle.indices) {
+                if (haystack[i + j] != needle[j]) continue@outer
+            }
+            return i
+        }
+        return -1
+    }
+
     internal fun extractPackageZip(
         zipStream: InputStream,
         pkgDir: File,
@@ -573,23 +724,20 @@ object OfflineRegionHelper {
         ZipInputStream(zipStream).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
-                val entryBytes = zis.readBytes()
                 when (entry.name) {
                     "region_meta.json" -> {
-                        File(pkgDir, "region_meta.json").writeBytes(entryBytes)
+                        File(pkgDir, "region_meta.json").outputStream().use { out ->
+                            NonClosingInputStream(zis).copyTo(out)
+                        }
                     }
                     "kct_trails.geojson.gz" -> {
-                        val geoJson = GZIPInputStream(entryBytes.inputStream()).bufferedReader().use { it.readText() }
-                        File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
-                        trailsOk = true
+                        trailsOk = streamFeatureArrayFromGzip(zis, File(pkgDir, TRAILS_FRAGMENT_FILE))
                     }
                     "outdoor_pois.geojson.gz" -> {
-                        val geoJson = GZIPInputStream(entryBytes.inputStream()).bufferedReader().use { it.readText() }
-                        File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
-                        poisOk = true
+                        poisOk = streamFeatureArrayFromGzip(zis, File(pkgDir, POIS_FRAGMENT_FILE))
                     }
                     "contours_z12.tiles.gz" -> {
-                        contoursOk = entryBytes.inputStream().use { importContours(it) }
+                        contoursOk = NonClosingInputStream(zis).use { importContours(it) }
                     }
                 }
                 zis.closeEntry()
@@ -745,12 +893,10 @@ object OfflineRegionHelper {
                         File(pkgDir, "region_meta.json").outputStream().use { input.copyTo(it) }
                     }
                     trailsOk = downloadPackageFile(preset, "kct_trails.geojson.gz") { input ->
-                        val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
-                        File(pkgDir, TRAILS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                        streamFeatureArrayFromGzip(input, File(pkgDir, TRAILS_FRAGMENT_FILE))
                     }
                     downloadPackageFile(preset, "outdoor_pois.geojson.gz") { input ->
-                        val geoJson = GZIPInputStream(input).bufferedReader().use { it.readText() }
-                        File(pkgDir, POIS_FRAGMENT_FILE).writeText(extractFeatureArray(geoJson))
+                        streamFeatureArrayFromGzip(input, File(pkgDir, POIS_FRAGMENT_FILE))
                     }
                     contoursImported = downloadPackageFile(preset, "contours_z12.tiles.gz") { input ->
                         ContourTileManager.importTilePackage(appContext, input)
@@ -1019,19 +1165,37 @@ object OfflineRegionHelper {
 
     private fun refreshActiveViewportOnExecutor(context: Context, lat: Double, lon: Double) {
         val margin = 0.05
-        val visible = loadTrailPackages(context).filter { p ->
-            lat <= p.bounds[0] + margin && lat >= p.bounds[2] - margin &&
-                lon <= p.bounds[1] + margin && lon >= p.bounds[3] - margin
-        }
+        val visible = loadTrailPackages(context)
+            .filter { p ->
+                lat <= p.bounds[0] + margin && lat >= p.bounds[2] - margin &&
+                    lon <= p.bounds[1] + margin && lon >= p.bounds[3] - margin
+            }
+            .sortedBy { p ->
+                val centerLat = (p.bounds[0] + p.bounds[2]) / 2.0
+                val centerLon = (p.bounds[1] + p.bounds[3]) / 2.0
+                hypot(lat - centerLat, lon - centerLon)
+            }
+            .take(2)
         val inJmk = lat in 48.70..49.50 && lon in 15.90..17.00
         val key = visible.joinToString(",") { it.dir.name } + "|jmk=$inJmk"
         if (key == activeTrailKey) return
         activeTrailKey = key
 
-        val trailFragments = visible.mapNotNull { p ->
-            File(p.dir, TRAILS_FRAGMENT_FILE).takeIf { it.exists() }?.readText()?.takeIf { it.isNotBlank() }
+        val trailFiles = visible.mapNotNull { p ->
+            File(p.dir, TRAILS_FRAGMENT_FILE).takeIf { it.exists() && it.length() > 0L }
         }
-        _customTrailsGeoJson.value = """{"type":"FeatureCollection","features":[${trailFragments.joinToString(",")}]}"""
+        val gen = trailFileGen.incrementAndGet()
+        val outFile = File(context.cacheDir, "active_trails_$gen.geojson")
+        val tmpFile = File(context.cacheDir, "active_trails_$gen.geojson.tmp")
+        writeCombinedFeatureCollectionFile(trailFiles, tmpFile)
+        if (!tmpFile.renameTo(outFile)) {
+            tmpFile.copyTo(outFile, overwrite = true)
+            tmpFile.delete()
+        }
+        _customTrailsUri.value = outFile.toURI().toString()
+        context.cacheDir.listFiles { f ->
+            f.name.startsWith("active_trails_") && f.name.endsWith(".geojson") && f.name != outFile.name && f.name != "active_trails_${gen - 1}.geojson"
+        }?.forEach { it.delete() }
 
         val poiFragments = mutableListOf<String>()
         if (inJmk) {
@@ -1045,6 +1209,31 @@ object OfflineRegionHelper {
         val combinedPoisGeoJson = """{"type":"FeatureCollection","features":[${poiFragments.joinToString(",")}]}"""
         _customPoisGeoJson.value = combinedPoisGeoJson
         _activePois.value = parseOutdoorPois(combinedPoisGeoJson)
+    }
+
+    internal fun writeCombinedFeatureCollectionFile(fragmentFiles: List<File>, outFile: File): File {
+        val header = """{"type":"FeatureCollection","features":[""".toByteArray(StandardCharsets.US_ASCII)
+        val comma = ",".toByteArray(StandardCharsets.US_ASCII)
+        val footer = "]}".toByteArray(StandardCharsets.US_ASCII)
+        outFile.outputStream().buffered(32 * 1024).use { out ->
+            out.write(header)
+            var wroteAny = false
+            val buf = ByteArray(32 * 1024)
+            for (frag in fragmentFiles) {
+                if (!frag.exists() || frag.length() == 0L) continue
+                if (wroteAny) out.write(comma)
+                frag.inputStream().use { input ->
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        if (n > 0) out.write(buf, 0, n)
+                    }
+                }
+                wroteAny = true
+            }
+            out.write(footer)
+        }
+        return outFile
     }
 
     private val POI_FEATURE_REGEX = Regex(
