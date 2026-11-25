@@ -49,29 +49,29 @@ object StyleBuilder {
               "type": "geojson",
               "data": "asset://jmk_kct_trails.geojson",
               "maxzoom": 14,
-              "buffer": 16,
-              "tolerance": 1.2
+              "buffer": 64,
+              "tolerance": 0.375
             },
             "custom_kct_trails_source": {
               "type": "geojson",
               "data": {"type": "FeatureCollection", "features": []},
               "maxzoom": 14,
-              "buffer": 16,
-              "tolerance": 1.2
+              "buffer": 64,
+              "tolerance": 0.375
             },
             "jmk_contours_source": {
               "type": "geojson",
               "data": "asset://jmk_contours.geojson",
               "maxzoom": 14,
-              "buffer": 16,
-              "tolerance": 1.0
+              "buffer": 64,
+              "tolerance": 0.375
             },
             "custom_contours_source": {
               "type": "geojson",
               "data": {"type": "FeatureCollection", "features": []},
               "maxzoom": 14,
-              "buffer": 16,
-              "tolerance": 1.0
+              "buffer": 64,
+              "tolerance": 0.375
             },
             "custom_outdoor_pois_source": {
               "type": "geojson",

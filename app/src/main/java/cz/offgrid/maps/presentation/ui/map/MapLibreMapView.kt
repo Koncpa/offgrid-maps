@@ -106,13 +106,17 @@ fun MapLibreMapView(
     DisposableEffect(lifecycleOwner, mapView) {
         val memCallbacks = object : ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
-                if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+                if (!isScreenVisible && level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ||
+                    level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE
+                ) {
                     mapView.onLowMemory()
                 }
             }
             override fun onConfigurationChanged(newConfig: Configuration) = Unit
             override fun onLowMemory() {
-                mapView.onLowMemory()
+                if (!isScreenVisible) {
+                    mapView.onLowMemory()
+                }
             }
         }
         val appContext = context.applicationContext
