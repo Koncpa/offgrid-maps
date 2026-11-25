@@ -32,7 +32,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
@@ -209,10 +208,11 @@ object OfflineRegionHelper {
     private val _catalogRegions = MutableStateFlow<List<OfflinePresetRegion>>(presetRegions)
     val catalogRegions: StateFlow<List<OfflinePresetRegion>> = _catalogRegions.asStateFlow()
 
-    private val _customTrailsUri = MutableStateFlow<String?>(null)
-    val customTrailsUri: StateFlow<String?> = _customTrailsUri.asStateFlow()
+    private val _customTrailsGeoJson = MutableStateFlow<String?>(null)
+    val customTrailsGeoJson: StateFlow<String?> = _customTrailsGeoJson.asStateFlow()
 
-    private val trailFileGen = AtomicInteger(0)
+    @Volatile
+    private var activePoiKey: String? = null
 
     private val _customPoisGeoJson = MutableStateFlow<String?>(null)
     val customPoisGeoJson: StateFlow<String?> = _customPoisGeoJson.asStateFlow()
@@ -915,6 +915,9 @@ object OfflineRegionHelper {
                 if (!trailsOk && !contoursImported) {
                     _downloadError.value = "Package sync failed – check Wi-Fi"
                 }
+                if (trailsOk) {
+                    TrailTileManager.ensurePackageIndexed(pkgDir)
+                }
                 trailExecutor.execute { invalidateTrailPackages() }
                 updateTrailsForViewport(appContext, lastViewportLat, lastViewportLon)
             } finally {
@@ -1122,6 +1125,7 @@ object OfflineRegionHelper {
     private fun invalidateTrailPackages() {
         trailPackages = null
         activeTrailKey = null
+        activePoiKey = null
     }
 
     private fun loadBundledJmkPoisFragment(context: Context): String {
@@ -1175,27 +1179,21 @@ object OfflineRegionHelper {
                 val centerLon = (p.bounds[1] + p.bounds[3]) / 2.0
                 hypot(lat - centerLat, lon - centerLon)
             }
-            .take(2)
+            .take(3)
         val inJmk = lat in 48.70..49.50 && lon in 15.90..17.00
-        val key = visible.joinToString(",") { it.dir.name } + "|jmk=$inJmk"
-        if (key == activeTrailKey) return
-        activeTrailKey = key
+        val regionKey = visible.joinToString(",") { it.dir.name } + "|jmk=$inJmk"
+        val trailKey = "${TrailTileManager.viewportTileKey(lat, lon)}|$regionKey"
+        if (trailKey != activeTrailKey) {
+            activeTrailKey = trailKey
+            _customTrailsGeoJson.value = TrailTileManager.loadViewportTrailsGeoJson(
+                packageDirs = visible.map { it.dir },
+                lat = lat,
+                lon = lon
+            )
+        }
 
-        val trailFiles = visible.mapNotNull { p ->
-            File(p.dir, TRAILS_FRAGMENT_FILE).takeIf { it.exists() && it.length() > 0L }
-        }
-        val gen = trailFileGen.incrementAndGet()
-        val outFile = File(context.cacheDir, "active_trails_$gen.geojson")
-        val tmpFile = File(context.cacheDir, "active_trails_$gen.geojson.tmp")
-        writeCombinedFeatureCollectionFile(trailFiles, tmpFile)
-        if (!tmpFile.renameTo(outFile)) {
-            tmpFile.copyTo(outFile, overwrite = true)
-            tmpFile.delete()
-        }
-        _customTrailsUri.value = outFile.toURI().toString()
-        context.cacheDir.listFiles { f ->
-            f.name.startsWith("active_trails_") && f.name.endsWith(".geojson") && f.name != outFile.name && f.name != "active_trails_${gen - 1}.geojson"
-        }?.forEach { it.delete() }
+        if (regionKey == activePoiKey) return
+        activePoiKey = regionKey
 
         val poiFragments = mutableListOf<String>()
         if (inJmk) {
@@ -1209,31 +1207,6 @@ object OfflineRegionHelper {
         val combinedPoisGeoJson = """{"type":"FeatureCollection","features":[${poiFragments.joinToString(",")}]}"""
         _customPoisGeoJson.value = combinedPoisGeoJson
         _activePois.value = parseOutdoorPois(combinedPoisGeoJson)
-    }
-
-    internal fun writeCombinedFeatureCollectionFile(fragmentFiles: List<File>, outFile: File): File {
-        val header = """{"type":"FeatureCollection","features":[""".toByteArray(StandardCharsets.US_ASCII)
-        val comma = ",".toByteArray(StandardCharsets.US_ASCII)
-        val footer = "]}".toByteArray(StandardCharsets.US_ASCII)
-        outFile.outputStream().buffered(32 * 1024).use { out ->
-            out.write(header)
-            var wroteAny = false
-            val buf = ByteArray(32 * 1024)
-            for (frag in fragmentFiles) {
-                if (!frag.exists() || frag.length() == 0L) continue
-                if (wroteAny) out.write(comma)
-                frag.inputStream().use { input ->
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        if (n > 0) out.write(buf, 0, n)
-                    }
-                }
-                wroteAny = true
-            }
-            out.write(footer)
-        }
-        return outFile
     }
 
     private val POI_FEATURE_REGEX = Regex(

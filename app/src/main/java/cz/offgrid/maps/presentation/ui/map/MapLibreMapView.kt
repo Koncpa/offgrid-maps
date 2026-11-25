@@ -82,7 +82,7 @@ fun MapLibreMapView(
     var isStyleLoaded by remember { mutableStateOf(false) }
     var isScreenVisible by remember { mutableStateOf(true) }
     val customContoursGeoJson by ContourTileManager.customContoursGeoJson.collectAsState()
-    val customTrailsUri by OfflineRegionHelper.customTrailsUri.collectAsState()
+    val customTrailsGeoJson by OfflineRegionHelper.customTrailsGeoJson.collectAsState()
     val customPoisGeoJson by OfflineRegionHelper.customPoisGeoJson.collectAsState()
 
     val mapView = remember {
@@ -277,14 +277,12 @@ fun MapLibreMapView(
         }
     }
 
-    // Update marked hiking trails from streamed file URI so multi-region GeoJSON stays off the Java heap
-    LaunchedEffect(customTrailsUri, isStyleLoaded) {
-        val trailsUri = customTrailsUri
-        if (isStyleLoaded && !trailsUri.isNullOrBlank()) {
+    // Update marked hiking trails for the local 3x3 spatial tile grid around the viewport
+    LaunchedEffect(customTrailsGeoJson, isStyleLoaded) {
+        val trailsJson = customTrailsGeoJson
+        if (isStyleLoaded && !trailsJson.isNullOrEmpty()) {
             mapInstance?.style?.getSourceAs<GeoJsonSource>(CUSTOM_KCT_TRAILS_SOURCE_ID)?.let { source ->
-                source.setUri(trailsUri)
-                mapInstance?.triggerRepaint()
-                delay(80L)
+                source.setGeoJson(trailsJson)
                 mapInstance?.triggerRepaint()
             }
         }

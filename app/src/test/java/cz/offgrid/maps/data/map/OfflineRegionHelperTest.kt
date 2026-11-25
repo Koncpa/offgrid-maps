@@ -339,33 +339,4 @@ class OfflineRegionHelperTest {
             tempDir.deleteRecursively()
         }
     }
-
-    @Test
-    fun writeCombinedFeatureCollectionFile_mergesNonEmptyFragmentsIntoValidJson() {
-        val tempDir = Files.createTempDirectory("offgrid_merge_test").toFile()
-        try {
-            val f1 = File(tempDir, "r1.features").apply {
-                writeText("""{"type":"Feature","properties":{"colour":"red"},"geometry":null}""")
-            }
-            val empty = File(tempDir, "empty.features").apply { writeText("") }
-            val f2 = File(tempDir, "r2.features").apply {
-                writeText("""{"type":"Feature","properties":{"colour":"blue"},"geometry":null}""")
-            }
-            val outFile = File(tempDir, "active_trails.geojson")
-
-            OfflineRegionHelper.writeCombinedFeatureCollectionFile(listOf(f1, empty, f2), outFile)
-            val json = org.json.JSONObject(outFile.readText(Charsets.UTF_8))
-            val arr = json.getJSONArray("features")
-            assertEquals(2, arr.length())
-            assertEquals("red", arr.getJSONObject(0).getJSONObject("properties").getString("colour"))
-            assertEquals("blue", arr.getJSONObject(1).getJSONObject("properties").getString("colour"))
-
-            val emptyOut = File(tempDir, "empty_trails.geojson")
-            OfflineRegionHelper.writeCombinedFeatureCollectionFile(emptyList(), emptyOut)
-            val emptyJson = org.json.JSONObject(emptyOut.readText(Charsets.UTF_8))
-            assertEquals(0, emptyJson.getJSONArray("features").length())
-        } finally {
-            tempDir.deleteRecursively()
-        }
-    }
 }
