@@ -615,8 +615,10 @@ fun MapScreen(
                         activeLocation
                     }
                     activeLocation = targetLatLng
+                    val targetZoom = maxOf(zoomLevel, 14.0f)
+                    zoomLevel = targetZoom
                     maplibreMapInstance?.moveCamera(
-                        CameraUpdateFactory.newLatLng(targetLatLng)
+                        CameraUpdateFactory.newLatLngZoom(targetLatLng, targetZoom.toDouble())
                     )
                 },
                 modifier = Modifier
