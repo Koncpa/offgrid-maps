@@ -44,7 +44,6 @@ import cz.offgrid.maps.data.map.SavedOfflineRegion
 import cz.offgrid.maps.data.tracking.BarometricAltimeterManager
 import cz.offgrid.maps.data.tracking.CompassSensorManager
 import cz.offgrid.maps.data.tracking.GpxExporter
-import cz.offgrid.maps.data.tracking.GpxRouteSummary
 import cz.offgrid.maps.data.tracking.LiveGpsManager
 import cz.offgrid.maps.data.tracking.LocationTrackingService
 import cz.offgrid.maps.data.tracking.TrackingManager
@@ -793,7 +792,7 @@ private fun MapScaleBar(
 
 /**
  * Pure black AMOLED overlay menu with three tabs:
- * 1) Routes (remaining route distance/ascent, GPX import, route list, share, delete)
+ * 1) Routes (remaining route distance/ascent, GPX import, route list, delete)
  * 2) POIs (Survival Radar: nearest springs/water, shelters/huts, saddles & landmarks)
  * 3) Offline (Nearby GPS shortcut, saved regions, and 3-level Continent -> Country -> Region catalog)
  */
@@ -817,13 +816,8 @@ private fun GpxRoutePickerOverlay(
     onDeleteOfflineRegion: (SavedOfflineRegion) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val overlayContext = LocalContext.current
-    val overlayView = LocalView.current
-    val overlayScope = rememberCoroutineScope()
-
     // 0 = Routes, 1 = Offline Maps, 2 = Survival POIs
     var selectedTab by remember { mutableIntStateOf(0) }
-    var inspectedHike by remember { mutableStateOf<HikeExportState?>(null) }
     var selectedContinent by remember { mutableStateOf<String?>(null) }
     var selectedCountry by remember { mutableStateOf<String?>(null) }
     var showSavedMaps by remember { mutableStateOf(false) }
@@ -831,7 +825,6 @@ private fun GpxRoutePickerOverlay(
 
     val stepBackOrDismiss = {
         when {
-            selectedTab == 0 && inspectedHike != null -> inspectedHike = null
             selectedTab == 1 && showSavedMaps -> showSavedMaps = false
             selectedTab == 1 && selectedCountry != null -> selectedCountry = null
             selectedTab == 1 && selectedContinent != null -> selectedContinent = null
@@ -1004,10 +997,7 @@ private fun GpxRoutePickerOverlay(
                         selected = selectedTab == 0,
                         accentColor = TrailGreen,
                         modifier = Modifier.weight(1f),
-                        onClick = {
-                            selectedTab = 0
-                            inspectedHike = null
-                        }
+                        onClick = { selectedTab = 0 }
                     )
                     OverlayTabPill(
                         label = "POIs",
@@ -1028,160 +1018,102 @@ private fun GpxRoutePickerOverlay(
 
             if (selectedTab == 0) {
                 // --- TAB 1: GPX ROUTES ---
-                val activeHikeDetail = inspectedHike
-                if (activeHikeDetail != null) {
-                    item(key = "hike_detail_back") {
-                        BreadcrumbBackPill(
-                            label = "← Routes",
-                            onClick = { inspectedHike = null }
-                        )
-                    }
-                    item(key = "hike_detail_card") {
-                        HikeExportDetailCard(
-                            state = activeHikeDetail,
-                            onLaunchShare = {
-                                overlayView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                GpxExporter.launchSystemShareIfAvailable(overlayContext, activeHikeDetail.file)
-                            },
-                            onLoadOnMap = {
-                                inspectedHike = null
-                                onSelectFile(activeHikeDetail.file)
-                            }
-                        )
-                    }
-                } else {
-                    if (activeRouteName != null && remainingRouteStats != null) {
-                        item(key = "active_route_stats") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(DarkSurface)
-                                    .border(1.4.dp, TrailYellow, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 10.dp, vertical = 6.5.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val kmStr = "%.1f".format(Locale.US, remainingRouteStats.first)
-                                Text(
-                                    text = "▲ +${remainingRouteStats.second} m · $kmStr km left",
-                                    color = TrailYellow,
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-
-                    item(key = "import_gpx_btn") {
+                if (activeRouteName != null && remainingRouteStats != null) {
+                    item(key = "active_route_stats") {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(DarkSurface)
-                                .border(1.5.dp, TrailGreen, RoundedCornerShape(14.dp))
-                                .clickable { onImportGpx() }
-                                .padding(horizontal = 12.dp, vertical = 8.5.dp),
+                                .border(1.4.dp, TrailYellow, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.5.dp),
                             contentAlignment = Alignment.Center
                         ) {
+                            val kmStr = "%.1f".format(Locale.US, remainingRouteStats.first)
                             Text(
-                                text = "+ Import GPX",
-                                color = TrailGreen,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "▲ +${remainingRouteStats.second} m · $kmStr km left",
+                                color = TrailYellow,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
+                }
 
-                    if (files.isEmpty()) {
-                        item(key = "no_routes") {
+                item(key = "import_gpx_btn") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(DarkSurface)
+                            .border(1.5.dp, TrailGreen, RoundedCornerShape(14.dp))
+                            .clickable { onImportGpx() }
+                            .padding(horizontal = 12.dp, vertical = 8.5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "+ Import GPX",
+                            color = TrailGreen,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                if (files.isEmpty()) {
+                    item(key = "no_routes") {
+                        Text(
+                            text = "No saved routes",
+                            color = OutdoorTextSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                } else {
+                    items(files, key = { it.name }) { file ->
+                        val isSelected = activeRouteName == file.nameWithoutExtension
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(DarkSurface)
+                                .border(
+                                    width = if (isSelected) 1.6.dp else 1.2.dp,
+                                    color = if (isSelected) TrailGreen else DarkSurfaceVariant,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .clickable { onSelectFile(file) }
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
-                                text = "No saved routes",
-                                color = OutdoorTextSecondary,
+                                text = file.nameWithoutExtension.replace("_", " "),
+                                color = if (isSelected) TrailGreen else OutdoorTextPrimary,
                                 fontSize = 11.sp,
-                                modifier = Modifier.padding(vertical = 8.dp)
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                        }
-                    } else {
-                        items(files, key = { it.name }) { file ->
-                            val isSelected = activeRouteName == file.nameWithoutExtension
-                            Row(
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(DarkSurface)
-                                    .border(
-                                        width = if (isSelected) 1.6.dp else 1.2.dp,
-                                        color = if (isSelected) TrailGreen else DarkSurfaceVariant,
-                                        shape = RoundedCornerShape(14.dp)
-                                    )
-                                    .clickable { onSelectFile(file) }
-                                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(AmoledBlack)
+                                    .border(1.2.dp, TrailRed, CircleShape)
+                                    .clickable { onDeleteFile(file) },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = file.nameWithoutExtension.replace("_", " "),
-                                    color = if (isSelected) TrailGreen else OutdoorTextPrimary,
+                                    text = "✕",
+                                    color = TrailRed,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
+                                    fontWeight = FontWeight.Bold
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(AmoledBlack)
-                                        .border(1.2.dp, TrailBlue, CircleShape)
-                                        .clickable {
-                                            overlayView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                            overlayScope.launch {
-                                                val state = withContext(Dispatchers.IO) {
-                                                    HikeExportState(
-                                                        file = file,
-                                                        summary = GpxExporter.summarizeGpxFile(file),
-                                                        exportedToDownloads = GpxExporter.exportGpxBackup(overlayContext, file),
-                                                        canShare = GpxExporter.hasShareTarget(overlayContext, file)
-                                                    )
-                                                }
-                                                inspectedHike = state
-                                            }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "↗",
-                                        color = TrailBlue,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(AmoledBlack)
-                                        .border(1.2.dp, TrailRed, CircleShape)
-                                        .clickable {
-                                            if (inspectedHike?.file == file) {
-                                                inspectedHike = null
-                                            }
-                                            onDeleteFile(file)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "✕",
-                                        color = TrailRed,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
                             }
                         }
                     }
@@ -1553,10 +1485,12 @@ private fun GpxRoutePickerOverlay(
                             .padding(horizontal = 18.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        val backLabel = when {
-                            selectedTab == 0 && inspectedHike != null -> "← Routes"
-                            selectedTab == 1 && (showSavedMaps || selectedCountry != null || selectedContinent != null) -> "← Up"
-                            else -> "Close"
+                        val backLabel = if (
+                            selectedTab == 1 && (showSavedMaps || selectedCountry != null || selectedContinent != null)
+                        ) {
+                            "← Up"
+                        } else {
+                            "Close"
                         }
                         Text(
                             text = backLabel,
@@ -1568,111 +1502,6 @@ private fun GpxRoutePickerOverlay(
                 }
             }
         }
-        }
-    }
-}
-
-private data class HikeExportState(
-    val file: File,
-    val summary: GpxRouteSummary,
-    val exportedToDownloads: Boolean,
-    val canShare: Boolean
-)
-
-@Composable
-private fun HikeExportDetailCard(
-    state: HikeExportState,
-    onLaunchShare: () -> Unit,
-    onLoadOnMap: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(DarkSurface)
-            .border(1.4.dp, TrailBlue, RoundedCornerShape(14.dp))
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        Text(
-            text = state.file.nameWithoutExtension.replace("_", " "),
-            color = OutdoorTextPrimary,
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        val distStr = "%.2f".format(Locale.US, state.summary.distanceKm)
-        Text(
-            text = "$distStr km · ▲ +${state.summary.ascentMeters} m · ${state.summary.pointCount} pts",
-            color = TrailYellow,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(AmoledBlack)
-                .border(
-                    width = 1.dp,
-                    color = if (state.exportedToDownloads) TrailGreen else TrailRed,
-                    shape = RoundedCornerShape(10.dp)
-                )
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-        ) {
-            Text(
-                text = if (state.exportedToDownloads) {
-                    "✓ Exported to Download/OffGridMaps"
-                } else {
-                    "✕ Failed to write to Download/OffGridMaps"
-                },
-                color = if (state.exportedToDownloads) TrailGreen else TrailRed,
-                fontSize = 9.5.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        if (state.canShare) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(AmoledBlack)
-                    .border(1.4.dp, TrailBlue, RoundedCornerShape(12.dp))
-                    .clickable { onLaunchShare() }
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "↗ Send via Share",
-                    color = TrailBlue,
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        } else {
-            Text(
-                text = "File saved as ${state.file.name} in Download/OffGridMaps for USB or Files access.",
-                color = OutdoorTextSecondary,
-                fontSize = 9.sp
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(AmoledBlack)
-                .border(1.4.dp, TrailGreen, RoundedCornerShape(12.dp))
-                .clickable { onLoadOnMap() }
-                .padding(horizontal = 10.dp, vertical = 7.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Load on Map",
-                color = TrailGreen,
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }

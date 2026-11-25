@@ -81,6 +81,31 @@
       color: #000000;
     }
     a.pill:hover { border-color: var(--amber); }
+    .guide {
+      margin-top: 1.5rem;
+      padding: 1.1rem 1.15rem;
+      background: var(--amoled-black);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    .guide h2 {
+      margin: 0 0 0.55rem;
+      font-size: 1rem;
+      color: var(--lime);
+    }
+    .guide ol {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+    .guide li + li { margin-top: 0.45rem; }
+    .guide code {
+      background: var(--surface-variant);
+      padding: 0.1rem 0.35rem;
+      border-radius: 5px;
+      font-size: 0.82rem;
+    }
     .foot { margin-top: 1.4rem; font-size: 0.85rem; color: var(--text-secondary); }
   </style>
 </head>
@@ -108,6 +133,15 @@
       <a class="pill primary" href="./privacy.html">Privacy Policy</a>
       <a class="pill" href="mailto:appmanufacture.dev@gmail.com">Support: appmanufacture.dev@gmail.com</a>
     </div>
+    <section class="guide" aria-label="GPX Import Guide">
+      <h2>How to Send a GPX Route to Your Watch</h2>
+      <ol>
+        <li><strong>Export `.gpx` on your phone</strong> (Mapy.com, Komoot, Strava, or Garmin Connect).</li>
+        <li><strong>Send it to the watch</strong> via <strong>Quick Share</strong>, Bluetooth, or a Wear OS file manager (saved into <code>Download/</code>).</li>
+        <li><strong>Open it in OffGrid Maps</strong> directly from the notification, or open <strong>Routes</strong> (auto-syncs <code>Download/</code> &amp; <code>Download/OffGridMaps/</code>) or tap <strong>+ Import GPX</strong>.</li>
+        <li><strong>Via computer (ADB):</strong> run <code>adb push route.gpx /sdcard/Download/OffGridMaps/</code> and open <strong>Routes</strong>.</li>
+      </ol>
+    </section>
     <p class="foot">AppManufacture &middot; <code>cz.offgrid.maps</code></p>
   </main>
 </body>
