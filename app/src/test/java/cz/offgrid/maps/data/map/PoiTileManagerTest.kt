@@ -79,4 +79,39 @@ class PoiTileManagerTest {
             tempRoot.deleteRecursively()
         }
     }
+
+    @Test
+    fun ensurePackageIndexed_deletesRawPoisFileAndSupportsReindex() {
+        val pkgDir = Files.createTempDirectory("poi_cleanup_test").toFile()
+        try {
+            val rawFile = File(pkgDir, "pois.features")
+            rawFile.writeText(
+                """{"type":"Feature","properties":{"cat":"water","label":"Spring A"},"geometry":{"type":"Point","coordinates":[13.79200,47.87200]}}""",
+                StandardCharsets.UTF_8
+            )
+
+            PoiTileManager.ensurePackageIndexed(pkgDir)
+
+            assertTrue(File(pkgDir, "poi_tiles/.indexed_v1").exists())
+            assertFalse("Raw pois.features should be deleted once indexed", rawFile.exists())
+            assertTrue(
+                PoiTileManager.loadViewportPoisGeoJson(listOf(pkgDir), 47.87, 13.79)!!.contains("Spring A")
+            )
+
+            // Re-download updated POIs
+            rawFile.writeText(
+                """{"type":"Feature","properties":{"cat":"shelter","label":"Hut B"},"geometry":{"type":"Point","coordinates":[13.79200,47.87200]}}""",
+                StandardCharsets.UTF_8
+            )
+            PoiTileManager.invalidateIndex(pkgDir)
+            PoiTileManager.ensurePackageIndexed(pkgDir)
+
+            assertFalse(rawFile.exists())
+            val reloaded = PoiTileManager.loadViewportPoisGeoJson(listOf(pkgDir), 47.87, 13.79)!!
+            assertTrue(reloaded.contains("Hut B"))
+            assertFalse(reloaded.contains("Spring A"))
+        } finally {
+            pkgDir.deleteRecursively()
+        }
+    }
 }

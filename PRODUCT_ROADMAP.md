@@ -84,15 +84,15 @@ The core mission of the product is to deliver **100% reliable offline topographi
 Prioritized engineering audit backlog prepared after the `v1.0.0` release (`versionCode = 2`, `targetSdk = 35`).
 
 ### P1 – Highest Priority (Stability, Privacy & Daily Battery Impact)
-- [ ] **1. Asynchronous `stopTracking()` & clean service teardown** (`LocationTrackingService.kt`):
+- [x] **1. Asynchronous `stopTracking()` & clean service teardown** (`LocationTrackingService.kt`):
   - Move `GpxExporter.saveTrackToGpx(...)` and `MediaStore` export off the main thread onto `ioExecutor` before `stopSelf()`, preventing ANRs on long multi-hour treks or emergency `<= 5%` battery saves.
   - Shut down `ioExecutor` and ensure sensors/listeners are cleanly released in `onDestroy()`.
-- [ ] **2. Dynamic `1–4` z12 contour tile window & post-index raw `.features` cleanup** (`ContourTileManager.kt`, `TrailTileManager.kt`, `PoiTileManager.kt`):
+- [x] **2. Dynamic `1–4` z12 contour tile window & post-index raw `.features` cleanup** (`ContourTileManager.kt`, `TrailTileManager.kt`, `PoiTileManager.kt`):
   - Load only the `1–4` nearest `z=12` contour tiles around the viewport instead of a fixed `3×3` (`9`-tile) grid, reducing native MapLibre `geojson-vt` RAM for contours by ~55–85%.
   - Automatically delete redundant raw `trails.features` and `pois.features` files once `.indexed_v1` spatial tile markers are flushed cleanly, reclaiming tens to hundreds of MB of watch flash storage.
-- [ ] **3. Disable Android Auto Backup (`android:allowBackup="false"`)** (`AndroidManifest.xml`):
+- [x] **3. Disable Android Auto Backup (`android:allowBackup="false"`)** (`AndroidManifest.xml`):
   - Prevents Android from backing up local GPS history (`files/tracks/*.gpx`) or last coordinates (`SharedPreferences`) to Google Drive, aligning 100% with the offline-only Privacy Policy.
-- [ ] **4. Isolate compass `azimuthDegrees` recompositions & throttle `SharedPreferences` writes** (`MapScreen.kt`, `OfflineRegionHelper.kt`, `BarometricAltimeterManager.kt`):
+- [x] **4. Isolate compass `azimuthDegrees` recompositions & throttle `SharedPreferences` writes** (`MapScreen.kt`, `OfflineRegionHelper.kt`, `BarometricAltimeterManager.kt`):
   - Scope `azimuthDegrees` collection to small isolated composables (cardinal label + MapLibre chevron effect) instead of recomposing the entire root `MapScreen` up to 12.5×/s.
   - Throttle `saveLastKnownCenter` (save on `> 150 m` move or `ON_PAUSE`) and `saveCalibrationToPrefs` (at most every `60 s` or `> 2 m` offset shift) instead of flushing XML to flash on every 1.5 s GPS fix.
 

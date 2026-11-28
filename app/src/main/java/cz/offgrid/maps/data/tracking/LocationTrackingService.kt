@@ -29,16 +29,18 @@ class LocationTrackingService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationManager: LocationManager? = null
-    private lateinit var locationCallback: LocationCallback
+    internal lateinit var locationCallback: LocationCallback
     private lateinit var hardwareGpsListener: LocationListener
     private lateinit var altimeterManager: BarometricAltimeterManager
     private val ioExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = android.os.Handler(Looper.getMainLooper())
     private var lastNotificationMillis = 0L
     private var lastNotifiedDistanceMeters = 0.0
     private var lastCheckpointPointsCount = 0
     private var isScreenInteractive = true
     private var isBatteryReceiverRegistered = false
     private var isWatchHardwareGpsActive = false
+    private var isStopping = false
     private var lastHardwareGpsElapsedRealtimeNs = 0L
 
     /**
@@ -174,6 +176,7 @@ class LocationTrackingService : Service() {
         lastNotifiedDistanceMeters = 0.0
         lastCheckpointPointsCount = 0
         isScreenInteractive = true
+        isStopping = false
         lastHardwareGpsElapsedRealtimeNs = 0L
 
         if (!isBatteryReceiverRegistered) {
@@ -282,30 +285,50 @@ class LocationTrackingService : Service() {
     }
 
     private fun stopTracking(emergencyLowBattery: Boolean) {
+        if (isStopping) return
+        isStopping = true
+
         fusedLocationClient.removeLocationUpdates(locationCallback)
         disableWatchHardwareGps()
         altimeterManager.stop()
         unregisterBatteryReceiverSafely()
 
-        val recordedPoints = TrackingManager.trackPoints.value
+        val recordedPoints = TrackingManager.trackPoints.value.toList()
         val distKm = TrackingManager.totalDistanceMeters.value / 1000.0
         val ascentM = TrackingManager.totalAscentMeters.value.toInt()
-
         val prefix = if (emergencyLowBattery) "lowbat5pct" else "hike"
-        val savedFile = GpxExporter.saveTrackToGpx(this, recordedPoints, prefix = prefix)
-        TrackingManager.setTrackingActive(false)
+        val appCtx = applicationContext
 
-        if (emergencyLowBattery) {
-            TrackingManager.setSavedSummary("Battery ≤5%! GPX saved (%.2f km)".format(distKm))
-        } else if (savedFile != null) {
-            TrackingManager.setSavedSummary("GPX: %.2f km • ↑%d m".format(distKm, ascentM))
-        } else {
-            GpxExporter.clearRecoveryCheckpoint(this)
-            TrackingManager.setSavedSummary("Recording stopped (0 pts)")
+        TrackingManager.setTrackingActive(false)
+        if (recordedPoints.isNotEmpty()) {
+            TrackingManager.setSavedSummary("Saving GPX…")
         }
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        ioExecutor.execute {
+            val savedFile = try {
+                GpxExporter.saveTrackToGpx(appCtx, recordedPoints, prefix = prefix)
+            } catch (_: Exception) {
+                null
+            }
+            if (savedFile == null) {
+                GpxExporter.clearRecoveryCheckpoint(appCtx)
+            }
+            mainHandler.post {
+                isStopping = false
+                if (emergencyLowBattery) {
+                    TrackingManager.setSavedSummary("Battery ≤5%%! GPX saved (%.2f km)".format(distKm))
+                } else if (savedFile != null) {
+                    TrackingManager.setSavedSummary("GPX: %.2f km • ↑%d m".format(distKm, ascentM))
+                } else {
+                    TrackingManager.setSavedSummary("Recording stopped (0 pts)")
+                }
+                // Only stop the foreground service if the user did not immediately start a new track
+                if (!TrackingManager.isTracking.value) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
+        }
     }
 
     private fun unregisterBatteryReceiverSafely() {
@@ -319,7 +342,14 @@ class LocationTrackingService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (_: Exception) {
+        }
+        disableWatchHardwareGps()
+        altimeterManager.stop()
         unregisterBatteryReceiverSafely()
+        ioExecutor.shutdown()
         super.onDestroy()
     }
 

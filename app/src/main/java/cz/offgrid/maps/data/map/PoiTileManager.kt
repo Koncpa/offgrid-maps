@@ -22,16 +22,29 @@ object PoiTileManager {
     private const val JMK_TILES_DIR = "jmk_poi_tiles"
     private const val INDEX_MARKER = ".indexed_v1"
 
-    /** Ensures [pkgDir]/poi_tiles is populated from [pkgDir]/pois.features in O(1) streaming RAM. */
+    /** Clears the index marker before re-downloading a package so updated POIs are re-indexed cleanly. */
+    fun invalidateIndex(pkgDir: File) {
+        val marker = File(File(pkgDir, TILES_SUBDIR), INDEX_MARKER)
+        if (marker.exists()) marker.delete()
+    }
+
+    /**
+     * Ensures [pkgDir]/poi_tiles is populated from [pkgDir]/pois.features in O(1) streaming RAM,
+     * then deletes the redundant raw `pois.features` file once the index marker is flushed.
+     */
     fun ensurePackageIndexed(pkgDir: File) {
         val tilesDir = File(pkgDir, TILES_SUBDIR)
         val marker = File(tilesDir, INDEX_MARKER)
-        if (marker.exists()) return
-
         val poisFile = File(pkgDir, "pois.features")
+        if (marker.exists()) {
+            cleanupRawFeatureFileIfIndexed(poisFile, marker)
+            return
+        }
+
         if (!poisFile.exists() || poisFile.length() == 0L) {
             tilesDir.mkdirs()
             marker.writeText("empty")
+            cleanupRawFeatureFileIfIndexed(poisFile, marker)
             return
         }
 
@@ -39,6 +52,7 @@ object PoiTileManager {
             indexPoiStreamToTiles(input, tilesDir, isFeatureCollection = false)
         }
         marker.writeText("ok")
+        cleanupRawFeatureFileIfIndexed(poisFile, marker)
     }
 
     /** Lazily indexes the bundled JMK POI asset on disk so it is not pinned permanently in heap RAM. */

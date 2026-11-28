@@ -131,7 +131,29 @@ object OfflineRegionHelper {
     private val _savedRegions = MutableStateFlow<List<SavedOfflineRegion>>(emptyList())
     val savedRegions: StateFlow<List<SavedOfflineRegion>> = _savedRegions.asStateFlow()
 
-    fun saveLastKnownCenter(context: Context, lat: Double, lon: Double) {
+    @Volatile
+    private var lastSavedCenterLat = Double.NaN
+    @Volatile
+    private var lastSavedCenterLon = Double.NaN
+
+    internal fun shouldPersistLastKnownCenter(
+        lastLat: Double,
+        lastLon: Double,
+        newLat: Double,
+        newLon: Double,
+        force: Boolean = false
+    ): Boolean {
+        if (force || lastLat.isNaN() || lastLon.isNaN()) return true
+        // ~0.0014 deg lat (~155 m) or ~0.0020 deg lon (~145 m at 49 deg N) avoids flushing XML every 1.5 s
+        return kotlin.math.abs(newLat - lastLat) >= 0.0014 || kotlin.math.abs(newLon - lastLon) >= 0.0020
+    }
+
+    fun saveLastKnownCenter(context: Context, lat: Double, lon: Double, force: Boolean = false) {
+        if (!shouldPersistLastKnownCenter(lastSavedCenterLat, lastSavedCenterLon, lat, lon, force)) {
+            return
+        }
+        lastSavedCenterLat = lat
+        lastSavedCenterLon = lon
         context.getSharedPreferences(MAP_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putFloat(KEY_LAST_LAT, lat.toFloat())
@@ -269,7 +291,7 @@ object OfflineRegionHelper {
     """.trimIndent()
 
     @Synchronized
-    private fun ensureLocalStyleServerUrl(): String {
+    internal fun ensureLocalStyleServerUrl(): String {
         if (localStyleServerPort > 0) {
             return "http://127.0.0.1:$localStyleServerPort/style.json"
         }
@@ -917,9 +939,11 @@ object OfflineRegionHelper {
                     _downloadError.value = "Package sync failed – check Wi-Fi"
                 }
                 if (trailsOk) {
+                    TrailTileManager.invalidateIndex(pkgDir)
                     TrailTileManager.ensurePackageIndexed(pkgDir)
                 }
                 if (File(pkgDir, POIS_FRAGMENT_FILE).exists()) {
+                    PoiTileManager.invalidateIndex(pkgDir)
                     PoiTileManager.ensurePackageIndexed(pkgDir)
                 }
                 trailExecutor.execute { invalidateTrailPackages() }
@@ -1125,7 +1149,7 @@ object OfflineRegionHelper {
     private var activeTrailKey: String? = null
     private val viewportRequestSeq = AtomicLong(0L)
 
-    private fun invalidateTrailPackages() {
+    internal fun invalidateTrailPackages() {
         trailPackages = null
         activeTrailKey = null
         activePoiKey = null
@@ -1162,7 +1186,7 @@ object OfflineRegionHelper {
         }
     }
 
-    private fun refreshActiveViewportOnExecutor(
+    internal fun refreshActiveViewportOnExecutor(
         context: Context,
         lat: Double,
         lon: Double,
@@ -1240,7 +1264,7 @@ object OfflineRegionHelper {
     }
 
     /** Removes the downloaded trail package that belongs to a deleted offline region. */
-    private fun deleteTrailPackage(context: Context, regionTitle: String) {
+    internal fun deleteTrailPackage(context: Context, regionTitle: String) {
         val appCtx = context.applicationContext
         trailExecutor.execute {
             loadTrailPackages(appCtx).filter { it.title == regionTitle }.forEach { it.dir.deleteRecursively() }

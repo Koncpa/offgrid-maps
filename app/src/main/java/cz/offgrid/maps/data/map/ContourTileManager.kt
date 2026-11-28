@@ -58,9 +58,20 @@ object ContourTileManager {
     private val _customContoursGeoJson = MutableStateFlow<String?>(null)
     val customContoursGeoJson: StateFlow<String?> = _customContoursGeoJson.asStateFlow()
 
+    internal data class TileWindow(
+        val minTx: Int,
+        val maxTx: Int,
+        val minTy: Int,
+        val maxTy: Int
+    ) {
+        val tileCount: Int get() = (maxTx - minTx + 1) * (maxTy - minTy + 1)
+    }
+
     /**
      * Loads contour lines for the current camera viewport from the local tile cache (and when network
      * is enabled, fetches, generates, and permanently caches any missing tiles).
+     * Loads only the 1–4 nearest z=12 tiles around the viewport instead of a fixed 3x3 (9-tile) grid,
+     * cutting native MapLibre geojson-vt contour memory by ~55–85%.
      */
     fun ensureViewportContours(
         context: Context,
@@ -72,9 +83,8 @@ object ContourTileManager {
         // Style contour layers start at minzoom 12; avoid decoding heavy GeoJSON at overview zooms
         if (zoom < 11.8) return
 
-        val centerTx = lonToTileX(centerLon, TILE_ZOOM)
-        val centerTy = latToTileY(centerLat, TILE_ZOOM)
-        val viewportKey = "${centerTx}_${centerTy}_$allowNetworkFetch"
+        val window = computeContourTileWindow(centerLat, centerLon, zoom)
+        val viewportKey = "${window.minTx}_${window.maxTx}_${window.minTy}_${window.maxTy}_$allowNetworkFetch"
         if (viewportKey == lastViewportKey) return
         lastViewportKey = viewportKey
 
@@ -82,13 +92,35 @@ object ContourTileManager {
         activeViewportJob = scope.launch {
             updateActiveViewportTiles(
                 context = context,
-                minTx = centerTx - 1,
-                maxTx = centerTx + 1,
-                minTy = centerTy - 1,
-                maxTy = centerTy + 1,
+                minTx = window.minTx,
+                maxTx = window.maxTx,
+                minTy = window.minTy,
+                maxTy = window.maxTy,
                 allowNetworkFetch = allowNetworkFetch
             )
         }
+    }
+
+    internal fun computeContourTileWindow(
+        centerLat: Double,
+        centerLon: Double,
+        zoom: Double
+    ): TileWindow {
+        val maxTile = (1 shl TILE_ZOOM) - 1
+        val fx = lonToTileXDouble(centerLon, TILE_ZOOM).coerceIn(0.0, maxTile.toDouble() + 0.999999)
+        val fy = latToTileYDouble(centerLat, TILE_ZOOM).coerceIn(0.0, maxTile.toDouble() + 0.999999)
+        val tx = floor(fx).toInt().coerceIn(0, maxTile)
+        val ty = floor(fy).toInt().coerceIn(0, maxTile)
+        val fracX = fx - tx
+        val fracY = fy - ty
+
+        // Wider margin at z12 overview, tighter margin at z13+ hiking zoom so only visible neighbor tiles load
+        val edgeMargin = if (zoom < 12.6) 0.38 else 0.26
+        val minTx = if (fracX < edgeMargin) (tx - 1).coerceAtLeast(0) else tx
+        val maxTx = if (fracX > 1.0 - edgeMargin) (tx + 1).coerceAtMost(maxTile) else tx
+        val minTy = if (fracY < edgeMargin) (ty - 1).coerceAtLeast(0) else ty
+        val maxTy = if (fracY > 1.0 - edgeMargin) (ty + 1).coerceAtMost(maxTile) else ty
+        return TileWindow(minTx = minTx, maxTx = maxTx, minTy = minTy, maxTy = maxTy)
     }
 
     /**
@@ -164,7 +196,7 @@ object ContourTileManager {
         return imported
     }
 
-    private fun updateActiveViewportTiles(
+    internal fun updateActiveViewportTiles(
         context: Context,
         minTx: Int,
         maxTx: Int,
@@ -251,15 +283,34 @@ object ContourTileManager {
         bmp.recycle()
 
         val elev = FloatArray(w * h)
-        var minEle = 9000f
-        var maxEle = -500f
         for (i in pixels.indices) {
             val px = pixels[i]
             val r = Color.red(px)
             val g = Color.green(px)
             val b = Color.blue(px)
-            val e = (r * 256f + g + b / 256f) - 32768f
-            elev[i] = e
+            elev[i] = (r * 256f + g + b / 256f) - 32768f
+        }
+
+        return generateContoursFromElevationGrid(z, tx, ty, w, h, elev)
+    }
+
+    /**
+     * Generates GeoJSON `MultiLineString` contour features (`10 m` minor, `50 m` major)
+     * from a decoded elevation grid using Marching Squares.
+     */
+    internal fun generateContoursFromElevationGrid(
+        z: Int,
+        tx: Int,
+        ty: Int,
+        w: Int,
+        h: Int,
+        elev: FloatArray
+    ): String {
+        if (elev.size < w * h || w <= 4 || h <= 4) return ""
+        var minEle = 9000f
+        var maxEle = -500f
+        for (i in 0 until w * h) {
+            val e = elev[i]
             if (e < minEle) minEle = e
             if (e > maxEle) maxEle = e
         }
@@ -342,12 +393,16 @@ object ContourTileManager {
         return "[%.5f,%.5f]".format(Locale.US, lon, lat)
     }
 
-    internal fun lonToTileX(lon: Double, z: Int): Int {
-        return ((lon + 180.0) / 360.0 * (1 shl z)).toInt()
+    internal fun lonToTileXDouble(lon: Double, z: Int): Double {
+        return (lon + 180.0) / 360.0 * (1 shl z)
     }
 
-    internal fun latToTileY(lat: Double, z: Int): Int {
-        val latRad = Math.toRadians(lat)
-        return ((1.0 - asinh(tan(latRad)) / PI) / 2.0 * (1 shl z)).toInt()
+    internal fun latToTileYDouble(lat: Double, z: Int): Double {
+        val latRad = Math.toRadians(lat.coerceIn(-85.0511, 85.0511))
+        return (1.0 - asinh(tan(latRad)) / PI) / 2.0 * (1 shl z)
     }
+
+    internal fun lonToTileX(lon: Double, z: Int): Int = lonToTileXDouble(lon, z).toInt()
+
+    internal fun latToTileY(lat: Double, z: Int): Int = latToTileYDouble(lat, z).toInt()
 }

@@ -339,4 +339,85 @@ class OfflineRegionHelperTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun shouldPersistLastKnownCenter_throttlesSmallMovementsUnlessForced() {
+        // First write when unset must always persist
+        assertTrue(OfflineRegionHelper.shouldPersistLastKnownCenter(Double.NaN, Double.NaN, 49.12, 16.33))
+        // Tiny 20 m GPS step must NOT trigger a SharedPreferences flush
+        assertEquals(
+            false,
+            OfflineRegionHelper.shouldPersistLastKnownCenter(49.1200, 16.3300, 49.1202, 16.3302)
+        )
+        // Movement > ~155 m latitude must trigger flush
+        assertTrue(OfflineRegionHelper.shouldPersistLastKnownCenter(49.1200, 16.3300, 49.1216, 16.3300))
+        // Explicit force (ON_PAUSE) must always flush even with zero movement
+        assertTrue(OfflineRegionHelper.shouldPersistLastKnownCenter(49.1200, 16.3300, 49.1200, 16.3300, force = true))
+    }
+
+    @Test
+    fun computeAdaptiveZoomRange_scalesDownCleanlyForLargeSpans() {
+        assertEquals(8.0 to 14.0, OfflineRegionHelper.computeAdaptiveZoomRange(0.5, 0.8))
+        assertEquals(8.0 to 13.0, OfflineRegionHelper.computeAdaptiveZoomRange(1.5, 1.8))
+        assertEquals(7.0 to 12.0, OfflineRegionHelper.computeAdaptiveZoomRange(3.0, 4.0))
+        assertEquals(6.0 to 11.0, OfflineRegionHelper.computeAdaptiveZoomRange(5.5, 8.0))
+    }
+
+    @Test
+    fun parseOutdoorPois_handlesNegativeHemisphereBlankLabelsAndEmptyJson() {
+        val sample = """{"type":"FeatureCollection","features":[
+            {"type":"Feature","properties":{"cat":"shelter","label":"Refugio \"Frey\""},"geometry":{"type":"Point","coordinates":[-71.4882,-41.1986]}},
+            {"type":"Feature","properties":{"cat":"water","label":"   "},"geometry":{"type":"Point","coordinates":[-122.4194,37.7749]}}
+        ]}"""
+        val pois = OfflineRegionHelper.parseOutdoorPois(sample)
+        assertEquals(1, pois.size)
+        assertEquals("Refugio \"Frey\"", pois[0].label)
+        assertEquals(-41.1986, pois[0].lat, 0.0001)
+        assertEquals(-71.4882, pois[0].lon, 0.0001)
+
+        assertTrue(OfflineRegionHelper.parseOutdoorPois("""{"type":"FeatureCollection","features":[]}""").isEmpty())
+    }
+
+    @Test
+    fun streamFeatureArrayFromGzip_handlesEmptyFeaturesMissingMarkerAndCorruptBytes() {
+        val tempDir = Files.createTempDirectory("offgrid_gzip_edge").toFile()
+        try {
+            fun gzip(s: String): ByteArray = ByteArrayOutputStream().use { baos ->
+                GZIPOutputStream(baos).use { it.write(s.toByteArray(Charsets.UTF_8)) }
+                baos.toByteArray()
+            }
+
+            // Empty FeatureCollection -> returns true and writes empty fragment
+            val emptyOut = File(tempDir, "empty.features")
+            assertTrue(
+                OfflineRegionHelper.streamFeatureArrayFromGzip(
+                    ByteArrayInputStream(gzip("""{"type":"FeatureCollection","features":[]}""")),
+                    emptyOut
+                )
+            )
+            assertEquals("", emptyOut.readText())
+
+            // Valid JSON without "features":[ marker -> returns false
+            val noMarkerOut = File(tempDir, "nomarker.features")
+            assertEquals(
+                false,
+                OfflineRegionHelper.streamFeatureArrayFromGzip(
+                    ByteArrayInputStream(gzip("""{"type":"Other"}""")),
+                    noMarkerOut
+                )
+            )
+
+            // Corrupt non-GZIP bytes -> returns false safely without throwing
+            val corruptOut = File(tempDir, "corrupt.features")
+            assertEquals(
+                false,
+                OfflineRegionHelper.streamFeatureArrayFromGzip(
+                    ByteArrayInputStream(byteArrayOf(0x01, 0x02, 0x03, 0x04)),
+                    corruptOut
+                )
+            )
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

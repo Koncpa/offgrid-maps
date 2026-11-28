@@ -50,6 +50,9 @@ import cz.offgrid.maps.data.tracking.TrackingManager
 import cz.offgrid.maps.presentation.theme.*
 import cz.offgrid.maps.presentation.ui.map.MapLibreMapView
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -93,6 +96,12 @@ fun MapScreen(
 
     var isScreenVisible by remember { mutableStateOf(true) }
 
+    // Start on user's last known position (or nearest saved region / fallback)
+    var activeLocation by remember {
+        val (lat, lon) = OfflineRegionHelper.loadLastKnownCenter(context)
+        mutableStateOf(LatLng(lat, lon))
+    }
+
     // Sensors and live satellite GPS receiver run while the screen is awake (0 mW when wrist is lowered)
     DisposableEffect(lifecycleOwner, compassManager, altimeterManager, liveGpsManager) {
         val observer = LifecycleEventObserver { _, event ->
@@ -106,6 +115,12 @@ fun MapScreen(
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     isScreenVisible = false
+                    OfflineRegionHelper.saveLastKnownCenter(
+                        context = context,
+                        lat = activeLocation.latitude,
+                        lon = activeLocation.longitude,
+                        force = true
+                    )
                     compassManager.stop()
                     altimeterManager.stop()
                     liveGpsManager.stop()
@@ -139,7 +154,6 @@ fun MapScreen(
     val activeDownloadTitle by OfflineRegionHelper.activeDownloadTitle.collectAsState()
     val downloadError by OfflineRegionHelper.downloadError.collectAsState()
     val savedOfflineRegions by OfflineRegionHelper.savedRegions.collectAsState()
-    val azimuthDegrees by compassManager.azimuthDegrees.collectAsState()
 
     var zoomLevel by remember { mutableFloatStateOf(13.0f) }
     var maplibreMapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
@@ -176,12 +190,6 @@ fun MapScreen(
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
-    }
-
-    // Start on user's last known position (or nearest saved region / fallback)
-    var activeLocation by remember {
-        val (lat, lon) = OfflineRegionHelper.loadLastKnownCenter(context)
-        mutableStateOf(LatLng(lat, lon))
     }
 
     // Camera follows GPS only while the screen is awake AND the user has not panned away (isFollowingGps)
@@ -284,7 +292,7 @@ fun MapScreen(
         MapLibreMapView(
             zoomLevel = zoomLevel,
             targetLocation = activeLocation,
-            azimuthDegrees = azimuthDegrees,
+            azimuthDegreesFlow = compassManager.azimuthDegrees,
             trackPoints = trackPoints,
             plannedRoutePoints = plannedRoutePoints,
             mbtilesFile = defaultMapFile,
@@ -360,12 +368,7 @@ fun MapScreen(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            Text(
-                text = formatCompassCardinal(azimuthDegrees),
-                color = TrailYellow,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
-            )
+            CompassCardinalText(azimuthFlow = compassManager.azimuthDegrees)
         }
 
         if (isOffRoute) {
@@ -1842,9 +1845,28 @@ private fun KctTrailBlazeBadge(stripeColor: Color) {
 }
 
 /**
+ * Isolated compass cardinal indicator (`N/NE/E/...`) collecting only distinct 8-wind transitions so
+ * wrist rotations never recompose the surrounding [MapScreen].
+ */
+@Composable
+private fun CompassCardinalText(azimuthFlow: StateFlow<Float>) {
+    val cardinal by remember(azimuthFlow) {
+        azimuthFlow
+            .map { formatCompassCardinal(it) }
+            .distinctUntilChanged()
+    }.collectAsState(initial = formatCompassCardinal(azimuthFlow.value))
+    Text(
+        text = cardinal,
+        color = TrailYellow,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+/**
  * Converts an azimuth in degrees (0..360) to an 8-wind cardinal direction abbreviation (N, NE, E, SE, S, SW, W, NW).
  */
-private fun formatCompassCardinal(azimuthDeg: Float): String {
+internal fun formatCompassCardinal(azimuthDeg: Float): String {
     val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
     val index = ((azimuthDeg + 22.5f) / 45.0f).toInt() and 7
     return directions[index]

@@ -38,7 +38,8 @@ class LiveGpsManager(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var isRunning = false
-    private var isWatchHardwareGpsActive = false
+    internal var isWatchHardwareGpsActive = false
+        private set
     private var lastStrictFixElapsedRealtimeNs = 0L
     private var lastHardwareGpsElapsedRealtimeNs = 0L
     private var consecutiveAccurateFusedFixes = 0
@@ -63,7 +64,7 @@ class LiveGpsManager(
         processLocation(location, isDirectWatchSatellite = true)
     }
 
-    private val fusedLocationCallback = object : LocationCallback() {
+    internal val fusedLocationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             if (!isRunning) return
             for (location in result.locations) {

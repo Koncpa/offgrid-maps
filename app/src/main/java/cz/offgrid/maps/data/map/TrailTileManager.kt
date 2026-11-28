@@ -56,6 +56,15 @@ internal class BoundedTileWriterPool(
     }
 }
 
+internal fun cleanupRawFeatureFileIfIndexed(rawFile: File, markerFile: File) {
+    if (markerFile.exists() && rawFile.exists()) {
+        try {
+            rawFile.delete()
+        } catch (_: Exception) {
+        }
+    }
+}
+
 /**
  * Spatial tile indexer and viewport loader for downloaded `trails.features` files.
  *
@@ -76,24 +85,36 @@ object TrailTileManager {
 
     internal fun viewportTileKey(lat: Double, lon: Double): String = "${cellX(lon)}_${cellY(lat)}"
 
+    /** Clears the index marker before re-downloading a package so updated files are re-indexed cleanly. */
+    fun invalidateIndex(pkgDir: File) {
+        val marker = File(File(pkgDir, TILES_SUBDIR), INDEX_MARKER)
+        if (marker.exists()) marker.delete()
+    }
+
     /**
      * Ensures [pkgDir]/trail_tiles is populated from [pkgDir]/trails.features.
-     * Uses streaming O(1) memory so even 30 MB GeoJSON fragments index cleanly on Wear OS.
+     * Uses streaming O(1) memory so even 30 MB GeoJSON fragments index cleanly on Wear OS,
+     * then deletes the redundant raw `trails.features` file once the index marker is written.
      */
     fun ensurePackageIndexed(pkgDir: File) {
         val tilesDir = File(pkgDir, TILES_SUBDIR)
         val marker = File(tilesDir, INDEX_MARKER)
-        if (marker.exists()) return
-
         val trailsFile = File(pkgDir, "trails.features")
+        if (marker.exists()) {
+            cleanupRawFeatureFileIfIndexed(trailsFile, marker)
+            return
+        }
+
         if (!trailsFile.exists() || trailsFile.length() == 0L) {
             tilesDir.mkdirs()
             marker.writeText("empty")
+            cleanupRawFeatureFileIfIndexed(trailsFile, marker)
             return
         }
 
         indexTrailsFragmentToTiles(trailsFile, tilesDir)
         marker.writeText("ok")
+        cleanupRawFeatureFileIfIndexed(trailsFile, marker)
     }
 
     /**

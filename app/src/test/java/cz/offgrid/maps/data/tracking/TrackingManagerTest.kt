@@ -422,4 +422,32 @@ class TrackingManagerTest {
         assertEquals(expectedKm, summary.distanceKm, 0.01)
         assertEquals(205, summary.ascentMeters)
     }
+
+    @Test
+    fun shouldPersistCalibration_throttlesFrequentTinyShiftsUntilIntervalOrTwoMeters() {
+        val t0 = 1_700_000_000_000L
+        // Initial persistence must always happen
+        assertTrue(BarometricAltimeterManager.shouldPersistCalibration(Double.NaN, 12.5, 0L, t0))
+        // 0.4 m shift after only 5 seconds must be skipped
+        assertFalse(BarometricAltimeterManager.shouldPersistCalibration(12.5, 12.9, t0, t0 + 5_000L))
+        // >= 2.0 m offset shift must persist immediately
+        assertTrue(BarometricAltimeterManager.shouldPersistCalibration(12.5, 14.6, t0, t0 + 5_000L))
+        // >= 60 s elapsed must persist even for tiny shifts
+        assertTrue(BarometricAltimeterManager.shouldPersistCalibration(12.5, 12.6, t0, t0 + 60_000L))
+        // Forced flush (stop()) must always persist
+        assertTrue(BarometricAltimeterManager.shouldPersistCalibration(12.5, 12.5, t0, t0 + 1_000L, force = true))
+    }
+
+    @Test
+    fun formatCompassCardinal_mapsAllEightWindsAndWraparoundAccurately() {
+        assertEquals("N", cz.offgrid.maps.presentation.ui.formatCompassCardinal(0f))
+        assertEquals("N", cz.offgrid.maps.presentation.ui.formatCompassCardinal(359.9f))
+        assertEquals("NE", cz.offgrid.maps.presentation.ui.formatCompassCardinal(45f))
+        assertEquals("E", cz.offgrid.maps.presentation.ui.formatCompassCardinal(90f))
+        assertEquals("SE", cz.offgrid.maps.presentation.ui.formatCompassCardinal(135f))
+        assertEquals("S", cz.offgrid.maps.presentation.ui.formatCompassCardinal(180f))
+        assertEquals("SW", cz.offgrid.maps.presentation.ui.formatCompassCardinal(225f))
+        assertEquals("W", cz.offgrid.maps.presentation.ui.formatCompassCardinal(270f))
+        assertEquals("NW", cz.offgrid.maps.presentation.ui.formatCompassCardinal(315f))
+    }
 }

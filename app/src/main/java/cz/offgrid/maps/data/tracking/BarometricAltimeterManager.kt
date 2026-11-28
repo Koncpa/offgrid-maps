@@ -83,6 +83,11 @@ class BarometricAltimeterManager(
     }
 
     fun stop() {
+        if (isCalibratedWithGps || !hasHardwareBarometer) {
+            _altitudeMeters.value?.let { alt ->
+                saveCalibrationToPrefs(baroCalibrationOffsetMeters, alt, force = true)
+            }
+        }
         sensorManager.unregisterListener(this)
         smoothedBaroAltitude = null
         pendingCalibrationMslAltitude = null
@@ -211,9 +216,18 @@ class BarometricAltimeterManager(
         }
     }
 
-    private fun saveCalibrationToPrefs(offsetMeters: Double, mslAltMeters: Double) {
+    private var lastSavedCalibrationMetric: Double = Double.NaN
+    private var lastSavedPrefsMillis: Long = 0L
+
+    private fun saveCalibrationToPrefs(offsetMeters: Double, mslAltMeters: Double, force: Boolean = false) {
         val now = System.currentTimeMillis()
         lastCalibrationTimeMillis = now
+        val metric = if (hasHardwareBarometer) offsetMeters else mslAltMeters
+        if (!shouldPersistCalibration(lastSavedCalibrationMetric, metric, lastSavedPrefsMillis, now, force)) {
+            return
+        }
+        lastSavedCalibrationMetric = metric
+        lastSavedPrefsMillis = now
         prefs.edit()
             .putFloat(KEY_BARO_OFFSET, offsetMeters.toFloat())
             .putFloat(KEY_LAST_MSL_ALT, mslAltMeters.toFloat())
@@ -228,6 +242,18 @@ class BarometricAltimeterManager(
         private const val KEY_BARO_OFFSET = "baro_calibration_offset_m"
         private const val KEY_LAST_MSL_ALT = "last_calibrated_msl_alt_m"
         private const val KEY_CALIBRATION_TIME_MS = "baro_calibration_time_ms"
+
+        internal fun shouldPersistCalibration(
+            lastOffsetMeters: Double,
+            newOffsetMeters: Double,
+            lastPersistMillis: Long,
+            nowMillis: Long,
+            force: Boolean = false
+        ): Boolean {
+            if (force || lastOffsetMeters.isNaN() || lastPersistMillis == 0L) return true
+            return (nowMillis - lastPersistMillis) >= 60_000L ||
+                kotlin.math.abs(newOffsetMeters - lastOffsetMeters) >= 2.0
+        }
 
         /**
          * Extracts true orthometric elevation above mean sea level (MSL) from a [Location]:

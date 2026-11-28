@@ -32,6 +32,7 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
@@ -63,7 +64,7 @@ private const val CUSTOM_OUTDOOR_POIS_SOURCE_ID = "custom_outdoor_pois_source"
 fun MapLibreMapView(
     zoomLevel: Float,
     targetLocation: LatLng,
-    azimuthDegrees: Float,
+    azimuthDegreesFlow: StateFlow<Float>,
     trackPoints: List<TrackPoint>,
     plannedRoutePoints: List<TrackPoint> = emptyList(),
     mbtilesFile: File?,
@@ -250,7 +251,7 @@ fun MapLibreMapView(
                         iconAllowOverlap(true),
                         iconIgnorePlacement(true),
                         iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
-                        iconRotate(azimuthDegrees)
+                        iconRotate(azimuthDegreesFlow.value)
                     )
                 )
 
@@ -312,14 +313,16 @@ fun MapLibreMapView(
         }
     }
 
-    // Update heading chevron rotation on GPU via layer property
-    LaunchedEffect(azimuthDegrees, isStyleLoaded, isScreenVisible) {
+    // Update heading chevron rotation on GPU directly from StateFlow (zero Compose recompositions)
+    LaunchedEffect(azimuthDegreesFlow, isStyleLoaded, isScreenVisible) {
         if (isStyleLoaded && isScreenVisible) {
-            mapInstance?.let { map ->
-                map.style?.getLayerAs<SymbolLayer>(USER_LOCATION_LAYER_ID)?.setProperties(
-                    iconRotate(azimuthDegrees)
-                )
-                map.triggerRepaint()
+            azimuthDegreesFlow.collect { deg ->
+                mapInstance?.let { map ->
+                    map.style?.getLayerAs<SymbolLayer>(USER_LOCATION_LAYER_ID)?.setProperties(
+                        iconRotate(deg)
+                    )
+                    map.triggerRepaint()
+                }
             }
         }
     }

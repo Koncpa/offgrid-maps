@@ -138,4 +138,46 @@ class StyleBuilderTest {
         assertEquals("viewpoint", pois[1].category)
         assertEquals("picnic", pois[2].category)
     }
+
+    @Test
+    fun createAmoledOutdoorStyle_isValidJsonWithUniqueLayerIdsAndValidSources() {
+        val tempFile = File.createTempFile("style_valid", ".mbtiles")
+        try {
+            for (styleJson in listOf(
+                StyleBuilder.createAmoledOutdoorStyle(null),
+                StyleBuilder.createAmoledOutdoorStyle(tempFile)
+            )) {
+                val root = org.json.JSONObject(styleJson)
+                assertEquals(8, root.getInt("version"))
+
+                val sources = root.getJSONObject("sources")
+                val sourceNames = sources.keys().asSequence().toSet()
+                assertTrue("Expected offline_source", "offline_source" in sourceNames)
+
+                // Every GeoJSON source must enforce Wear OS memory caps (maxzoom <= 14, buffer <= 32)
+                for (name in sourceNames) {
+                    val src = sources.getJSONObject(name)
+                    if (src.getString("type") == "geojson") {
+                        assertTrue("GeoJSON source $name must cap maxzoom <= 14", src.optInt("maxzoom", 99) <= 14)
+                        assertTrue("GeoJSON source $name must cap buffer <= 32", src.optInt("buffer", 999) <= 32)
+                    }
+                }
+
+                val layers = root.getJSONArray("layers")
+                assertTrue("Expected > 20 map layers", layers.length() > 20)
+                val seenIds = mutableSetOf<String>()
+                for (i in 0 until layers.length()) {
+                    val layer = layers.getJSONObject(i)
+                    val id = layer.getString("id")
+                    assertTrue("Duplicate layer id detected: $id", seenIds.add(id))
+                    if (layer.getString("type") != "background") {
+                        val srcRef = layer.getString("source")
+                        assertTrue("Layer $id references unknown source '$srcRef'", srcRef in sourceNames)
+                    }
+                }
+            }
+        } finally {
+            tempFile.delete()
+        }
+    }
 }
